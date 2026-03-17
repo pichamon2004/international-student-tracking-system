@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum VisaStatus {
+  ACTIVE
+  EXPIRED
+  PENDING
+  CANCELLED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(STAFF)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Student {
+  id              Int       @id @default(autoincrement())
+  studentId       String    @unique
+  titleTh         String?
+  firstNameTh     String?
+  lastNameTh      String?
+  titleEn         String?
+  firstNameEn     String
+  lastNameEn      String
+  dateOfBirth     DateTime
+  gender          Gender
+  nationality     String
+  email           String?
+  phone           String?
+  address         String?   @db.Text
+  emergencyContact String?
+  emergencyPhone  String?
+  faculty         String?
+  program         String?
+  level           String?   // Bachelor, Master, PhD
+  advisorName     String?
+  enrollmentDate  DateTime?
+  expectedGraduation DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  passport        Passport?
+  visas           Visa[]
+  documents       Document[]
+
+  @@map("students")
+}
+
+model Passport {
+  id             Int      @id @default(autoincrement())
+  studentId      Int      @unique
+  passportNumber String   @unique
+  issuingCountry String
+  issueDate      DateTime
+  expiryDate     DateTime
+  placeOfIssue   String?
+  mrzLine1       String?
+  mrzLine2       String?
+  imageUrl       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("passports")
+}
+
+model Visa {
+  id            Int        @id @default(autoincrement())
+  studentId     Int
+  visaNumber    String?
+  visaType      String
+  status        VisaStatus @default(ACTIVE)
+  issuingCountry String
+  issueDate     DateTime
+  expiryDate    DateTime
+  entries       String?    // Single, Multiple
+  remarks       String?    @db.Text
+  imageUrl      String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  student       Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("visas")
+}
+
+model Document {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  name        String
+  description String?
+  fileUrl     String
+  fileType    String
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+model DocumentTemplate {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  content     String   @db.LongText
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("document_templates")
+}
