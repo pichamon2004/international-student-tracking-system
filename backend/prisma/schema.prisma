@@ -7,8 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────
+
 enum Role {
-  ADMIN
+  STUDENT
+  ADVISOR
   STAFF
 }
 
@@ -18,6 +23,19 @@ enum Gender {
   OTHER
 }
 
+enum AcademicLevel {
+  BACHELOR
+  MASTER
+  PHD
+}
+
+enum RegistrationStatus {
+  PENDING_APPROVAL  // Phase 1: รอ Staff อนุมัติ
+  REJECTED          // ถูกปฏิเสธใน Phase 1
+  PHASE2_INCOMPLETE // Phase 2: กรอกข้อมูลยังไม่ครบ
+  ACTIVE            // ลงทะเบียนครบแล้ว
+}
+
 enum VisaStatus {
   ACTIVE
   EXPIRED
@@ -25,52 +43,162 @@ enum VisaStatus {
   CANCELLED
 }
 
+enum RequestStatus {
+  PENDING
+  ADVISOR_APPROVED
+  ADVISOR_REJECTED
+  STAFF_APPROVED
+  STAFF_REJECTED
+  CANCELLED
+}
+
+enum DocumentType {
+  PASSPORT_COPY
+  VISA_COPY
+  TRANSCRIPT
+  INSURANCE
+  ENROLLMENT_CERTIFICATE
+  PHOTO
+  WORK_PERMIT
+  OTHER
+}
+
+enum InterserviceStatus {
+  NOT_SUBMITTED  // ยังไม่ได้ยื่นใน KKU Interservice
+  PENDING        // ยื่นแล้ว รอดำเนินการ
+  APPROVED       // อนุมัติแล้ว
+  REJECTED       // ถูกปฏิเสธ
+}
+
+enum NotificationType {
+  VISA_ALERT          // แจ้งเตือนวีซ่าใกล้หมดอายุ
+  REGISTRATION        // แจ้งผลการลงทะเบียน
+  REQUEST_UPDATE      // แจ้งผลคำร้อง
+  DOCUMENT_REQUIRED   // แจ้งให้แนบเอกสาร
+  GENERAL
+}
+
+// ─────────────────────────────────────────────────────
+// USER & AUTH
+// ─────────────────────────────────────────────────────
+
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  googleId  String?   @unique   // Google OAuth 2.0 (Prototype) / KKU SSO (ระบบจริง)
   name      String
-  role      Role     @default(STAFF)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  image     String?             // Profile picture URL จาก Google
+  role      Role?               // null = ยังไม่ได้รับการกำหนด Role จาก Staff
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  student       Student?
+  advisor       Advisor?
+  auditLogs     AuditLog[]
+  notifications Notification[]
 
   @@map("users")
 }
 
-model Student {
-  id              Int       @id @default(autoincrement())
-  studentId       String    @unique
-  titleTh         String?
-  firstNameTh     String?
-  lastNameTh      String?
-  titleEn         String?
-  firstNameEn     String
-  lastNameEn      String
-  dateOfBirth     DateTime
-  gender          Gender
-  nationality     String
-  email           String?
-  phone           String?
-  address         String?   @db.Text
-  emergencyContact String?
-  emergencyPhone  String?
-  faculty         String?
-  program         String?
-  level           String?   // Bachelor, Master, PhD
-  advisorName     String?
-  enrollmentDate  DateTime?
-  expectedGraduation DateTime?
-  isActive        Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+// ─────────────────────────────────────────────────────
+// STUDENT
+// ─────────────────────────────────────────────────────
 
-  passport        Passport?
-  visas           Visa[]
-  documents       Document[]
+model Student {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique
+  studentId String? @unique  // kku_student_id (Staff กรอกให้ตอนกำหนด Role)
+
+  // Personal Info (Phase 2 — Step 1)
+  titleTh           String?
+  firstNameTh       String?
+  lastNameTh        String?
+  titleEn           String?
+  firstNameEn       String?
+  lastNameEn        String?
+  dateOfBirth       DateTime?
+  gender            Gender?
+  nationality       String?
+  religion          String?
+
+  // Contact
+  email             String?
+  phone             String?
+  address           String?   @db.Text
+  emergencyContact  String?
+  emergencyPhone    String?
+  emergencyRelation String?
+
+  // Academic (Staff กรอกหลัง Phase 1 อนุมัติ)
+  faculty            String?
+  program            String?
+  level              AcademicLevel?
+  enrollmentDate     DateTime?
+  expectedGraduation DateTime?
+  academicStatus     String?         // Active, On Leave, Graduated
+  scholarship        String?         // ทุนการศึกษา
+  advisorId          Int?
+
+  // Registration
+  registrationStatus RegistrationStatus @default(PENDING_APPROVAL)
+  registrationStep   Int                @default(1)   // Phase 2 step ที่ค้างอยู่ (1–6)
+  rejectionReason    String?            @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id])
+  advisor            Advisor?           @relation(fields: [advisorId], references: [id])
+  passport           Passport?
+  visas              Visa[]
+  dependents         Dependent[]
+  documents          Document[]
+  requests           Request[]
+  visaRenewals       VisaRenewal[]
+  interserviceChecks InterserviceCheck[]
+  generatedDocuments GeneratedDocument[]
 
   @@map("students")
 }
+
+// ─────────────────────────────────────────────────────
+// ADVISOR
+// ─────────────────────────────────────────────────────
+
+model Advisor {
+  id          Int     @id @default(autoincrement())
+  userId      Int     @unique
+
+  titleTh     String?
+  firstNameTh String?
+  lastNameTh  String?
+  titleEn     String?
+  firstNameEn String?
+  lastNameEn  String?
+  nationality String?
+  phone       String?
+  faculty     String?
+
+  // Work Permit (เฉพาะอาจารย์ต่างชาติ — กรอกเองหลังล็อกอินครั้งแรก)
+  workPermitNumber  String?
+  workPermitIssue   DateTime?
+  workPermitExpiry  DateTime?
+  workPermitFileUrl String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  students Student[]
+
+  @@map("advisors")
+}
+
+// ─────────────────────────────────────────────────────
+// PASSPORT
+// ─────────────────────────────────────────────────────
 
 model Passport {
   id             Int      @id @default(autoincrement())
@@ -80,61 +208,269 @@ model Passport {
   issueDate      DateTime
   expiryDate     DateTime
   placeOfIssue   String?
-  mrzLine1       String?
-  mrzLine2       String?
-  imageUrl       String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 
-  student        Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // OCR / MRZ Data (Phase 2 — Step 2)
+  mrzLine1   String?
+  mrzLine2   String?
+  imageUrl   String?
+  isVerified Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("passports")
 }
 
-model Visa {
-  id            Int        @id @default(autoincrement())
-  studentId     Int
-  visaNumber    String?
-  visaType      String
-  status        VisaStatus @default(ACTIVE)
-  issuingCountry String
-  issueDate     DateTime
-  expiryDate    DateTime
-  entries       String?    // Single, Multiple
-  remarks       String?    @db.Text
-  imageUrl      String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+// ─────────────────────────────────────────────────────
+// VISA
+// ─────────────────────────────────────────────────────
 
-  student       Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+model Visa {
+  id             Int        @id @default(autoincrement())
+  studentId      Int
+  visaNumber     String?
+  visaType       String     // ED, Non-B, Non-O, Tourist ฯลฯ
+  status         VisaStatus @default(ACTIVE)
+  issuingCountry String
+  issuingPlace   String?
+  issueDate      DateTime
+  expiryDate     DateTime
+  entries        String?    // Single, Multiple, Re-entry
+  remarks        String?    @db.Text
+  imageUrl       String?
+  isCurrent      Boolean    @default(true)  // วีซ่าที่ใช้งานอยู่ปัจจุบัน
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("visas")
 }
 
-model Document {
-  id          Int      @id @default(autoincrement())
-  studentId   Int
-  name        String
-  description String?
-  fileUrl     String
-  fileType    String
-  fileSize    Int
-  uploadedAt  DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// ─────────────────────────────────────────────────────
+// DEPENDENT (ผู้ติดตาม — Phase 2 Step 6)
+// ─────────────────────────────────────────────────────
 
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+model Dependent {
+  id           Int    @id @default(autoincrement())
+  studentId    Int
+  relationship String // Spouse, Child
+
+  // Personal
+  firstNameEn String
+  lastNameEn  String
+  firstNameTh String?
+  lastNameTh  String?
+  dateOfBirth DateTime
+  gender      Gender
+  nationality String
+
+  // Passport
+  passportNumber   String?
+  passportExpiry   DateTime?
+  passportImageUrl String?
+
+  // Visa
+  visaType     String?
+  visaExpiry   DateTime?
+  visaImageUrl String?
+  visaStatus   VisaStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@map("dependents")
+}
+
+// ─────────────────────────────────────────────────────
+// DOCUMENT
+// ─────────────────────────────────────────────────────
+
+model Document {
+  id           Int          @id @default(autoincrement())
+  studentId    Int?
+  dependentId  Int?
+  documentType DocumentType @default(OTHER)
+  name         String
+  description  String?
+  fileUrl      String
+  fileType     String       // pdf, jpg, png ฯลฯ
+  fileSize     Int          // bytes
+  uploadedBy   Int          // userId ของผู้อัปโหลด
+
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  student   Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dependent Dependent? @relation(fields: [dependentId], references: [id], onDelete: Cascade)
 
   @@map("documents")
 }
 
+// ─────────────────────────────────────────────────────
+// REQUEST / PETITION (คำร้อง)
+// ─────────────────────────────────────────────────────
+
+model Request {
+  id          Int           @id @default(autoincrement())
+  studentId   Int
+  type        String        // visa_extension, leave, name_change ฯลฯ
+  title       String
+  description String?       @db.Text
+  status      RequestStatus @default(PENDING)
+  attachments String?       @db.Text  // JSON array of file URLs
+
+  // Advisor Review
+  advisorId      Int?
+  advisorComment String?   @db.Text
+  advisorAt      DateTime?
+
+  // Staff Review
+  staffId      Int?
+  staffComment String?   @db.Text
+  staffAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("requests")
+}
+
+// ─────────────────────────────────────────────────────
+// PDF DOCUMENT TEMPLATE & GENERATED DOCUMENT
+// ─────────────────────────────────────────────────────
+
 model DocumentTemplate {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   name        String
   description String?
-  content     String   @db.LongText
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  content     String  @db.LongText  // Template พร้อม Placeholder เช่น {{student_name}}
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  generatedDocuments GeneratedDocument[]
 
   @@map("document_templates")
+}
+
+model GeneratedDocument {
+  id         Int    @id @default(autoincrement())
+  templateId Int
+  studentId  Int
+  generatedBy Int   // Staff userId
+
+  fileUrl       String?   // PDF ที่ Generate แล้ว
+  signedFileUrl String?   // PDF ที่ลงนามแล้ว (อัปโหลดกลับ)
+  signedBy      String?
+  signedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  template DocumentTemplate @relation(fields: [templateId], references: [id])
+  student  Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("generated_documents")
+}
+
+// ─────────────────────────────────────────────────────
+// EMAIL TEMPLATE (UC23 / FR13)
+// ─────────────────────────────────────────────────────
+
+model EmailTemplate {
+  id        Int     @id @default(autoincrement())
+  name      String
+  subject   String
+  body      String  @db.LongText  // Template พร้อม Placeholder เช่น {{student_name}}
+  variables String? @db.Text      // JSON: [{key: "student_name", description: "ชื่อนักศึกษา"}]
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
+}
+
+// ─────────────────────────────────────────────────────
+// VISA RENEWAL & KKU INTERSERVICE
+// ─────────────────────────────────────────────────────
+
+model VisaRenewal {
+  id            Int      @id @default(autoincrement())
+  studentId     Int
+  daysRemaining Int      // 60, 30, หรือ 7 วัน
+  notifiedAt    DateTime @default(now())
+  isResolved    Boolean  @default(false)
+  resolvedAt    DateTime?
+
+  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  interserviceChecks InterserviceCheck[]
+
+  @@map("visa_renewals")
+}
+
+model InterserviceCheck {
+  id          Int                @id @default(autoincrement())
+  studentId   Int
+  renewalId   Int?
+  status      InterserviceStatus @default(NOT_SUBMITTED)
+  referenceId String?            // Reference ID จาก KKU Interservice
+  notes       String?
+  checkedAt   DateTime           @default(now())
+
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  renewal VisaRenewal? @relation(fields: [renewalId], references: [id])
+
+  @@map("interservice_checks")
+}
+
+// ─────────────────────────────────────────────────────
+// NOTIFICATION
+// ─────────────────────────────────────────────────────
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String           @db.Text
+  type      NotificationType @default(GENERAL)
+  isRead    Boolean          @default(false)
+  link      String?          // Deep link ไปหน้าที่เกี่ยวข้อง
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────────────
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String   // CREATE, UPDATE, DELETE, LOGIN, APPROVE ฯลฯ
+  entity    String   // Student, Visa, Document, Request ฯลฯ
+  entityId  Int?
+  before    String?  @db.LongText  // JSON: ข้อมูลก่อนเปลี่ยน
+  after     String?  @db.LongText  // JSON: ข้อมูลหลังเปลี่ยน
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
 }
