@@ -104,15 +104,7 @@ export default function AdvisorRequestPage() {
                   </td>
                   <td className="py-3 px-4 w-px whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2">
-                      {req.status === 'Pending' ? (
-                        <>
-                          <Button variant="danger"  onClick={() => {}} />
-                          <Button variant="info"    onClick={() => router.push(`/advisor/request/${req.id}`)} />
-                          <Button variant="success" onClick={() => {}} />
-                        </>
-                      ) : (
-                        <Button variant="info" onClick={() => router.push(`/advisor/request/${req.id}`)} />
-                      )}
+                      <Button variant="info" onClick={() => router.push(`/advisor/request/${req.id}`)} />
                     </div>
                   </td>
                 </tr>
