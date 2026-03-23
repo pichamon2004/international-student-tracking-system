@@ -85,7 +85,7 @@ export default function AdvisorStudentsPage() {
           onChange={e => setNationality(e.target.value)}
           className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-primary bg-gray-50 outline-none cursor-pointer hover:border-primary transition-colors"
         >
-          {NATIONALITIES.map(n => <option key={n} value={n}>{n === 'All' ? 'All Nationalities' : n}</option>)}
+          {NATIONALITIES.map(n => <option  key={n} value={n}>{n === 'All' ? 'All Nationalities' : n}</option>)}
         </select>
 
         {/* Visa Status */}
@@ -137,7 +137,7 @@ export default function AdvisorStudentsPage() {
                     <span className="text-primary font-medium">{s.name}</span>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-gray-500 text-xs font-mono">{s.studentId}</td>
+                <td className="py-3 px-4 text-primary text-xs">{s.studentId}</td>
                 <td className="py-3 px-4 text-primary">{s.nationality}</td>
                 <td className="py-3 px-4 text-primary">{s.faculty}</td>
                 <td className="py-3 px-4 text-center">
