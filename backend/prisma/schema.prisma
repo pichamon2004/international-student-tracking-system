@@ -44,12 +44,13 @@ enum VisaStatus {
 }
 
 enum RequestStatus {
-  PENDING
-  ADVISOR_APPROVED
-  ADVISOR_REJECTED
-  STAFF_APPROVED
-  STAFF_REJECTED
-  CANCELLED
+  PENDING                // นักศึกษายื่นคำร้อง → Staff รับก่อน
+  FORWARDED_TO_ADVISOR   // Staff ส่งให้อาจารย์พิจารณา
+  ADVISOR_APPROVED       // อาจารย์อนุมัติ → กลับมาที่ Staff อนุมัติขั้นสุดท้าย
+  ADVISOR_REJECTED       // อาจารย์ปฏิเสธ
+  STAFF_APPROVED         // Staff อนุมัติขั้นสุดท้าย (สมบูรณ์)
+  STAFF_REJECTED         // Staff ปฏิเสธ
+  CANCELLED              // ยกเลิก
 }
 
 enum DocumentType {
