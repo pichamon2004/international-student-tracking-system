@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Kanit } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
 
-const inter = Inter({ subsets: ['latin'] });
+const kanit = Kanit({ subsets: ['latin', 'thai'], weight: ['300', '400', '500', '600', '700'], variable: '--font-kanit' });
 
 export const metadata: Metadata = {
   title: 'International Student Tracking System',
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th">
-      <body className={inter.className}>
+      <body className={`${kanit.variable} font-kanit`}>
         {children}
         <Toaster position="top-right" />
       </body>

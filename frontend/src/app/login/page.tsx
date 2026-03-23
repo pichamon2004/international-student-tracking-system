@@ -1,65 +1,58 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/auth';
-import toast from 'react-hot-toast';
+import { FcGoogle } from "react-icons/fc";
+
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { login, isLoading } = useAuthStore();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await login(email, password);
-      toast.success('เข้าสู่ระบบสำเร็จ');
-      router.push('/dashboard');
-    } catch {
-      toast.error('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
-    }
+  const handleGoogleLogin = () => {
+    // TODO: implement Google OAuth
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 to-primary-600">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">ระบบติดตามนักศึกษาต่างชาติ</h1>
-          <p className="text-gray-500 text-sm mt-1">วิทยาลัยการคอมพิวเตอร์</p>
+    <div className="relative min-h-screen overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#DEEBFF' }}>
+
+      {/* Decorative circles */}
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(120vw, 80rem)', height: 'min(120vw, 80rem)', top: 'max(-60vw, -40rem)', left: 'max(-60vw, -40rem)' }} />
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(95vw, 64rem)', height: 'min(95vw, 64rem)', top: 'max(-47.5vw, -32rem)', left: 'max(-47.5vw, -32rem)' }} />
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(70vw, 48rem)', height: 'min(70vw, 48rem)', top: 'max(-35vw, -24rem)', left: 'max(-35vw, -24rem)' }} />
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(120vw, 80rem)', height: 'min(120vw, 80rem)', bottom: 'max(-60vw, -40rem)', right: 'max(-60vw, -40rem)' }} />
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(95vw, 64rem)', height: 'min(95vw, 64rem)', bottom: 'max(-47.5vw, -32rem)', right: 'max(-47.5vw, -32rem)' }} />
+      <div className="absolute rounded-full opacity-60" style={{ backgroundColor: '#0776BC', width: 'min(70vw, 48rem)', height: 'min(70vw, 48rem)', bottom: 'max(-35vw, -24rem)', right: 'max(-35vw, -24rem)' }} />
+
+
+      {/* Card */}
+      <div className="flex flex-col items-center justify-between relative z-10 bg-white rounded-2xl shadow-lg w-full max-w-[600px]  mx-6 h-[600px] md:h-[650px] pt-8">
+        
+        {/* Logo */}
+        <div className="flex items-center ">
+          <img src="./logo.png" alt="logo" width={280} height={96} />
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="email@example.com"
-              required
-            />
+
+        <div className="flex flex-col items-center w-full gap-8 px-8 md:px-16 pb-12">
+
+          {/* Welcome Text */}
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="text-2xl md:text-3xl font-semibold text-primary">Welcome Back</p>
+            <p className="text-sm md:text-base text-gray-500">Sign in with your KKU account to continue</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+
+          {/* Google Button */}
           <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition disabled:opacity-50"
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-4 border border-gray-300 rounded-full py-3 px-6 text-gray-700 font-medium hover:bg-gray-50 transition md:text-xl"
           >
-            {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+            {/* Google Icon */}
+            <FcGoogle size={36}/>
+
+            Sign in with KKU Mail
           </button>
-        </form>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-gray-200 px-10 py-6 w-full flex justify-between">
+          <a href="https://pdp.kku.ac.th/policy/680656708694016000?lang=th" target="_blank" className="text-md font-medium" style={{ color: '#1a5fa8' }}>Privacy Policy</a>
+          <a href="https://ssonext.kku.ac.th/support" target="_blank" className="text-md font-medium" style={{ color: '#1a5fa8' }}>Help</a>
+        </div>
       </div>
     </div>
   );
