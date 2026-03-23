@@ -43,7 +43,7 @@ export default function AdvisorDashboardPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {statCards.map(({ label, value, icon: Icon, iconBg, iconColor }) => (
-          <div key={label} className="bg-white rounded-2xl shadow-sm px-4 md:px-8 flex items-center gap-3 md:gap-4 h-[100px] md:h-[150px]">
+          <div key={label} className="bg-white rounded-2xl shadow-sm px-4 md:px-8 flex items-center gap-3 md:gap-4 h-[100px] md:h-[130px]">
             <div className="rounded-full p-3 md:p-6 flex-shrink-0" style={{ backgroundColor: iconBg }}>
               <Icon className="w-5 h-5 md:w-10 md:h-10" style={{ color: iconColor }} />
             </div>
@@ -55,38 +55,7 @@ export default function AdvisorDashboardPage() {
         ))}
       </div>
 
-      {/* Pending Requests Table */}
-      <div className="bg-white rounded-2xl shadow-sm p-6">
-        <h2 className="text-2xl font-semibold text-primary">Pending Requests</h2>
-        <hr className="my-4" />
-        {mockPendingRequests.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">ไม่มีคำร้องที่รอการอนุมัติ</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left   py-3 px-4 font-semibold text-primary">Student</th>
-                <th className="text-left   py-3 px-4 font-semibold text-primary">Document Type</th>
-                <th className="text-left   py-3 px-4 font-semibold text-primary">Submission Date</th>
-                <th className="text-center py-3 px-4 font-semibold text-primary">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockPendingRequests.map(req => (
-                <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
-                  <td className="py-3 px-4 text-primary font-medium">{req.name}</td>
-                  <td className="py-3 px-4 text-primary">{req.documentType}</td>
-                  <td className="py-3 px-4 text-primary">{req.submissionDate}</td>
-                  <td className="py-3 px-4 text-center">
-                    <Button variant="info" onClick={() => router.push(`/advisor/request/${req.id}`)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
+      
       {/* Bottom Grid: Visa Expiring + World Map */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
 
