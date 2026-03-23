@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { RiBarChartLine, RiUserStarLine, RiSettings3Line, RiLogoutBoxLine, RiUser3Line } from 'react-icons/ri';
 import { IconType } from 'react-icons';
 import { clsx } from 'clsx';
@@ -37,6 +37,8 @@ const navConfig: Record<string, NavItem[]> = {
   ],
 };
 
+const pendingCount = 2; // Mock — replace with real data later
+
 // Mock user — replace with real auth data later
 const mockUser = {
   name: 'Somchai Jaidee',
@@ -50,6 +52,7 @@ interface RoleNavbarProps {
 
 export default function RoleNavbar({ role }: RoleNavbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const items = navConfig[role];
   const initials = mockUser.name.split(' ').map(w => w[0]).join('').toUpperCase();
 
@@ -79,12 +82,13 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
       <div className="flex items-center gap-1 flex-1 justify-center">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
+          const showBadge = label === 'Request Management' && pendingCount > 0;
           return (
             <Link
               key={href}
               href={href}
               className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap',
+                'relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap',
                 active
                   ? 'bg-[#C4E8FF] text-primary'
                   : 'text-gray-500 hover:bg-[#C4E8FF] hover:text-primary'
@@ -92,6 +96,11 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
             >
               <Icon size={18} />
               {label}
+              {showBadge && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -126,7 +135,7 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
               <p className="text-xs text-gray-400 capitalize">{mockUser.role}</p>
             </div>
             <button
-              onClick={() => {}}
+              onClick={() => router.push('/login')}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
             >
               <RiLogoutBoxLine size={16} />

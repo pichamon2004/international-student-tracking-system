@@ -1,44 +1,29 @@
-import { RiUser3Line, RiFileTextLine, RiVisaLine, RiPassportLine } from 'react-icons/ri';
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { RiUser3Line } from 'react-icons/ri';
 import StudentWorldMap from '@/components/ui/StudentWorldMap';
-import { BsFillPersonFill } from "react-icons/bs";
-import { IoDocumentText } from "react-icons/io5";
-import { FaIdCard } from "react-icons/fa6";
-import { FaPassport } from "react-icons/fa6";
+import Button from '@/components/ui/Button';
+import { BsFillPersonFill } from 'react-icons/bs';
+import { IoDocumentText } from 'react-icons/io5';
+import { FaIdCard } from 'react-icons/fa6';
+import { FaPassport } from 'react-icons/fa6';
+
+const mockPendingRequests = [
+  { id: 1, name: 'Joanna Sofia', documentType: 'Travel Letter',   submissionDate: '01/01/1001' },
+  { id: 4, name: 'Maria Santos', documentType: 'Travel Letter',   submissionDate: '10/03/2025' },
+];
 
 const statCards = [
-  {
-    label: 'Total Students',
-    value: 8,
-    icon: BsFillPersonFill,
-    iconBg: '#DEEBFF',
-    iconColor: '#578FCA',
-  },
-  {
-    label: 'Documents in Progress',
-    value: 10,
-    icon: IoDocumentText,
-    iconBg: '#DFC2FF',
-    iconColor: '#8B2CF5',
-  },
-  {
-    label: 'Visa Expiring Soon',
-    value: 10,
-    icon: FaIdCard,
-    iconBg: '#FFC5C6',
-    iconColor: '#FF0000',
-  },
-  {
-    label: 'Passport Expiring Soon',
-    value: 10,
-    icon: FaPassport,
-    iconBg: '#FFC5C6',
-    iconColor: '#FF0000',
-  },
+  { label: 'Total Students',         value: 8,                           icon: BsFillPersonFill, iconBg: '#DEEBFF', iconColor: '#578FCA' },
+  { label: 'Pending Requests',       value: mockPendingRequests.length,  icon: IoDocumentText,   iconBg: '#DFC2FF', iconColor: '#8B2CF5' },
+  { label: 'Visa Expiring Soon',     value: 3,                           icon: FaIdCard,         iconBg: '#FFC5C6', iconColor: '#FF0000' },
+  { label: 'Passport Expiring Soon', value: 10,                          icon: FaPassport,       iconBg: '#FFC5C6', iconColor: '#FF0000' },
 ];
 
 const expiringVisas = [
-  { name: 'Liu Chen', country: 'China', daysLeft: 10, expireDate: '2025-10-10' },
-  { name: 'Aung Kyaw', country: 'Myanmar', daysLeft: 15, expireDate: '2025-10-10' },
+  { name: 'Liu Chen',      country: 'China',   daysLeft: 10, expireDate: '2025-10-10' },
+  { name: 'Aung Kyaw',    country: 'Myanmar', daysLeft: 15, expireDate: '2025-10-10' },
   { name: 'Tran Van Minh', country: 'Vietnam', daysLeft: 20, expireDate: '2025-10-10' },
 ];
 
@@ -50,8 +35,11 @@ const countryStats = [
 ];
 
 export default function AdvisorDashboardPage() {
+  const router = useRouter();
+
   return (
-    <div className="grid grid-rows-[auto_1fr] gap-4 md:gap-6 flex-1 min-h-0">
+    <div className="flex flex-col gap-4 md:gap-6">
+
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {statCards.map(({ label, value, icon: Icon, iconBg, iconColor }) => (
@@ -67,16 +55,48 @@ export default function AdvisorDashboardPage() {
         ))}
       </div>
 
-      {/* Bottom Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 min-h-0">
+      {/* Pending Requests Table */}
+      <div className="bg-white rounded-2xl shadow-sm p-6">
+        <h2 className="text-2xl font-semibold text-primary">Pending Requests</h2>
+        <hr className="my-4" />
+        {mockPendingRequests.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">ไม่มีคำร้องที่รอการอนุมัติ</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left   py-3 px-4 font-semibold text-primary">Student</th>
+                <th className="text-left   py-3 px-4 font-semibold text-primary">Document Type</th>
+                <th className="text-left   py-3 px-4 font-semibold text-primary">Submission Date</th>
+                <th className="text-center py-3 px-4 font-semibold text-primary">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mockPendingRequests.map(req => (
+                <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
+                  <td className="py-3 px-4 text-primary font-medium">{req.name}</td>
+                  <td className="py-3 px-4 text-primary">{req.documentType}</td>
+                  <td className="py-3 px-4 text-primary">{req.submissionDate}</td>
+                  <td className="py-3 px-4 text-center">
+                    <Button variant="info" onClick={() => router.push(`/advisor/request/${req.id}`)} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Bottom Grid: Visa Expiring + World Map */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+
         {/* Expiring Visas */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 min-h-0 overflow-auto">
+        <div className="bg-white rounded-2xl shadow-sm p-6">
           <h2 className="text-2xl font-semibold text-primary">Visa Expiring Soon</h2>
-          <hr className='my-4'/>
+          <hr className="my-4" />
           <div className="space-y-3">
-            
             {expiringVisas.map((s) => (
-              <div key={s.name} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition border ">
+              <div key={s.name} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition border">
                 <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
                   <RiUser3Line size={18} className="text-primary" />
                 </div>
@@ -94,7 +114,7 @@ export default function AdvisorDashboardPage() {
         </div>
 
         {/* Students by Country */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 min-h-0 overflow-auto flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col">
           <h2 className="text-2xl font-semibold text-primary mb-2">Students by Country</h2>
           <hr className="mb-4" />
           <StudentWorldMap data={countryStats} />
@@ -115,6 +135,7 @@ export default function AdvisorDashboardPage() {
             ))}
           </div>
         </div>
+
       </div>
     </div>
   );

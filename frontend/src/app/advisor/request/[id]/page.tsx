@@ -4,14 +4,13 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Button from '@/components/ui/Button';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiDownloadLine, RiFilePdfLine, RiFileImageLine, RiAttachmentLine, RiCloseLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiDownloadLine, RiFilePdfLine, RiFileImageLine, RiAttachmentLine, RiCloseLine, RiCheckLine } from 'react-icons/ri';
 
 type Status = 'Pending' | 'Approved' | 'Rejected';
 
 interface RequestLog {
   date: string;
   detail: string;
-  action: 'approve' | 'view' | null;
 }
 
 interface Attachment {
@@ -40,9 +39,8 @@ const mockDetails: Record<string, RequestDetail> = {
       { name: 'passport_copy.jpg',       type: 'image', size: '1.2 MB' },
     ],
     logs: [
-      { date: '01/01/1001', detail: 'Advisor Approved',  action: 'approve' },
-      { date: '01/01/1001', detail: 'Pending',            action: 'view'    },
-      { date: '01/01/1001', detail: 'Create New Request', action: null      },
+      { date: '01/01/1001', detail: 'Pending'            },
+      { date: '01/01/1001', detail: 'Create New Request' },
     ],
   },
   '2': {
@@ -54,9 +52,9 @@ const mockDetails: Record<string, RequestDetail> = {
       { name: 'enrollment_cert.pdf',     type: 'pdf',   size: '156 KB' },
     ],
     logs: [
-      { date: '05/03/2025', detail: 'Staff Approved',     action: 'approve' },
-      { date: '03/03/2025', detail: 'Advisor Approved',   action: 'view'    },
-      { date: '02/03/2025', detail: 'Create New Request', action: null      },
+      { date: '05/03/2025', detail: 'Staff Approved'     },
+      { date: '03/03/2025', detail: 'Advisor Approved'   },
+      { date: '02/03/2025', detail: 'Create New Request' },
     ],
   },
   '3': {
@@ -66,8 +64,8 @@ const mockDetails: Record<string, RequestDetail> = {
       { name: 'enrollment_request.pdf',  type: 'pdf',   size: '201 KB' },
     ],
     logs: [
-      { date: '07/03/2025', detail: 'Request Rejected',   action: 'view' },
-      { date: '05/03/2025', detail: 'Create New Request', action: null   },
+      { date: '07/03/2025', detail: 'Request Rejected'   },
+      { date: '05/03/2025', detail: 'Create New Request' },
     ],
   },
   '4': {
@@ -78,7 +76,7 @@ const mockDetails: Record<string, RequestDetail> = {
       { name: 'passport_scan.jpg',       type: 'image', size: '2.1 MB' },
     ],
     logs: [
-      { date: '10/03/2025', detail: 'Create New Request', action: null   },
+      { date: '10/03/2025', detail: 'Create New Request' },
     ],
   },
 };
@@ -87,8 +85,12 @@ export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const req = mockDetails[id];
+
+  const [localStatus, setLocalStatus] = useState<Status>(req?.status ?? 'Pending');
   const [comment, setComment] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [showRejectError, setShowRejectError] = useState(false);
+  const [actionDone, setActionDone] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -100,6 +102,21 @@ export default function RequestDetailPage() {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleApprove = () => {
+    setLocalStatus('Approved');
+    setActionDone(true);
+  };
+
+  const handleReject = () => {
+    if (!comment.trim()) {
+      setShowRejectError(true);
+      return;
+    }
+    setShowRejectError(false);
+    setLocalStatus('Rejected');
+    setActionDone(true);
+  };
+
   if (!req) {
     return (
       <div className="bg-white w-full flex-1 rounded-2xl p-8 flex flex-col items-center justify-center gap-4">
@@ -109,7 +126,7 @@ export default function RequestDetailPage() {
     );
   }
 
-  const isPending = req.status === 'Pending';
+  const isPending = localStatus === 'Pending';
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
@@ -123,8 +140,16 @@ export default function RequestDetailPage() {
           <RiArrowLeftLine size={18} />
         </button>
         <h1 className="text-2xl font-semibold text-primary">{req.id}</h1>
-        <StatusBadge status={req.status} />
+        <StatusBadge status={localStatus} />
       </div>
+
+      {/* Success Banner */}
+      {actionDone && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${localStatus === 'Approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+          <RiCheckLine size={16} />
+          {localStatus === 'Approved' ? 'คำร้องได้รับการอนุมัติเรียบร้อยแล้ว' : 'คำร้องถูกปฏิเสธเรียบร้อยแล้ว'}
+        </div>
+      )}
 
       {/* Main layout: left info + right history */}
       <div className="flex flex-col lg:flex-row gap-5 flex-1 min-h-0">
@@ -185,26 +210,31 @@ export default function RequestDetailPage() {
                   <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Date</th>
                   <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Detail</th>
                   <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                  <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {req.logs.map((log, i) => (
-                  <tr key={i} className="hover:bg-gray-50 transition">
-                    <td className="py-3 px-4 text-gray-400 text-xs whitespace-nowrap">{log.date}</td>
-                    <td className="py-3 px-4 text-primary font-medium">{log.detail}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-                        Finished
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {log.action === 'approve' && <Button variant="success" label="Approve" onClick={() => {}} />}
-                      {log.action === 'view'    && <Button variant="info"    label="View"    onClick={() => {}} />}
-                    </td>
-                  </tr>
-                ))}
+                {req.logs.map((log, i) => {
+                  const isInProgress = i === 0 && isPending;
+                  return (
+                    <tr key={i} className="hover:bg-gray-50 transition">
+                      <td className="py-3 px-4 text-gray-400 text-xs whitespace-nowrap">{log.date}</td>
+                      <td className="py-3 px-4 text-primary font-medium">{log.detail}</td>
+                      <td className="py-3 px-4 text-center">
+                        {isInProgress ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" />
+                            In Progress
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                            Finished
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -218,14 +248,19 @@ export default function RequestDetailPage() {
               )}
             </div>
 
-            <textarea
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              disabled={!isPending}
-              placeholder="Enter your comment here..."
-              rows={3}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors resize-none disabled:opacity-40 disabled:cursor-not-allowed"
-            />
+            <div className="flex flex-col gap-1">
+              <textarea
+                value={comment}
+                onChange={e => { setComment(e.target.value); setShowRejectError(false); }}
+                disabled={!isPending}
+                placeholder="Enter your comment here..."
+                rows={3}
+                className={`w-full border rounded-xl px-4 py-3 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors resize-none disabled:opacity-40 disabled:cursor-not-allowed ${showRejectError ? 'border-red-400' : 'border-gray-200'}`}
+              />
+              {showRejectError && (
+                <p className="text-xs text-red-500 pl-1">กรุณากรอกเหตุผลก่อนปฏิเสธคำร้อง</p>
+              )}
+            </div>
 
             <div className="flex items-center justify-between gap-4">
               {/* Attach */}
@@ -255,8 +290,8 @@ export default function RequestDetailPage() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-3 shrink-0">
-                <Button variant="danger"  label="Reject"  disabled={!isPending} onClick={() => {}} />
-                <Button variant="success" label="Approve" disabled={!isPending} onClick={() => {}} />
+                <Button variant="danger"  label="Reject"  disabled={!isPending} onClick={handleReject} />
+                <Button variant="success" label="Approve" disabled={!isPending} onClick={handleApprove} />
               </div>
             </div>
           </div>
