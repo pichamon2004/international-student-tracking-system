@@ -82,9 +82,9 @@ const mockDetails: Record<string, RequestDetail> = {
 };
 
 export default function RequestDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const req = mockDetails[id];
+  const req = params?.id ? mockDetails[params.id] : undefined;
 
   const [localStatus, setLocalStatus] = useState<Status>(req?.status ?? 'Pending');
   const [comment, setComment] = useState('');
@@ -116,6 +116,10 @@ export default function RequestDetailPage() {
     setLocalStatus('Rejected');
     setActionDone(true);
   };
+
+  if (!params?.id) {
+    return <div className="bg-white w-full flex-1 rounded-2xl p-8" />;
+  }
 
   if (!req) {
     return (
@@ -207,9 +211,9 @@ export default function RequestDetailPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Date</th>
-                  <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Detail</th>
-                  <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                  <td className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Date</td>
+                  <td className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Detail</td>
+                  <td className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</td>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

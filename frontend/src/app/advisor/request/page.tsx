@@ -36,10 +36,10 @@ export default function AdvisorRequestPage() {
       <p className="text-2xl font-semibold text-primary">Request Management</p>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 w-full">
+      <div className="flex flex-col gap-3 w-full">
 
         {/* Search */}
-        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 flex-1 bg-gray-50 focus-within:border-primary transition-colors">
+        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
           <RiSearchLine size={16} className="text-gray-400 shrink-0" />
           <input
             type="text"
@@ -51,13 +51,13 @@ export default function AdvisorRequestPage() {
         </div>
 
         {/* Status Filter Pills */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
           {STATUS_FILTERS.map(s => (
             <button
               key={s}
               onClick={() => setFilter(s)}
               className={clsx(
-                'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap',
                 filter === s
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -71,7 +71,7 @@ export default function AdvisorRequestPage() {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-t">
+        <table className="min-w-[560px] w-full text-sm border-t">
           <colgroup>
             <col />
             <col />

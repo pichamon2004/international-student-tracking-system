@@ -171,7 +171,15 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
             </div>
 
             <button
-              onClick={() => router.push('/login')}
+              onClick={() => { setOpen(false); router.push(`/${role}/profile`); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <RiUser3Line size={16} />
+              Profile
+            </button>
+            <hr className="my-1 border-gray-100" />
+            <button
+              onClick={() => {}}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
             >
               <RiLogoutBoxLine size={16} />
