@@ -35,11 +35,11 @@ export default function StaffDashboardPage() {
         {statCards.map(({ label, value, icon: Icon, iconBg, iconColor }) => (
           <div key={label} className="bg-white rounded-2xl shadow-sm px-4 md:px-8 flex items-center gap-3 md:gap-4 h-[100px] md:h-[130px]">
             <div className="rounded-full p-3 md:p-6 flex-shrink-0" style={{ backgroundColor: iconBg }}>
-              <Icon className="w-5 h-5 md:w-10 md:h-10" style={{ color: iconColor }} />
+              <Icon className="w-5 h-5 md:w-8 md:h-8 2xl:w-10 :h-10" style={{ color: iconColor }} />
             </div>
-            <div className="flex-1 text-right flex items-end flex-col justify-between h-full py-5 md:py-10">
-              <p className="text-xl md:text-3xl font-bold text-primary">{value}</p>
-              <p className="text-xs md:text-sm font-medium text-primary">{label}</p>
+            <div className="flex-1 text-right flex items-end flex-col justify-between h-full py-5 2xl:py-10">
+              <p className="text-xl md:text-2xl 2xl:text-3xl font-bold text-primary">{value}</p>
+              <p className="text-xs 2xl:text-sm font-medium text-primary">{label}</p>
             </div>
           </div>
         ))}

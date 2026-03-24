@@ -89,15 +89,15 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   }, []);
 
   return (
-    <nav className="bg-white rounded-b-2xl shadow-sm px-6 py-3 flex items-center justify-between gap-6">
+    <nav className="bg-white rounded-b-2xl shadow-sm px-6 py-3 flex items-center justify-between gap-6 ">
 
       {/* Logo */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="hidden md:flex items-center gap-2 shrink-0">
         <img src="/logo.png" alt="logo" className="h-10 w-auto" />
       </div>
 
       {/* Nav */}
-      <div className="flex items-center gap-1 flex-1 justify-center">
+      <div className="flex items-center gap-1 flex-1 justify-center ">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           const showBadge = label === 'Request Management' && pendingCount > 0;

@@ -36,10 +36,10 @@ export default function AdvisorRequestPage() {
       <p className="text-2xl font-semibold text-primary">Request Management</p>
 
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 w-full">
+      <div className="flex flex-col md:flex-row gap-3 w-full">
 
         {/* Search */}
-        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
+        <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
           <RiSearchLine size={16} className="text-gray-400 shrink-0" />
           <input
             type="text"
