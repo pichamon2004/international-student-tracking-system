@@ -9,7 +9,7 @@ interface RoleLayoutProps {
 export default function RoleLayout({ role, children }: RoleLayoutProps) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-secondary flex flex-col">
-      <div className='absolute w-full h-[190px] bg-primary rounded-bl-[100px]'></div>
+      <div className='absolute w-full h-[180px] 2xl:h-[190px] bg-primary rounded-bl-[100px]'></div>
 
       {/* Navbar */}
       <div className="relative z-20 px-6 pt-0">
