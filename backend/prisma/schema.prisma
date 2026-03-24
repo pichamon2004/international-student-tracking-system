@@ -30,10 +30,10 @@ enum AcademicLevel {
 }
 
 enum RegistrationStatus {
-  PENDING_APPROVAL  // Phase 1: รอ Staff อนุมัติ
-  REJECTED          // ถูกปฏิเสธใน Phase 1
-  PHASE2_INCOMPLETE // Phase 2: กรอกข้อมูลยังไม่ครบ
-  ACTIVE            // ลงทะเบียนครบแล้ว
+  PENDING_APPROVAL
+  REJECTED
+  PHASE2_INCOMPLETE
+  ACTIVE
 }
 
 enum VisaStatus {
@@ -44,16 +44,16 @@ enum VisaStatus {
 }
 
 enum RequestStatus {
-  PENDING                // นักศึกษายื่นคำร้อง → Staff รับก่อน
-  FORWARDED_TO_ADVISOR   // Staff ส่งให้อาจารย์ที่ปรึกษาพิจารณา
-  ADVISOR_APPROVED       // อาจารย์ที่ปรึกษาอนุมัติ → กลับมาที่ Staff
-  ADVISOR_REJECTED       // อาจารย์ที่ปรึกษาปฏิเสธ
-  STAFF_APPROVED         // Staff (ในฐานะคณะ) อนุมัติ → ส่งต่อให้ Dean
-  STAFF_REJECTED         // Staff ปฏิเสธ
-  FORWARDED_TO_DEAN      // Staff ส่งให้ Dean อนุมัติขั้นสุดท้าย
-  DEAN_APPROVED          // Dean อนุมัติ (สมบูรณ์)
-  DEAN_REJECTED          // Dean ปฏิเสธ
-  CANCELLED              // ยกเลิก
+  PENDING
+  FORWARDED_TO_ADVISOR
+  ADVISOR_APPROVED
+  ADVISOR_REJECTED
+  STAFF_APPROVED
+  STAFF_REJECTED
+  FORWARDED_TO_DEAN
+  DEAN_APPROVED
+  DEAN_REJECTED
+  CANCELLED
 }
 
 enum DocumentType {
@@ -68,17 +68,17 @@ enum DocumentType {
 }
 
 enum InterserviceStatus {
-  NOT_SUBMITTED  // ยังไม่ได้ยื่นใน KKU Interservice
-  PENDING        // ยื่นแล้ว รอดำเนินการ
-  APPROVED       // อนุมัติแล้ว
-  REJECTED       // ถูกปฏิเสธ
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum NotificationType {
-  VISA_ALERT          // แจ้งเตือนวีซ่าใกล้หมดอายุ
-  REGISTRATION        // แจ้งผลการลงทะเบียน
-  REQUEST_UPDATE      // แจ้งผลคำร้อง
-  DOCUMENT_REQUIRED   // แจ้งให้แนบเอกสาร
+  VISA_ALERT
+  REGISTRATION
+  REQUEST_UPDATE
+  DOCUMENT_REQUIRED
   GENERAL
 }
 
@@ -87,15 +87,15 @@ enum NotificationType {
 // ─────────────────────────────────────────────────────
 
 model User {
-  id        Int       @id @default(autoincrement())
-  email     String    @unique
-  googleId  String?   @unique   // Google OAuth 2.0 (Prototype) / KKU SSO (ระบบจริง)
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  googleId  String?  @unique
   name      String
-  image     String?             // Profile picture URL จาก Google
-  role      Role?               // null = ยังไม่ได้รับการกำหนด Role จาก Staff
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  image     String?
+  role      Role?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   student       Student?
   advisor       Advisor?
@@ -112,48 +112,44 @@ model User {
 model Student {
   id        Int     @id @default(autoincrement())
   userId    Int     @unique
-  studentId String? @unique  // kku_student_id (Staff กรอกให้ตอนกำหนด Role)
+  studentId String? @unique
 
-  // Personal Info (Phase 2 — Step 1)
-  titleTh           String?
-  firstNameTh       String?
-  lastNameTh        String?
-  titleEn           String?
-  firstNameEn       String?
-  lastNameEn        String?
-  dateOfBirth       DateTime?
-  gender            Gender?
-  nationality       String?
-  religion          String?
+  titleTh     String?
+  firstNameTh String?
+  lastNameTh  String?
+  titleEn     String?
+  firstNameEn String?
+  lastNameEn  String?
+  dateOfBirth DateTime?
+  gender      Gender?
+  nationality String?
+  religion    String?
 
-  // Contact
   email             String?
   phone             String?
-  address           String?   @db.Text
+  address           String?  @db.Text
   emergencyContact  String?
   emergencyPhone    String?
   emergencyRelation String?
 
-  // Academic (Staff กรอกหลัง Phase 1 อนุมัติ)
   faculty            String?
   program            String?
   level              AcademicLevel?
   enrollmentDate     DateTime?
   expectedGraduation DateTime?
-  academicStatus     String?         // Active, On Leave, Graduated
-  scholarship        String?         // ทุนการศึกษา
+  academicStatus     String?
+  scholarship        String?
   advisorId          Int?
 
-  // Registration
   registrationStatus RegistrationStatus @default(PENDING_APPROVAL)
-  registrationStep   Int                @default(1)   // Phase 2 step ที่ค้างอยู่ (1–6)
+  registrationStep   Int                @default(1)
   rejectionReason    String?            @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user               User               @relation(fields: [userId], references: [id])
-  advisor            Advisor?           @relation(fields: [advisorId], references: [id])
+  user               User                @relation(fields: [userId], references: [id])
+  advisor            Advisor?            @relation(fields: [advisorId], references: [id])
   passports          Passport[]
   visas              Visa[]
   healthInsurances   HealthInsurance[]
@@ -174,7 +170,6 @@ model Student {
 model Advisor {
   id          Int     @id @default(autoincrement())
   userId      Int     @unique
-
   titleTh     String?
   firstNameTh String?
   lastNameTh  String?
@@ -185,14 +180,12 @@ model Advisor {
   phone       String?
   faculty     String?
 
-  // Work Permit (เฉพาะอาจารย์ต่างชาติ — กรอกเองหลังล็อกอินครั้งแรก)
   workPermitNumber  String?
   workPermitIssue   DateTime?
   workPermitExpiry  DateTime?
   workPermitFileUrl String?
 
-  isDean    Boolean  @default(false) // true = คณบดี/รองคณบดี — เห็น FORWARDED_TO_DEAN queue
-
+  isDean    Boolean  @default(false)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -209,23 +202,19 @@ model Advisor {
 
 model Passport {
   id             Int      @id @default(autoincrement())
-  studentId      Int                             // ลบ @unique → รองรับหลายเล่ม (history)
+  studentId      Int
   passportNumber String
   issuingCountry String
   issueDate      DateTime
   expiryDate     DateTime
   placeOfIssue   String?
-
-  // OCR / MRZ Data (Phase 2 — Step 2)
-  mrzLine1   String?
-  mrzLine2   String?
-  imageUrl   String?
-  isVerified Boolean  @default(false)
-
-  isCurrent  Boolean  @default(true)             // false = เล่มเก่า (ต่ออายุแล้ว)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  mrzLine1       String?
+  mrzLine2       String?
+  imageUrl       String?
+  isVerified     Boolean  @default(false)
+  isCurrent      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -240,19 +229,18 @@ model Visa {
   id             Int        @id @default(autoincrement())
   studentId      Int
   visaNumber     String?
-  visaType       String     // ED, Non-B, Non-O, Tourist ฯลฯ
+  visaType       String
   status         VisaStatus @default(ACTIVE)
   issuingCountry String
   issuingPlace   String?
   issueDate      DateTime
   expiryDate     DateTime
-  entries        String?    // Single, Multiple, Re-entry
+  entries        String?
   remarks        String?    @db.Text
   imageUrl       String?
-  isCurrent      Boolean    @default(true)  // วีซ่าที่ใช้งานอยู่ปัจจุบัน
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isCurrent      Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -264,18 +252,17 @@ model Visa {
 // ─────────────────────────────────────────────────────
 
 model HealthInsurance {
-  id            Int      @id @default(autoincrement())
-  studentId     Int
-  provider      String            // บริษัทประกัน เช่น AXA, Allianz
-  policyNumber  String?           // เลขกรมธรรม์
-  coverageType  String?           // Inpatient, Outpatient, Comprehensive ฯลฯ
-  startDate     DateTime
-  expiryDate    DateTime
-  fileUrl       String?           // URL สแกนกรมธรรม์ (Cloudflare R2)
-  isCurrent     Boolean  @default(true)  // false = กรมธรรม์เก่า (ต่ออายุแล้ว)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  studentId    Int
+  provider     String
+  policyNumber String?
+  coverageType String?
+  startDate    DateTime
+  expiryDate   DateTime
+  fileUrl      String?
+  isCurrent    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -283,15 +270,14 @@ model HealthInsurance {
 }
 
 // ─────────────────────────────────────────────────────
-// DEPENDENT (ผู้ติดตาม — Phase 2 Step 6)
+// DEPENDENT
 // ─────────────────────────────────────────────────────
 
 model Dependent {
   id           Int    @id @default(autoincrement())
   studentId    Int
-  relationship String // Spouse, Child
+  relationship String
 
-  // Personal
   firstNameEn String
   lastNameEn  String
   firstNameTh String?
@@ -300,16 +286,13 @@ model Dependent {
   gender      Gender
   nationality String
 
-  // Passport
   passportNumber   String?
   passportExpiry   DateTime?
   passportImageUrl String?
-
-  // Visa
-  visaType     String?
-  visaExpiry   DateTime?
-  visaImageUrl String?
-  visaStatus   VisaStatus @default(ACTIVE)
+  visaType         String?
+  visaExpiry       DateTime?
+  visaImageUrl     String?
+  visaStatus       VisaStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -332,9 +315,9 @@ model Document {
   name         String
   description  String?
   fileUrl      String
-  fileType     String       // pdf, jpg, png ฯลฯ
-  fileSize     Int          // bytes
-  uploadedBy   Int          // userId ของผู้อัปโหลด
+  fileType     String
+  fileSize     Int
+  uploadedBy   Int
 
   uploadedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -346,24 +329,66 @@ model Document {
 }
 
 // ─────────────────────────────────────────────────────
-// REQUEST / PETITION (คำร้อง)
+// DOCUMENT TEMPLATE
+// ─────────────────────────────────────────────────────
+
+model DocumentTemplate {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  body        String  @db.LongText  // HTML content with {{variable}} placeholders
+  variables   String? @db.Text      // JSON array of variable tokens e.g. ["{{student_name}}"]
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requestTypes       RequestType[]
+  generatedDocuments GeneratedDocument[]
+
+  @@map("document_templates")
+}
+
+// ─────────────────────────────────────────────────────
+// REQUEST TYPE  (staff configures)
+// ─────────────────────────────────────────────────────
+
+model RequestType {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  icon        String? // react-icons key e.g. "RiPlaneLine"
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documentTemplates DocumentTemplate[]
+  requests          Request[]
+
+  @@map("request_types")
+}
+
+// ─────────────────────────────────────────────────────
+// REQUEST / PETITION  (student submits)
 // ─────────────────────────────────────────────────────
 
 model Request {
-  id          Int           @id @default(autoincrement())
-  studentId   Int
-  type        String        // visa_extension, leave, name_change ฯลฯ
-  title       String
-  description String?       @db.Text
-  status      RequestStatus @default(PENDING)
-  attachments String?       @db.Text  // JSON array of file URLs
+  id            Int           @id @default(autoincrement())
+  studentId     Int
+  requestTypeId Int?
+  title         String
+  description   String?       @db.Text
+  formData      String?       @db.LongText  // JSON — values student filled in
+  status        RequestStatus @default(PENDING)
+  attachments   String?       @db.Text      // JSON array of file URLs
 
-  // Advisor Review
+  // Advisor review
   advisorId      Int?
   advisorComment String?   @db.Text
   advisorAt      DateTime?
 
-  // Staff Review
+  // Staff review
   staffId      Int?
   staffComment String?   @db.Text
   staffAt      DateTime?
@@ -371,38 +396,24 @@ model Request {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student     Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  requestType RequestType? @relation(fields: [requestTypeId], references: [id])
 
   @@map("requests")
 }
 
 // ─────────────────────────────────────────────────────
-// PDF DOCUMENT TEMPLATE & GENERATED DOCUMENT
+// GENERATED DOCUMENT
 // ─────────────────────────────────────────────────────
 
-model DocumentTemplate {
-  id          Int     @id @default(autoincrement())
-  name        String
-  description String?
-  content     String  @db.LongText  // Template พร้อม Placeholder เช่น {{student_name}}
-  isActive    Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  generatedDocuments GeneratedDocument[]
-
-  @@map("document_templates")
-}
-
 model GeneratedDocument {
-  id         Int    @id @default(autoincrement())
-  templateId Int
-  studentId  Int
-  generatedBy Int   // Staff userId
+  id          Int     @id @default(autoincrement())
+  templateId  Int
+  studentId   Int
+  generatedBy Int
 
-  fileUrl       String?   // PDF ที่ Generate แล้ว
-  signedFileUrl String?   // PDF ที่ลงนามแล้ว (อัปโหลดกลับ)
+  fileUrl       String?
+  signedFileUrl String?
   signedBy      String?
   signedAt      DateTime?
 
@@ -416,15 +427,15 @@ model GeneratedDocument {
 }
 
 // ─────────────────────────────────────────────────────
-// EMAIL TEMPLATE (UC23 / FR13)
+// EMAIL TEMPLATE
 // ─────────────────────────────────────────────────────
 
 model EmailTemplate {
   id        Int     @id @default(autoincrement())
   name      String
   subject   String
-  body      String  @db.LongText  // Template พร้อม Placeholder เช่น {{student_name}}
-  variables String? @db.Text      // JSON: [{key: "student_name", description: "ชื่อนักศึกษา"}]
+  body      String  @db.LongText
+  variables String? @db.Text  // JSON
   isActive  Boolean @default(true)
 
   createdAt DateTime @default(now())
@@ -440,7 +451,7 @@ model EmailTemplate {
 model VisaRenewal {
   id            Int      @id @default(autoincrement())
   studentId     Int
-  daysRemaining Int      // 60, 30, หรือ 7 วัน
+  daysRemaining Int
   notifiedAt    DateTime @default(now())
   isResolved    Boolean  @default(false)
   resolvedAt    DateTime?
@@ -456,7 +467,7 @@ model InterserviceCheck {
   studentId   Int
   renewalId   Int?
   status      InterserviceStatus @default(NOT_SUBMITTED)
-  referenceId String?            // Reference ID จาก KKU Interservice
+  referenceId String?
   notes       String?
   checkedAt   DateTime           @default(now())
 
@@ -477,7 +488,7 @@ model Notification {
   message   String           @db.Text
   type      NotificationType @default(GENERAL)
   isRead    Boolean          @default(false)
-  link      String?          // Deep link ไปหน้าที่เกี่ยวข้อง
+  link      String?
 
   createdAt DateTime @default(now())
 
@@ -493,11 +504,11 @@ model Notification {
 model AuditLog {
   id        Int      @id @default(autoincrement())
   userId    Int
-  action    String   // CREATE, UPDATE, DELETE, LOGIN, APPROVE ฯลฯ
-  entity    String   // Student, Visa, Document, Request ฯลฯ
+  action    String
+  entity    String
   entityId  Int?
-  before    String?  @db.LongText  // JSON: ข้อมูลก่อนเปลี่ยน
-  after     String?  @db.LongText  // JSON: ข้อมูลหลังเปลี่ยน
+  before    String?  @db.LongText
+  after     String?  @db.LongText
   ipAddress String?
 
   createdAt DateTime @default(now())
