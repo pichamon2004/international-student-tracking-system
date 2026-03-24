@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiEditLine, RiAddLine } from 'react-icons/ri';
-import Button from '@/components/ui/Button';
+import AddAdvisorModal, { NewAdvisorData } from '@/components/AddAdvisorModal';
 
 interface Advisor {
   id: number;
@@ -10,9 +11,10 @@ interface Advisor {
   title: string;
   requestToDo: number;
   studentCount: number;
+  photoUrl?: string;
 }
 
-const mockAdvisors: Advisor[] = [
+const initialAdvisors: Advisor[] = [
   { id: 1, name: 'Asst. Prof. Pusadee Seresangtakul', title: 'Associate Dean for Academic Affairs', requestToDo: 2, studentCount: 5 },
   { id: 2, name: 'Asst. Prof. Pusadee Seresangtakul', title: 'Associate Dean for Academic Affairs', requestToDo: 2, studentCount: 5 },
   { id: 3, name: 'Asst. Prof. Pusadee Seresangtakul', title: 'Associate Dean for Academic Affairs', requestToDo: 2, studentCount: 5 },
@@ -23,37 +25,48 @@ const avatarColors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400'];
 
 export default function StaffAdvisorsPage() {
   const router = useRouter();
+  const [advisors, setAdvisors] = useState<Advisor[]>(initialAdvisors);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const getInitials = (name: string) =>
     name.split(' ').filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+  const handleAddAdvisor = (data: NewAdvisorData) => {
+    const fullName = [data.prefix, data.firstName, data.middleName, data.lastName].filter(Boolean).join(' ');
+    const newId = Math.max(0, ...advisors.map(a => a.id)) + 1;
+    setAdvisors(prev => [...prev, { id: newId, name: fullName, title: data.nationality, requestToDo: 0, studentCount: 0, photoUrl: data.photoUrl }]);
+    setShowAddModal(false);
+  };
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-2xl font-semibold text-primary">Teachers Management</p>
+        <p className="text-2xl font-semibold text-primary">Advisor Management</p>
 
         <button
-          onClick={() => { }}
+          onClick={() => setShowAddModal(true)}
           className="bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
         >
           <RiAddLine className="text-lg" />
-          Teacher
+          Advisor
         </button>
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {mockAdvisors.map(advisor => (
+        {advisors.map(advisor => (
           <div key={advisor.id} className="bg-white rounded-2xl p-5 flex flex-col gap-4
            shadow-md hover:shadow-xl hover:-translate-y-1
            transition-all duration-300">
 
             {/* Top Row: Avatar + Edit */}
             <div className="flex items-start justify-between">
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg">
-                {getInitials(advisor.name)}
+              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+                {advisor.photoUrl
+                  ? <img src={advisor.photoUrl} alt={advisor.name} className="w-full h-full object-cover" />
+                  : getInitials(advisor.name)}
               </div>
               <button
                 onClick={() => router.push(`/staff/advisors/${advisor.id}/edit`)}
@@ -120,6 +133,10 @@ export default function StaffAdvisorsPage() {
           </div>
         ))}
       </div>
+
+      {showAddModal && (
+        <AddAdvisorModal onSave={handleAddAdvisor} onClose={() => setShowAddModal(false)} />
+      )}
 
     </div>
   );

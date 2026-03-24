@@ -61,7 +61,7 @@ export default function AdvisorEditPage() {
         >
           <RiArrowLeftLine size={18} />
         </button>
-        <h1 className="text-2xl font-semibold text-primary">Edit Teacher</h1>
+        <h1 className="text-2xl font-semibold text-primary">Edit Advisor</h1>
       </div>
 
       {/* Main layout */}
