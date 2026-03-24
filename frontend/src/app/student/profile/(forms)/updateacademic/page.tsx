@@ -51,7 +51,7 @@ export default function AcademicPage() {
         >
           <RiArrowLeftLine size={18} />
         </button>
-        <h1 className="text-2xl font-semibold text-primary">Academic Document</h1>
+        <h1 className="text-2xl font-semibold text-primary">Update My Academic Document</h1>
       </div>
 
       <div className="flex flex-col gap-5">

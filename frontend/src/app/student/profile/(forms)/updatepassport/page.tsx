@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { setProgressField } from '@/lib/progressStore';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiUpload } from 'react-icons/fi';
@@ -34,15 +34,48 @@ function sexFromPrefix(prefix: string) {
   return prefix === 'Mr.' ? 'M' : prefix ? 'F' : '—';
 }
 
-export default function PassportPage() {
+const MOCK_PASSPORTS = [
+  {
+    id: 1,
+    passportNo: 'UA51234567',
+    prefix: 'Miss',
+    givenName: 'Pichamon',
+    middleName: '',
+    surname: 'Phongphrathapet',
+    nationality: 'Thai',
+    nationalityId: '1123100110110',
+    placeOfBirth: 'Khon Kaen',
+    country: 'Thailand',
+    birthDate: '1998-03-15',
+    dateOfIssue: '2020-06-01',
+    expiryDate: '2030-05-31',
+    image: 'https://wacinfotech.com/images/OS550/passport-thai-mrp.jpg',
+  },
+];
+
+function PassportForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+  const isEdit = !!id;
+  const existing = isEdit ? MOCK_PASSPORTS.find(p => p.id === Number(id)) ?? null : null;
+
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(existing?.image ?? null);
 
   const [form, setForm] = useState({
-    passportNo: '', prefix: '', surname: '', middleName: '', givenName: '',
-    nationality: '', nationalityId: '', placeOfBirth: '', country: '',
-    birthDate: '', dateOfIssue: '', expiryDate: '',
+    passportNo:    existing?.passportNo    ?? '',
+    prefix:        existing?.prefix        ?? '',
+    surname:       existing?.surname       ?? '',
+    middleName:    existing?.middleName    ?? '',
+    givenName:     existing?.givenName     ?? '',
+    nationality:   existing?.nationality   ?? '',
+    nationalityId: existing?.nationalityId ?? '',
+    placeOfBirth:  existing?.placeOfBirth  ?? '',
+    country:       existing?.country       ?? '',
+    birthDate:     existing?.birthDate     ?? '',
+    dateOfIssue:   existing?.dateOfIssue   ?? '',
+    expiryDate:    existing?.expiryDate    ?? '',
   });
 
   function set(key: keyof typeof form) {
@@ -67,15 +100,17 @@ export default function PassportPage() {
         >
           <RiArrowLeftLine size={18} />
         </button>
-        <h1 className="text-2xl font-semibold text-primary">Add My Passport</h1>
+        <h1 className="text-2xl font-semibold text-primary">
+          {isEdit ? 'Edit Passport' : 'Add Passport'}
+        </h1>
       </div>
 
       {/* Top: Upload + Preview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 ">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
         {/* Upload area */}
         <div
           onClick={() => fileRef.current?.click()}
-          className="relative flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-primary/50 transition min-h-56 bg-gray-50 "
+          className="relative flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-primary/50 transition min-h-56 bg-gray-50"
         >
           {preview ? (
             <img src={preview} alt="Passport" className="w-full h-full object-contain rounded-2xl max-h-64" />
@@ -88,25 +123,20 @@ export default function PassportPage() {
           )}
           <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
         </div>
-        
+
         {/* Passport preview card */}
         <div className="border border-gray-200 rounded-2xl p-5 flex flex-col gap-3 bg-white shadow-sm text-sm min-h-56">
-          {/* Top row */}
           <div className="flex items-start justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] text-gray-400 uppercase tracking-wide">Country Code</span>
-              <span className="text-sm font-medium text-gray-700">{form.country ? form.country.slice(0, 2).toUpperCase() : 'US'}</span>
+              <span className="text-sm font-medium text-gray-700">{form.country ? form.country.slice(0, 2).toUpperCase() : 'TH'}</span>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-gray-400 uppercase tracking-wide">Passport No.</span>
               <span className="text-sm font-bold text-primary">{form.passportNo || 'UA51234567'}</span>
             </div>
           </div>
-
-          {/* Name */}
           <p className="text-base font-semibold text-gray-800">{fullName}</p>
-
-          {/* Info grid */}
           <div className="grid grid-cols-3 gap-x-4 gap-y-2 mt-1">
             <div className="flex flex-col gap-0.5">
               <span className="text-[10px] text-gray-400">Nationality</span>
@@ -133,8 +163,6 @@ export default function PassportPage() {
               <span className="text-xs font-medium text-gray-700">{form.country || '—'}</span>
             </div>
           </div>
-
-          {/* Dates */}
           <div className="flex flex-col gap-1 mt-1">
             <div className="flex flex-col gap-0.5">
               <span className="text-[10px] text-gray-400">Date of issue</span>
@@ -224,5 +252,13 @@ export default function PassportPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function PassportPage() {
+  return (
+    <Suspense>
+      <PassportForm />
+    </Suspense>
   );
 }
