@@ -6,6 +6,7 @@ import { RiArrowLeftLine, RiMailLine, RiPhoneLine, RiMapPinLine, RiCheckboxCircl
 import { clsx } from 'clsx';
 import { BsPeopleFill } from 'react-icons/bs';
 import Button from '@/components/ui/Button';
+import { RenewalDetailModal, type RenewalModalData } from '@/components/RenewalDetailModal';
 
 type VisaStatus = 'Active' | 'Expired' | 'Expiring Soon';
 type Tab = 'Student Information' | 'Passport & Visa' | 'Health Insurance' | 'Academic Record' | 'Recent Activity' | 'Renewal History';
@@ -18,6 +19,9 @@ interface PassportRecord {
   issueDate: string;
   expiryDate: string;
   isCurrent: boolean;
+  imageUrl?: string;
+  mrzLine1?: string;
+  mrzLine2?: string;
 }
 
 interface VisaRecord {
@@ -28,6 +32,7 @@ interface VisaRecord {
   validUntil: string;
   entries: string;
   isCurrent: boolean;
+  imageUrls?: string[];
 }
 
 interface InsuranceRecord {
@@ -37,6 +42,7 @@ interface InsuranceRecord {
   startDate: string;
   expiryDate: string;
   isCurrent: boolean;
+  imageUrl?: string;
 }
 
 interface StudentDetail {
@@ -73,16 +79,17 @@ const mockStudents: Record<string, StudentDetail> = {
     ecName: 'Nguyen Van A', ecEmail: 'nguyen.a@gmail.com', ecPhone: '+84 90 123 4567', ecRelationship: 'Parent',
 
     personal: [
-      { label: 'Prefix',      value: 'Mr.' },
-      { label: 'First Name',  value: 'Thitikorn' },
-      { label: 'Middle Name', value: '—' },
-      { label: 'Last Name',   value: 'Suwanbutwipha' },
-      { label: 'Birth Date',  value: '01/01/1998' },
-      { label: 'Gender',      value: 'Male' },
-      { label: 'Religion',    value: 'Buddhism' },
+      { label: 'Prefix',       value: 'Mr.' },
+      { label: 'First Name',   value: 'Thitikorn' },
+      { label: 'Middle Name',  value: '—' },
+      { label: 'Last Name',    value: 'Suwanbutwipha' },
+      { label: 'Birth Date',   value: '01/01/1998' },
+      { label: 'Gender',       value: 'Male' },
+      { label: 'Religion',     value: 'Buddhism' },
+      { label: 'Nationality',  value: 'Vietnamese' },
       { label: 'Home Country', value: 'Vietnam' },
-      { label: 'Program',     value: 'Geo-Informatics' },
-      { label: 'Degree',      value: 'Ph.D.' },
+      { label: 'Program',      value: 'Geo-Informatics' },
+      { label: 'Degree',       value: 'Ph.D.' },
     ],
 
     passport: [
@@ -124,18 +131,30 @@ const mockStudents: Record<string, StudentDetail> = {
     academicRecordImageUrl: 'https://online.fliphtml5.com/fkehc/cwmu/files/shot.jpg',
 
     passports: [
-      { passportNumber: 'B98765432', issuingCountry: 'Vietnam', issueDate: '01/03/2024', expiryDate: '01/03/2034', isCurrent: true  },
-      { passportNumber: 'A12345678', issuingCountry: 'Vietnam', issueDate: '01/03/2014', expiryDate: '01/03/2024', isCurrent: false },
+      { passportNumber: 'B98765432', issuingCountry: 'Vietnam', issueDate: '01/03/2024', expiryDate: '01/03/2034', isCurrent: true,
+        imageUrl: 'https://wacinfotech.com/images/OS550/passport-thai-mrp.jpg',
+        mrzLine1: 'P<VNMSUWANBUTWIPHA<<THITIKORN<<<<<<<<<<<<<<',
+        mrzLine2: 'B987654321VNM9801015M3403014<<<<<<<<<<<<<<8' },
+      { passportNumber: 'A12345678', issuingCountry: 'Vietnam', issueDate: '01/03/2014', expiryDate: '01/03/2024', isCurrent: false,
+        imageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Chinese_Biometric_Passport.jpg/320px-Chinese_Biometric_Passport.jpg',
+        mrzLine1: 'P<VNMSUWANBUTWIPHA<<THITIKORN<<<<<<<<<<<<<<',
+        mrzLine2: 'A123456781VNM9801015M2403014<<<<<<<<<<<<<<4' },
     ],
     visas: [
-      { passportNo: 'B98765432', visaType: 'ED', placeOfIssue: 'Bangkok', validFrom: '15/04/2025', validUntil: '14/04/2026', entries: 'Multiple', isCurrent: true  },
-      { passportNo: 'A12345678', visaType: 'ED', placeOfIssue: 'Hanoi',   validFrom: '15/04/2024', validUntil: '14/04/2025', entries: 'Single',   isCurrent: false },
-      { passportNo: 'A12345678', visaType: 'ED', placeOfIssue: 'Hanoi',   validFrom: '15/04/2023', validUntil: '14/04/2024', entries: 'Single',   isCurrent: false },
+      { passportNo: 'B98765432', visaType: 'ED', placeOfIssue: 'Bangkok', validFrom: '15/04/2025', validUntil: '14/04/2026', entries: 'Multiple', isCurrent: true,
+        imageUrls: ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoiea5WJFKQ_q-vVykcmQbLSlEKWMXs-3vIg&s', 'https://loyaltylobby.com/wp-content/uploads/2022/08/Thai-Entry-Stamps.jpeg'] },
+      { passportNo: 'A12345678', visaType: 'ED', placeOfIssue: 'Hanoi',   validFrom: '15/04/2024', validUntil: '14/04/2025', entries: 'Single',   isCurrent: false,
+        imageUrls: ['https://loyaltylobby.com/wp-content/uploads/2022/08/Thai-Entry-Stamps.jpeg'] },
+      { passportNo: 'A12345678', visaType: 'ED', placeOfIssue: 'Hanoi',   validFrom: '15/04/2023', validUntil: '14/04/2024', entries: 'Single',   isCurrent: false,
+        imageUrls: ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoiea5WJFKQ_q-vVykcmQbLSlEKWMXs-3vIg&s'] },
     ],
     insurances: [
-      { provider: 'AXA Insurance',       policyNumber: 'AXA-2025-88001', coverageType: 'Comprehensive', startDate: '01/08/2025', expiryDate: '31/07/2026', isCurrent: true  },
-      { provider: 'Thai Life Insurance', policyNumber: 'TLI-2024-44320', coverageType: 'Inpatient',     startDate: '01/08/2024', expiryDate: '31/07/2025', isCurrent: false },
-      { provider: 'Thai Life Insurance', policyNumber: 'TLI-2023-32100', coverageType: 'Inpatient',     startDate: '01/08/2023', expiryDate: '31/07/2024', isCurrent: false },
+      { provider: 'AXA Insurance',       policyNumber: 'AXA-2025-88001', coverageType: 'Comprehensive', startDate: '01/08/2025', expiryDate: '31/07/2026', isCurrent: true,
+        imageUrl: 'https://www.tdi.texas.gov/artwork/compliance/bcbstx.png' },
+      { provider: 'Thai Life Insurance', policyNumber: 'TLI-2024-44320', coverageType: 'Inpatient',     startDate: '01/08/2024', expiryDate: '31/07/2025', isCurrent: false,
+        imageUrl: 'https://www.tdi.texas.gov/artwork/compliance/bcbstx.png' },
+      { provider: 'Thai Life Insurance', policyNumber: 'TLI-2023-32100', coverageType: 'Inpatient',     startDate: '01/08/2023', expiryDate: '31/07/2024', isCurrent: false,
+        imageUrl: 'https://www.tdi.texas.gov/artwork/compliance/bcbstx.png' },
     ],
 
     activity: [
@@ -200,8 +219,7 @@ export default function StaffStudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('Student Information');
-  const [selectedRenewal, setSelectedRenewal] = useState<string | null>(null);
-  const toggleRenewal = (key: string) => setSelectedRenewal(prev => prev === key ? null : key);
+  const [renewalModal, setRenewalModal] = useState<RenewalModalData | null>(null);
 
   const s = mockStudents[id] ?? mockStudents['1'];
   const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase();
@@ -357,66 +375,6 @@ export default function StaffStudentDetailPage() {
                 </div>
               </div>
 
-              <HistoryTableHeader label="Passport History" />
-              <div className="border border-gray-100 rounded-2xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issuing Country</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {s.passports.map((p, i) => (
-                      <tr key={i} className={clsx('hover:bg-gray-50 transition', p.isCurrent && 'bg-green-50/40')}>
-                        <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
-                        <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
-                        <td className="py-3 px-4 text-primary">{p.issueDate}</td>
-                        <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
-                        <td className="py-3 px-4 text-center">
-                          {p.isCurrent ? <CurrentBadge /> : <PastBadge />}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <HistoryTableHeader label="Visa History" />
-              <div className="border border-gray-100 rounded-2xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Visa Type</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Place of Issue</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid From</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid Until</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Entries</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {s.visas.map((v, i) => (
-                      <tr key={i} className={clsx('hover:bg-gray-50 transition', v.isCurrent && 'bg-green-50/40')}>
-                        <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
-                        <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
-                        <td className="py-3 px-4 text-primary">{v.placeOfIssue}</td>
-                        <td className="py-3 px-4 text-primary">{v.validFrom}</td>
-                        <td className="py-3 px-4 text-primary">{v.validUntil}</td>
-                        <td className="py-3 px-4 text-primary">{v.entries}</td>
-                        <td className="py-3 px-4 text-center">
-                          {v.isCurrent ? <CurrentBadge /> : <PastBadge />}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
             </div>
           )}
 
@@ -434,36 +392,6 @@ export default function StaffStudentDetailPage() {
                   className="w-full lg:w-1/2 object-cover rounded-xl bg-gray-200"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
-              </div>
-
-              <HistoryTableHeader label="Health Insurance History" />
-              <div className="border border-gray-100 rounded-2xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Provider</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Policy No.</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Coverage Type</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Start Date</th>
-                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
-                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {s.insurances.map((ins, i) => (
-                      <tr key={i} className={clsx('hover:bg-gray-50 transition', ins.isCurrent && 'bg-green-50/40')}>
-                        <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
-                        <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
-                        <td className="py-3 px-4 text-primary">{ins.coverageType}</td>
-                        <td className="py-3 px-4 text-primary">{ins.startDate}</td>
-                        <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
-                        <td className="py-3 px-4 text-center">
-                          {ins.isCurrent ? <CurrentBadge /> : <PastBadge />}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
 
             </div>
@@ -531,34 +459,26 @@ export default function StaffStudentDetailPage() {
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
                         <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                        <th className="w-8" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.passports.map((p, i) => {
-                        const key = `passport-${i}`; const open = selectedRenewal === key;
-                        return (
-                          <>
-                            <tr key={key} onClick={() => toggleRenewal(key)}
-                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', p.isCurrent && 'bg-green-50/40')}>
-                              <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
-                              <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
-                              <td className="py-3 px-4 text-primary">{p.issueDate}</td>
-                              <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
-                              <td className="py-3 px-4 text-center">{p.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
-                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
-                            </tr>
-                            {open && (
-                              <tr key={`${key}-d`}><td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                  {[{l:'Passport No.',v:p.passportNumber},{l:'Issuing Country',v:p.issuingCountry},{l:'Issue Date',v:p.issueDate},{l:'Expiry Date',v:p.expiryDate}]
-                                    .map(f => <div key={f.l} className="flex flex-col gap-0.5"><span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.l}</span><span className="text-sm font-semibold text-primary">{f.v}</span></div>)}
-                                </div>
-                              </td></tr>
-                            )}
-                          </>
-                        );
-                      })}
+                      {s.passports.map((p, i) => (
+                        <tr key={i} onClick={() => setRenewalModal({ kind: 'passport', data: {
+                            ...p,
+                            extraItems: s.passport.map(it =>
+                              it.label === 'Date of Issue' ? { ...it, value: p.issueDate } :
+                              it.label === 'Expiry Date'   ? { ...it, value: p.expiryDate } :
+                              it
+                            ),
+                          } })}
+                          className={clsx('cursor-pointer hover:bg-secondary/40 transition', p.isCurrent && 'bg-green-50/40')}>
+                          <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
+                          <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
+                          <td className="py-3 px-4 text-primary">{p.issueDate}</td>
+                          <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
+                          <td className="py-3 px-4 text-center">{p.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -576,34 +496,19 @@ export default function StaffStudentDetailPage() {
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid From</th>
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid Until</th>
                         <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                        <th className="w-8" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.visas.map((v, i) => {
-                        const key = `visa-${i}`; const open = selectedRenewal === key;
-                        return (
-                          <>
-                            <tr key={key} onClick={() => toggleRenewal(key)}
-                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', v.isCurrent && 'bg-green-50/40')}>
-                              <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
-                              <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
-                              <td className="py-3 px-4 text-primary">{v.validFrom}</td>
-                              <td className="py-3 px-4 text-primary">{v.validUntil}</td>
-                              <td className="py-3 px-4 text-center">{v.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
-                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
-                            </tr>
-                            {open && (
-                              <tr key={`${key}-d`}><td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                  {[{l:'Passport No.',v:v.passportNo},{l:'Visa Type',v:v.visaType},{l:'Place of Issue',v:v.placeOfIssue},{l:'Valid From',v:v.validFrom},{l:'Valid Until',v:v.validUntil},{l:'Entries',v:v.entries}]
-                                    .map(f => <div key={f.l} className="flex flex-col gap-0.5"><span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.l}</span><span className="text-sm font-semibold text-primary">{f.v}</span></div>)}
-                                </div>
-                              </td></tr>
-                            )}
-                          </>
-                        );
-                      })}
+                      {s.visas.map((v, i) => (
+                        <tr key={i} onClick={() => setRenewalModal({ kind: 'visa', data: { ...v } })}
+                          className={clsx('cursor-pointer hover:bg-secondary/40 transition', v.isCurrent && 'bg-green-50/40')}>
+                          <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
+                          <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
+                          <td className="py-3 px-4 text-primary">{v.validFrom}</td>
+                          <td className="py-3 px-4 text-primary">{v.validUntil}</td>
+                          <td className="py-3 px-4 text-center">{v.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -621,34 +526,19 @@ export default function StaffStudentDetailPage() {
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Start Date</th>
                         <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
                         <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                        <th className="w-8" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.insurances.map((ins, i) => {
-                        const key = `ins-${i}`; const open = selectedRenewal === key;
-                        return (
-                          <>
-                            <tr key={key} onClick={() => toggleRenewal(key)}
-                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', ins.isCurrent && 'bg-green-50/40')}>
-                              <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
-                              <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
-                              <td className="py-3 px-4 text-primary">{ins.startDate}</td>
-                              <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
-                              <td className="py-3 px-4 text-center">{ins.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
-                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
-                            </tr>
-                            {open && (
-                              <tr key={`${key}-d`}><td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                  {[{l:'Provider',v:ins.provider},{l:'Policy No.',v:ins.policyNumber},{l:'Coverage Type',v:ins.coverageType},{l:'Start Date',v:ins.startDate},{l:'Expiry Date',v:ins.expiryDate}]
-                                    .map(f => <div key={f.l} className="flex flex-col gap-0.5"><span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.l}</span><span className="text-sm font-semibold text-primary">{f.v}</span></div>)}
-                                </div>
-                              </td></tr>
-                            )}
-                          </>
-                        );
-                      })}
+                      {s.insurances.map((ins, i) => (
+                        <tr key={i} onClick={() => setRenewalModal({ kind: 'insurance', data: { ...ins } })}
+                          className={clsx('cursor-pointer hover:bg-secondary/40 transition', ins.isCurrent && 'bg-green-50/40')}>
+                          <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
+                          <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
+                          <td className="py-3 px-4 text-primary">{ins.startDate}</td>
+                          <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
+                          <td className="py-3 px-4 text-center">{ins.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -659,6 +549,13 @@ export default function StaffStudentDetailPage() {
 
         </div>
       </div>
+
+      {renewalModal && (
+        <RenewalDetailModal
+          record={renewalModal}
+          onClose={() => setRenewalModal(null)}
+        />
+      )}
 
     </div>
   );

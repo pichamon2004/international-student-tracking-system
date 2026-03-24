@@ -83,9 +83,6 @@ export default function EmailTemplateModal({ template, isCreate, allVariables, o
         {/* ── Header — KKU Blue (matches navbar) ── */}
         <div className="bg-primary text-white px-5 py-4 flex items-center justify-between shrink-0 rounded-t-2xl">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-              <RiMailLine size={16} className="text-white" />
-            </div>
             <div>
               <p className="text-sm font-semibold">{isCreate ? 'New Email Template' : 'Edit Email Template'}</p>
               {template && <p className="text-xs text-white/60">{template.name}</p>}
