@@ -5,7 +5,7 @@ import { RiSearchLine, RiAlarmWarningLine, RiArrowDropDownLine } from 'react-ico
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 
-type AlertStatus = 'not_added' | 'waiting' | 'visa_20' | 'visa_10';
+type AlertStatus = 'visa_critical' | 'visa_warning' | 'visa_normal' | 'visa_expired';
 
 interface AlertStudent {
   id: number;
@@ -26,20 +26,20 @@ const statCards = [
 ];
 
 const mockAlerts: AlertStudent[] = [
-  { id: 1, studentId: '645020082-4', name: 'Joanna Sofia', nationality: 'Indonesian', level: 'Ph.D.', major: 'CS+IT', advisor: 'Lect. Pawina', alertStatus: 'not_added' },
-  { id: 2, studentId: '645020081-6', name: 'Monica Sofia', nationality: 'Cambodian', level: 'M.Sc.', major: 'GIS', advisor: 'Lect. Kamron', alertStatus: 'waiting' },
-  { id: 3, studentId: '665380017-0', name: 'Cristina Sofia', nationality: 'American', level: 'M.Sc.', major: 'DS+AI', advisor: 'Lect. Panyaphon', alertStatus: 'visa_20' },
-  { id: 4, studentId: '665380032-4', name: 'Cristina Sofia', nationality: 'Chinese', level: 'Ph.D.', major: 'CS+IT', advisor: 'Lect. Arfat', alertStatus: 'visa_10' },
+  { id: 1, studentId: '645020082-4', name: 'Joanna Sofia',  nationality: 'Indonesian', level: 'Ph.D.', major: 'CS+IT', advisor: 'Lect. Pawina',     alertStatus: 'visa_critical' },
+  { id: 2, studentId: '645020081-6', name: 'Monica Sofia',  nationality: 'Cambodian',  level: 'M.Sc.', major: 'GIS',   advisor: 'Lect. Kamron',     alertStatus: 'visa_warning'  },
+  { id: 3, studentId: '665380017-0', name: 'Cristina Sofia', nationality: 'American',  level: 'M.Sc.', major: 'DS+AI', advisor: 'Lect. Panyaphon',  alertStatus: 'visa_normal'   },
+  { id: 4, studentId: '665380032-4', name: 'David Kim',     nationality: 'Chinese',    level: 'Ph.D.', major: 'CS+IT', advisor: 'Lect. Arfat',      alertStatus: 'visa_expired'  },
 ];
 
 const alertConfig: Record<AlertStatus, { label: string; className: string }> = {
-  not_added: { label: 'Not added 2 items yet', className: 'bg-red-100 text-red-600' },
-  waiting: { label: 'Waiting for approval', className: 'bg-yellow-100 text-yellow-700' },
-  visa_20: { label: 'Visa expiry in 20 days', className: 'bg-yellow-100 text-yellow-700' },
-  visa_10: { label: 'Visa expiry in 10 days', className: 'bg-red-100 text-red-600' },
+  visa_critical: { label: 'Critical (0–14 days)',  className: 'bg-red-100 text-red-600'        },
+  visa_warning:  { label: 'Warning (15–45 days)',  className: 'bg-yellow-100 text-yellow-700'  },
+  visa_normal:   { label: 'Normal (>45 days)',     className: 'bg-green-100 text-green-700'    },
+  visa_expired:  { label: 'Expired',               className: 'bg-gray-100 text-gray-500'      },
 };
 
-const STATUS_OPTIONS = ['All Status', 'Not added', 'Waiting', 'Visa expiry'];
+const STATUS_OPTIONS = ['All', 'Critical', 'Warning', 'Normal', 'Expired'];
 const TYPE_OPTIONS = ['All Document Types', 'Visa', 'Passport', 'Insurance'];
 
 export default function StaffNotificationPage() {
@@ -234,11 +234,8 @@ export default function StaffNotificationPage() {
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <Button variant="info" onClick={() => { }} />
-                        {(s.alertStatus === 'not_added' || s.alertStatus === 'visa_20' || s.alertStatus === 'visa_10') && (
+                        {(s.alertStatus === 'visa_critical' || s.alertStatus === 'visa_warning') && (
                           <Button variant="warning" label="Follow Up" onClick={() => { }} />
-                        )}
-                        {s.alertStatus === 'waiting' && (
-                          <Button variant="success" label="Approve" onClick={() => { }} />
                         )}
                       </div>
                     </td>

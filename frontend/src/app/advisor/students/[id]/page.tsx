@@ -2,12 +2,41 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiMailLine, RiPhoneLine, RiMapPinLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiMailLine, RiPhoneLine, RiMapPinLine, RiCheckboxCircleLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { BsPeopleFill } from "react-icons/bs";
+import { BsPeopleFill } from 'react-icons/bs';
 
 type VisaStatus = 'Active' | 'Expired' | 'Expiring Soon';
-type Tab = 'Personal' | 'Passport & Visa' | 'Health Insurance' | 'Academic Record' | 'Dependents';
+type Tab = 'Personal' | 'Passport & Visa' | 'Health Insurance' | 'Academic Record' | 'Dependents' | 'Renewal History';
+
+/* ─── Types ───────────────────────────────────────────────── */
+
+interface PassportRecord {
+  passportNumber: string;
+  issuingCountry: string;
+  issueDate: string;
+  expiryDate: string;
+  isCurrent: boolean;
+}
+
+interface VisaRecord {
+  passportNo: string;
+  visaType: string;
+  placeOfIssue: string;
+  validFrom: string;
+  validUntil: string;
+  entries: string;
+  isCurrent: boolean;
+}
+
+interface InsuranceRecord {
+  provider: string;
+  policyNumber: string;
+  coverageType: string;
+  startDate: string;
+  expiryDate: string;
+  isCurrent: boolean;
+}
 
 interface StudentDetail {
   id: string;
@@ -25,18 +54,25 @@ interface StudentDetail {
   ecEmail: string;
   ecPhone: string;
   ecRelationship: string;
+  // Flat current-record display (original)
   personal: { label: string; value: string }[];
   passport: { label: string; value: string }[];
   visa: { label: string; value: string }[];
   insurance: { label: string; value: string }[];
+  passportImageUrl: string;
+  visaImageUrls: string[];
+  insuranceImageUrl: string;
+  academicRecordImageUrl: string;
+  // History arrays (new)
+  passports: PassportRecord[];
+  visas: VisaRecord[];
+  insurances: InsuranceRecord[];
   dependents: { name: string; relation: string; nationality: string; passportNo: string }[];
   activities: { date: string; description: string; status: string; statusColor: 'green' | 'yellow' | 'red' | 'blue' }[];
   missingCount: number;
-  passportImageUrl: string;
-  visaImageUrls: [string, string, string];
-  insuranceImageUrl: string;
-  academicRecordImageUrl: string;
 }
+
+/* ─── Mock Data ───────────────────────────────────────────── */
 
 const mockStudents: Record<string, StudentDetail> = {
   '1': {
@@ -45,66 +81,97 @@ const mockStudents: Record<string, StudentDetail> = {
     email: 'zhang.wei@kkumail.com', phone: '+66 81 234 5678', address: '123 KKU Dormitory, Khon Kaen',
     visaStatus: 'Active', visaExpiry: '31/12/2025',
     ecName: 'Zhang Ming', ecEmail: 'zhang.ming@gmail.com', ecPhone: '+86 10 1234 5678', ecRelationship: 'Parent',
+
     personal: [
-      { label: 'Prefix',          value: 'Mr.' },
-      { label: 'First Name',      value: 'Zhang' },
-      { label: 'Middle Name',     value: '—' },
-      { label: 'Last Name',       value: 'Wei' },
-      { label: 'Date of Birth',   value: '15/03/1999' },
-      { label: 'Gender',          value: 'Male' },
-      { label: 'Religion',        value: 'Buddhism' },
-      { label: 'Home Country',    value: 'China' },
-      { label: 'Home Address',    value: 'Beijing, China' },
-      { label: 'Program',         value: 'Computer Engineering' },
-      { label: 'Faculty',         value: 'College of Computing' },
+      { label: 'Prefix',        value: 'Mr.' },
+      { label: 'First Name',    value: 'Zhang' },
+      { label: 'Middle Name',   value: '—' },
+      { label: 'Last Name',     value: 'Wei' },
+      { label: 'Date of Birth', value: '15/03/1999' },
+      { label: 'Gender',        value: 'Male' },
+      { label: 'Religion',      value: 'Buddhism' },
+      { label: 'Home Country',  value: 'China' },
+      { label: 'Home Address',  value: 'Beijing, China' },
+      { label: 'Program',       value: 'Computer Engineering' },
+      { label: 'Faculty',       value: 'College of Computing' },
     ],
+
+    // Current passport flat display
     passport: [
-      { label: 'Prefix',          value: 'Mr.' },
-      { label: 'Surname',         value: 'Wei' },
-      { label: 'Middle Name',     value: '—' },
-      { label: 'Given Name',      value: 'Zhang' },
-      { label: 'Birth Date',      value: '15/03/1999' },
-      { label: 'Nationality',     value: 'Chinese' },
-      { label: 'Nationality ID',  value: '110000199903150001' },
-      { label: 'Place of Birth',  value: 'Beijing, China' },
-      { label: 'Date of Issue',   value: '01/01/2020' },
-      { label: 'Expiry Date',     value: '01/01/2030' },
+      { label: 'Prefix',         value: 'Mr.' },
+      { label: 'Surname',        value: 'Wei' },
+      { label: 'Middle Name',    value: '—' },
+      { label: 'Given Name',     value: 'Zhang' },
+      { label: 'Birth Date',     value: '15/03/1999' },
+      { label: 'Nationality',    value: 'Chinese' },
+      { label: 'Nationality ID', value: '110000199903150001' },
+      { label: 'Place of Birth', value: 'Beijing, China' },
+      { label: 'Date of Issue',  value: '01/02/2024' },
+      { label: 'Expiry Date',    value: '01/02/2034' },
     ],
+
+    // Current visa flat display
     visa: [
-      { label: 'Passport',        value: 'E12345678' },
-      { label: 'Place of Issue',  value: 'Beijing' },
-      { label: 'Valid From',      value: '01/01/2024' },
-      { label: 'Valid Until',     value: '31/12/2025' },
-      { label: 'Type of Visa',    value: 'ED' },
+      { label: 'Passport',          value: 'E98765432' },
+      { label: 'Place of Issue',    value: 'Beijing' },
+      { label: 'Valid From',        value: '01/01/2025' },
+      { label: 'Valid Until',       value: '31/12/2025' },
+      { label: 'Type of Visa',      value: 'ED' },
       { label: 'Number of Entries', value: 'Multiple' },
     ],
+
+    // Current insurance flat display
     insurance: [
-      { label: 'Provider',        value: 'Krungthai-AXA' },
-      { label: 'Coverage',        value: '40,000 THB' },
-      { label: 'Valid from',        value: '31/05/2025' },
-      { label: 'Valid Until',     value: '31/05/2025' },
+      { label: 'Provider',       value: 'Krungthai-AXA' },
+      { label: 'Policy No.',     value: 'AXA-2025-00123' },
+      { label: 'Coverage Type',  value: 'Comprehensive' },
+      { label: 'Valid From',     value: '01/06/2025' },
+      { label: 'Valid Until',    value: '31/05/2026' },
     ],
-    dependents: [],
-    activities: [
-      { date: '01/01/2025', description: 'Leave Request Form',  status: 'Staff Of College Approved', statusColor: 'yellow' },
-      { date: '01/01/2025', description: 'Visa Added',          status: 'Updated',                   statusColor: 'green'  },
-    ],
-    missingCount: 2,
+
     passportImageUrl: 'https://wacinfotech.com/images/OS550/passport-thai-mrp.jpg',
-    visaImageUrls: ['https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoiea5WJFKQ_q-vVykcmQbLSlEKWMXs-3vIg&s', 'https://preview.redd.it/my-slightly-terrifying-thai-entry-stamp-and-extension-stamp-v0-55v5a48pef1e1.jpeg?width=1080&crop=smart&auto=webp&s=80dc2da7eb9416bad4032d9b01586d06919f1a76', 'https://loyaltylobby.com/wp-content/uploads/2022/08/Thai-Entry-Stamps.jpeg'],
+    visaImageUrls: [
+      'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQoiea5WJFKQ_q-vVykcmQbLSlEKWMXs-3vIg&s',
+      'https://loyaltylobby.com/wp-content/uploads/2022/08/Thai-Entry-Stamps.jpeg',
+    ],
     insuranceImageUrl: 'https://www.tdi.texas.gov/artwork/compliance/bcbstx.png',
     academicRecordImageUrl: 'https://online.fliphtml5.com/fkehc/cwmu/files/shot.jpg',
+
+    // History
+    passports: [
+      { passportNumber: 'E98765432', issuingCountry: 'China', issueDate: '01/02/2024', expiryDate: '01/02/2034', isCurrent: true  },
+      { passportNumber: 'E12345678', issuingCountry: 'China', issueDate: '01/02/2014', expiryDate: '01/02/2024', isCurrent: false },
+    ],
+    visas: [
+      { passportNo: 'E98765432', visaType: 'ED', placeOfIssue: 'Beijing', validFrom: '01/01/2025', validUntil: '31/12/2025', entries: 'Multiple', isCurrent: true  },
+      { passportNo: 'E12345678', visaType: 'ED', placeOfIssue: 'Beijing', validFrom: '01/01/2024', validUntil: '31/12/2024', entries: 'Single',   isCurrent: false },
+      { passportNo: 'E12345678', visaType: 'ED', placeOfIssue: 'Beijing', validFrom: '01/01/2023', validUntil: '31/12/2023', entries: 'Single',   isCurrent: false },
+    ],
+    insurances: [
+      { provider: 'Krungthai-AXA', policyNumber: 'AXA-2025-00123', coverageType: 'Comprehensive', startDate: '01/06/2025', expiryDate: '31/05/2026', isCurrent: true  },
+      { provider: 'Krungthai-AXA', policyNumber: 'AXA-2024-00088', coverageType: 'Inpatient',     startDate: '01/06/2024', expiryDate: '31/05/2025', isCurrent: false },
+    ],
+
+    dependents: [],
+    activities: [
+      { date: '01/02/2025', description: 'Passport',          status: 'Updated',                    statusColor: 'green'  },
+      { date: '01/01/2025', description: 'Visa',              status: 'Updated',                    statusColor: 'green'  },
+      { date: '01/06/2025', description: 'Health Insurance',  status: 'Updated',                    statusColor: 'green'  },
+      { date: '01/01/2025', description: 'Leave Request Form', status: 'Staff Of College Approved', statusColor: 'yellow' },
+    ],
+    missingCount: 2,
   },
 };
 
-const TABS: Tab[] = ['Personal', 'Passport & Visa', 'Health Insurance', 'Academic Record', 'Dependents'];
-
+const TABS: Tab[] = ['Personal', 'Passport & Visa', 'Health Insurance', 'Academic Record', 'Dependents', 'Renewal History'];
 
 const visaStatusConfig: Record<VisaStatus, string> = {
   'Active':        'bg-green-100 text-green-700',
   'Expiring Soon': 'bg-yellow-100 text-yellow-700',
   'Expired':       'bg-red-100 text-red-600',
 };
+
+/* ─── Helpers ─────────────────────────────────────────────── */
 
 function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   return (
@@ -119,10 +186,38 @@ function InfoGrid({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
+function CurrentBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+      <RiCheckboxCircleLine size={12} /> Current
+    </span>
+  );
+}
+
+function PastBadge() {
+  return (
+    <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+      Past
+    </span>
+  );
+}
+
+function HistoryTableHeader({ label }: { label: string }) {
+  return (
+    <p className="text-xs font-semibold text-primary/50 uppercase tracking-wide mt-6 mb-2">
+      {label}
+    </p>
+  );
+}
+
+/* ─── Page ────────────────────────────────────────────────── */
+
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('Personal');
+  const [selectedRenewal, setSelectedRenewal] = useState<string | null>(null);
+  const toggleRenewal = (key: string) => setSelectedRenewal(prev => prev === key ? null : key);
 
   const s = mockStudents[id] ?? mockStudents['1'];
   const initials = s.name.split(' ').map(w => w[0]).join('').toUpperCase();
@@ -144,8 +239,9 @@ export default function StudentDetailPage() {
       {/* Content */}
       <div className="flex flex-col lg:flex-row gap-6">
 
-        {/* Left: Profile Card */}
+        {/* ── Left: Profile Card ── */}
         <div className="lg:w-64 shrink-0 flex flex-col gap-4">
+
           {/* Avatar */}
           <div className="bg-secondary rounded-2xl p-6 flex flex-col items-center gap-3">
             <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold">
@@ -181,26 +277,25 @@ export default function StudentDetailPage() {
           {/* Emergency Contact */}
           <div className="bg-secondary rounded-2xl p-5 flex flex-col gap-3">
             <p className="text-xs font-semibold text-primary/60 uppercase tracking-wide">Emergency Contact</p>
-            <div className="flex items-start mt-3 text-sm text-primary">
-              <span className="text-sm font-semibold text-primary">{s.ecName}</span>
-            </div>
+            <span className="text-sm font-semibold text-primary mt-1">{s.ecName}</span>
             <div className="flex items-start gap-2.5 text-sm text-primary">
               <RiMailLine size={15} className="shrink-0 mt-0.5 text-primary/50" />
-              <span className="text-sm text-primary break-all">{s.ecEmail}</span>
+              <span className="break-all">{s.ecEmail}</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-primary">
               <RiPhoneLine size={15} className="shrink-0 text-primary/50" />
-              <span className="text-sm text-primary">{s.ecPhone}</span>
+              <span>{s.ecPhone}</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-primary">
               <BsPeopleFill size={15} className="shrink-0 text-primary/50" />
-              <span className="text-sm text-primary">{s.ecRelationship}</span>
+              <span>{s.ecRelationship}</span>
             </div>
           </div>
         </div>
 
-        {/* Right: Tabs */}
-        <div className="flex-1 flex flex-col gap-4">
+        {/* ── Right: Tabs ── */}
+        <div className="flex-1 flex flex-col gap-4 min-w-0">
+
           {/* Tab Bar */}
           <div className="flex flex-wrap gap-1 border-b border-gray-100 pb-1">
             {TABS.map(tab => (
@@ -219,12 +314,20 @@ export default function StudentDetailPage() {
             ))}
           </div>
 
-          {/* Tab Content */}
-          <div className={clsx('rounded-2xl', activeTab !== 'Passport & Visa' && activeTab !== 'Health Insurance' && activeTab !== 'Academic Record' && 'bg-secondary p-6')}>
-            {activeTab === 'Personal'      && <InfoGrid items={s.personal} />}
-            {activeTab === 'Passport & Visa' && (
+          {/* ── Personal ── */}
+          {activeTab === 'Personal' && (
+            <div className="bg-secondary rounded-2xl p-6">
+              <InfoGrid items={s.personal} />
+            </div>
+          )}
+
+          {/* ── Passport & Visa ── */}
+          {activeTab === 'Passport & Visa' && (
+            <div className="flex flex-col gap-4">
+
+              {/* Original: current passport + visa side-by-side */}
               <div className="flex flex-col lg:flex-row gap-4">
-                {/* Passport Column */}
+                {/* Passport column */}
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="bg-secondary rounded-2xl p-6 flex flex-col gap-4">
                     <p className="text-sm font-semibold text-primary">Passport Information</p>
@@ -233,55 +336,162 @@ export default function StudentDetailPage() {
                   <img
                     src={s.passportImageUrl}
                     alt="Passport"
-                    className="w-full md:w-3/5 h-full object-cover rounded-xl bg-gray-200"
+                    className="w-full md:w-3/5 object-cover rounded-xl bg-gray-200"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
-                {/* Visa Column */}
+                {/* Visa column */}
                 <div className="flex-1 flex flex-col gap-3">
                   <div className="bg-secondary rounded-2xl p-6 flex flex-col gap-4">
                     <p className="text-sm font-semibold text-primary">Visa Information</p>
                     <InfoGrid items={s.visa} />
                   </div>
-                  <div className="grid md:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {s.visaImageUrls.map((url, i) => (
                       <img
                         key={i}
                         src={url}
                         alt={`Visa stamp ${i + 1}`}
-                        className={clsx('h-48 sm:h-36 w-full object-contain rounded-xl bg-gray-200')}
+                        className="h-36 w-full object-contain rounded-xl bg-gray-200"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
                     ))}
                   </div>
                 </div>
               </div>
-            )}
-            {activeTab === 'Health Insurance'  && (
-              <div className="flex flex-col gap-3">
-                <div className="bg-secondary rounded-2xl p-6 flex flex-col gap-4">
+
+              {/* History: passport */}
+              <HistoryTableHeader label="Passport History" />
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issuing Country</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
+                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {s.passports.map((p, i) => (
+                      <tr key={i} className={clsx('hover:bg-gray-50 transition', p.isCurrent && 'bg-green-50/40')}>
+                        <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
+                        <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
+                        <td className="py-3 px-4 text-primary">{p.issueDate}</td>
+                        <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
+                        <td className="py-3 px-4 text-center">
+                          {p.isCurrent ? <CurrentBadge /> : <PastBadge />}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* History: visa */}
+              <HistoryTableHeader label="Visa History" />
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Visa Type</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Place of Issue</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid From</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid Until</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Entries</th>
+                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {s.visas.map((v, i) => (
+                      <tr key={i} className={clsx('hover:bg-gray-50 transition', v.isCurrent && 'bg-green-50/40')}>
+                        <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
+                        <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
+                        <td className="py-3 px-4 text-primary">{v.placeOfIssue}</td>
+                        <td className="py-3 px-4 text-primary">{v.validFrom}</td>
+                        <td className="py-3 px-4 text-primary">{v.validUntil}</td>
+                        <td className="py-3 px-4 text-primary">{v.entries}</td>
+                        <td className="py-3 px-4 text-center">
+                          {v.isCurrent ? <CurrentBadge /> : <PastBadge />}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          )}
+
+          {/* ── Health Insurance ── */}
+          {activeTab === 'Health Insurance' && (
+            <div className="flex flex-col gap-4">
+
+              {/* Original: current insurance + image card */}
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1 bg-secondary rounded-2xl p-6 flex flex-col gap-4">
                   <InfoGrid items={s.insurance} />
                 </div>
                 <img
                   src={s.insuranceImageUrl}
                   alt="Insurance"
-                  className="w-full md:w-1/2 object-cover rounded-xl bg-gray-200"
+                  className="w-full lg:w-1/2 object-cover rounded-xl bg-gray-200"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
-            )}
-            {activeTab === 'Academic Record'  && (
-              <div className="flex flex-col gap-3 h-full">
-                <img
-                  src={s.academicRecordImageUrl}
-                  alt="Academic Record"
-                  className="w-full h-full md:w-fit object-cover rounded-xl bg-gray-200"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+
+              {/* History */}
+              <HistoryTableHeader label="Health Insurance History" />
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Provider</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Policy No.</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Coverage Type</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Start Date</th>
+                      <th className="text-left   py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
+                      <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {s.insurances.map((ins, i) => (
+                      <tr key={i} className={clsx('hover:bg-gray-50 transition', ins.isCurrent && 'bg-green-50/40')}>
+                        <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
+                        <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
+                        <td className="py-3 px-4 text-primary">{ins.coverageType}</td>
+                        <td className="py-3 px-4 text-primary">{ins.startDate}</td>
+                        <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
+                        <td className="py-3 px-4 text-center">
+                          {ins.isCurrent ? <CurrentBadge /> : <PastBadge />}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-            {activeTab === 'Dependents' && (
-              s.dependents.length === 0 ? (
+
+            </div>
+          )}
+
+          {/* ── Academic Record ── */}
+          {activeTab === 'Academic Record' && (
+            <div className="flex flex-col gap-3">
+              <img
+                src={s.academicRecordImageUrl}
+                alt="Academic Record"
+                className="w-full md:w-fit object-cover rounded-xl bg-gray-200"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            </div>
+          )}
+
+          {/* ── Dependents ── */}
+          {activeTab === 'Dependents' && (
+            <div className="bg-secondary rounded-2xl p-6">
+              {s.dependents.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">No dependents recorded</p>
               ) : (
                 <table className="w-full text-sm">
@@ -304,11 +514,194 @@ export default function StudentDetailPage() {
                     ))}
                   </tbody>
                 </table>
-              )
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          
+          {/* ── Renewal History ── */}
+          {activeTab === 'Renewal History' && (
+            <div className="flex flex-col gap-5">
+
+              {/* PASSPORT */}
+              <div>
+                <p className="text-xs font-semibold text-primary/50 uppercase tracking-wide mb-2">Passport History</p>
+                <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issuing Country</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
+                        <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                        <th className="w-8" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {s.passports.map((p, i) => {
+                        const key = `passport-${i}`;
+                        const open = selectedRenewal === key;
+                        return (
+                          <>
+                            <tr key={key}
+                              onClick={() => toggleRenewal(key)}
+                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', p.isCurrent && 'bg-green-50/40')}>
+                              <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
+                              <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
+                              <td className="py-3 px-4 text-primary">{p.issueDate}</td>
+                              <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
+                              <td className="py-3 px-4 text-center">{p.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
+                            </tr>
+                            {open && (
+                              <tr key={`${key}-detail`}>
+                                <td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {[
+                                      { label: 'Passport No.', value: p.passportNumber },
+                                      { label: 'Issuing Country', value: p.issuingCountry },
+                                      { label: 'Issue Date', value: p.issueDate },
+                                      { label: 'Expiry Date', value: p.expiryDate },
+                                    ].map(f => (
+                                      <div key={f.label} className="flex flex-col gap-0.5">
+                                        <span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.label}</span>
+                                        <span className="text-sm font-semibold text-primary">{f.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* VISA */}
+              <div>
+                <p className="text-xs font-semibold text-primary/50 uppercase tracking-wide mb-2">Visa History</p>
+                <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Passport No.</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Visa Type</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid From</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Valid Until</th>
+                        <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                        <th className="w-8" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {s.visas.map((v, i) => {
+                        const key = `visa-${i}`;
+                        const open = selectedRenewal === key;
+                        return (
+                          <>
+                            <tr key={key}
+                              onClick={() => toggleRenewal(key)}
+                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', v.isCurrent && 'bg-green-50/40')}>
+                              <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
+                              <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
+                              <td className="py-3 px-4 text-primary">{v.validFrom}</td>
+                              <td className="py-3 px-4 text-primary">{v.validUntil}</td>
+                              <td className="py-3 px-4 text-center">{v.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
+                            </tr>
+                            {open && (
+                              <tr key={`${key}-detail`}>
+                                <td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    {[
+                                      { label: 'Passport No.', value: v.passportNo },
+                                      { label: 'Visa Type', value: v.visaType },
+                                      { label: 'Place of Issue', value: v.placeOfIssue },
+                                      { label: 'Valid From', value: v.validFrom },
+                                      { label: 'Valid Until', value: v.validUntil },
+                                      { label: 'Entries', value: v.entries },
+                                    ].map(f => (
+                                      <div key={f.label} className="flex flex-col gap-0.5">
+                                        <span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.label}</span>
+                                        <span className="text-sm font-semibold text-primary">{f.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* HEALTH INSURANCE */}
+              <div>
+                <p className="text-xs font-semibold text-primary/50 uppercase tracking-wide mb-2">Health Insurance History</p>
+                <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Provider</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Policy No.</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Start Date</th>
+                        <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Expiry Date</th>
+                        <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
+                        <th className="w-8" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {s.insurances.map((ins, i) => {
+                        const key = `ins-${i}`;
+                        const open = selectedRenewal === key;
+                        return (
+                          <>
+                            <tr key={key}
+                              onClick={() => toggleRenewal(key)}
+                              className={clsx('cursor-pointer transition', open ? 'bg-secondary/60' : 'hover:bg-gray-50', ins.isCurrent && 'bg-green-50/40')}>
+                              <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
+                              <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
+                              <td className="py-3 px-4 text-primary">{ins.startDate}</td>
+                              <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
+                              <td className="py-3 px-4 text-center">{ins.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
+                              <td className="py-3 px-4 text-gray-400 text-xs text-center">{open ? '▲' : '▼'}</td>
+                            </tr>
+                            {open && (
+                              <tr key={`${key}-detail`}>
+                                <td colSpan={6} className="px-6 py-4 bg-secondary/40 border-t border-[#0776BC]/10">
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    {[
+                                      { label: 'Provider', value: ins.provider },
+                                      { label: 'Policy No.', value: ins.policyNumber },
+                                      { label: 'Coverage Type', value: ins.coverageType },
+                                      { label: 'Start Date', value: ins.startDate },
+                                      { label: 'Expiry Date', value: ins.expiryDate },
+                                    ].map(f => (
+                                      <div key={f.label} className="flex flex-col gap-0.5">
+                                        <span className="text-[10px] font-semibold text-primary/40 uppercase tracking-wide">{f.label}</span>
+                                        <span className="text-sm font-semibold text-primary">{f.value}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
         </div>
       </div>
 

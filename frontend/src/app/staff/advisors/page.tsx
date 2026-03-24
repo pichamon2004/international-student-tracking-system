@@ -28,18 +28,27 @@ export default function StaffAdvisorsPage() {
     name.split(' ').filter(w => /^[A-Z]/.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-2xl font-semibold text-primary">Teachers Management</p>
-        <Button variant="primary" label="+ Teacher" onClick={() => {}} />
+
+        <button
+          onClick={() => { }}
+          className="bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
+        >
+          <RiAddLine className="text-lg" />
+          Teacher
+        </button>
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         {mockAdvisors.map(advisor => (
-          <div key={advisor.id} className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4">
+          <div key={advisor.id} className="bg-white rounded-2xl p-5 flex flex-col gap-4
+           shadow-md hover:shadow-xl hover:-translate-y-1
+           transition-all duration-300">
 
             {/* Top Row: Avatar + Edit */}
             <div className="flex items-start justify-between">

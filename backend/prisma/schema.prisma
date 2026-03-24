@@ -45,11 +45,14 @@ enum VisaStatus {
 
 enum RequestStatus {
   PENDING                // นักศึกษายื่นคำร้อง → Staff รับก่อน
-  FORWARDED_TO_ADVISOR   // Staff ส่งให้อาจารย์พิจารณา
-  ADVISOR_APPROVED       // อาจารย์อนุมัติ → กลับมาที่ Staff อนุมัติขั้นสุดท้าย
-  ADVISOR_REJECTED       // อาจารย์ปฏิเสธ
-  STAFF_APPROVED         // Staff อนุมัติขั้นสุดท้าย (สมบูรณ์)
+  FORWARDED_TO_ADVISOR   // Staff ส่งให้อาจารย์ที่ปรึกษาพิจารณา
+  ADVISOR_APPROVED       // อาจารย์ที่ปรึกษาอนุมัติ → กลับมาที่ Staff
+  ADVISOR_REJECTED       // อาจารย์ที่ปรึกษาปฏิเสธ
+  STAFF_APPROVED         // Staff (ในฐานะคณะ) อนุมัติ → ส่งต่อให้ Dean
   STAFF_REJECTED         // Staff ปฏิเสธ
+  FORWARDED_TO_DEAN      // Staff ส่งให้ Dean อนุมัติขั้นสุดท้าย
+  DEAN_APPROVED          // Dean อนุมัติ (สมบูรณ์)
+  DEAN_REJECTED          // Dean ปฏิเสธ
   CANCELLED              // ยกเลิก
 }
 
@@ -151,8 +154,9 @@ model Student {
 
   user               User               @relation(fields: [userId], references: [id])
   advisor            Advisor?           @relation(fields: [advisorId], references: [id])
-  passport           Passport?
+  passports          Passport[]
   visas              Visa[]
+  healthInsurances   HealthInsurance[]
   dependents         Dependent[]
   documents          Document[]
   requests           Request[]
@@ -187,6 +191,8 @@ model Advisor {
   workPermitExpiry  DateTime?
   workPermitFileUrl String?
 
+  isDean    Boolean  @default(false) // true = คณบดี/รองคณบดี — เห็น FORWARDED_TO_DEAN queue
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -203,8 +209,8 @@ model Advisor {
 
 model Passport {
   id             Int      @id @default(autoincrement())
-  studentId      Int      @unique
-  passportNumber String   @unique
+  studentId      Int                             // ลบ @unique → รองรับหลายเล่ม (history)
+  passportNumber String
   issuingCountry String
   issueDate      DateTime
   expiryDate     DateTime
@@ -215,6 +221,8 @@ model Passport {
   mrzLine2   String?
   imageUrl   String?
   isVerified Boolean  @default(false)
+
+  isCurrent  Boolean  @default(true)             // false = เล่มเก่า (ต่ออายุแล้ว)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -249,6 +257,29 @@ model Visa {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@map("visas")
+}
+
+// ─────────────────────────────────────────────────────
+// HEALTH INSURANCE
+// ─────────────────────────────────────────────────────
+
+model HealthInsurance {
+  id            Int      @id @default(autoincrement())
+  studentId     Int
+  provider      String            // บริษัทประกัน เช่น AXA, Allianz
+  policyNumber  String?           // เลขกรมธรรม์
+  coverageType  String?           // Inpatient, Outpatient, Comprehensive ฯลฯ
+  startDate     DateTime
+  expiryDate    DateTime
+  fileUrl       String?           // URL สแกนกรมธรรม์ (Cloudflare R2)
+  isCurrent     Boolean  @default(true)  // false = กรมธรรม์เก่า (ต่ออายุแล้ว)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("health_insurances")
 }
 
 // ─────────────────────────────────────────────────────
