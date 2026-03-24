@@ -2,6 +2,7 @@ import { IconType } from 'react-icons';
 import { RiCloseLine, RiEyeLine, RiCheckLine, RiAddLine, RiEditLine, RiDeleteBinLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import { IoClose } from "react-icons/io5";
+import { MdOutlineModeEdit } from "react-icons/md";
 
 type Variant = 'primary' | 'danger' | 'success' | 'info' | 'ghost' | 'warning';
 
@@ -21,8 +22,8 @@ const variantStyles: Record<Variant, string> = {
   danger:  'bg-[#FF5B5B] text-white hover:bg-red-500',
   success: 'bg-[#93ED8B] text-white hover:bg-green-400',
   info:    'bg-[#8ED2FF] text-white hover:bg-blue-400',
-  ghost:   'bg-gray-100 text-gray-700 hover:bg-gray-200',
-  warning: 'bg-[#FFC107] text-gray-700 hover:bg-yellow-500',
+  ghost:   'bg-gray-100 text-white hover:bg-gray-200',
+  warning: 'bg-[#FFC107] text-white hover:bg-yellow-500',
 };
 
 const variantDefaults: Record<Variant, { label: string; icon: IconType }> = {
@@ -31,7 +32,7 @@ const variantDefaults: Record<Variant, { label: string; icon: IconType }> = {
   info:    { label: 'View',    icon: RiEyeLine },
   primary: { label: 'Submit',  icon: RiAddLine },
   ghost:   { label: 'Edit',    icon: RiEditLine },
-  warning: { label: 'Edit',  icon: RiDeleteBinLine },
+  warning: { label: 'Edit',  icon: MdOutlineModeEdit },
 };
 
 const sizeStyles = {

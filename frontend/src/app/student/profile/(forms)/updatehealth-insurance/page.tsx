@@ -46,7 +46,7 @@ export default function HealthInsurancePage() {
         >
           <RiArrowLeftLine size={18} />
         </button>
-        <h1 className="text-2xl font-semibold text-primary">Add My Health Insurance</h1>
+        <h1 className="text-2xl font-semibold text-primary">Update My Health Insurance</h1>
       </div>
 
       <div className="flex flex-col gap-5">

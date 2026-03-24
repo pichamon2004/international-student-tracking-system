@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { setProgressField } from '@/lib/progressStore';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiUpload } from 'react-icons/fi';
@@ -9,12 +9,15 @@ import { FiUpload } from 'react-icons/fi';
 const VISA_TYPES = ['ED', 'Non-ED', 'Tourist', 'Transit', 'Business', 'Other'];
 const SEX_OPTIONS = ['M', 'F'];
 const NATIONALITIES = ['Thai', 'Chinese', 'Japanese', 'Vietnamese', 'Myanmar', 'Cambodian', 'Laotian', 'Indonesian', 'American', 'British', 'Other'];
-const PASSPORT_OPTIONS = ['E12345678', 'A98765432'];
+const PASSPORT_OPTIONS = ['UA51234567', 'E12345678', 'A98765432'];
 
-const UPLOAD_SLOTS = [
-  { key: 'visa' as const,     title: 'Upload  Image Latest Visa\npermission / Sticker' },
-  { key: 'arrival' as const,  title: 'Upload  Image Latest  admitted stamp\n(Arrival to Thailand)' },
-  { key: 'departed' as const, title: 'Upload  Image Latest  Departed\n(Departure from Thailand)' },
+type UploadKey = 'visa' | 'arrival' | 'departed' | 'passport';
+
+const UPLOAD_SLOTS: { key: UploadKey; title: string }[] = [
+  { key: 'visa',      title: 'Upload Image Latest Visa\npermission / Sticker' },
+  { key: 'arrival',   title: 'Upload Image Latest admitted stamp\n(Arrival to Thailand)' },
+  { key: 'departed',  title: 'Upload Image Latest Departed\n(Departure from Thailand)' },
+  { key: 'passport',  title: 'Upload Passport Image' },
 ];
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:border-primary';
@@ -30,28 +33,56 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-type UploadKey = 'visa' | 'arrival' | 'departed';
+const MOCK_VISAS = [
+  {
+    id: 1,
+    passport: 'UA51234567',
+    placeOfIssue: 'Bangkok',
+    validFrom: '2024-01-01',
+    validUntil: '2026-12-31',
+    visaType: 'ED',
+    numberOfEntries: 'Multiple',
+    sex: 'F',
+    givenName: 'Pichamon',
+    surname: 'Phongphrathapet',
+    dateOfBirth: '1998-03-15',
+    nationality: 'Thai',
+    remarks: 'Study purposes',
+    images: { visa: null, arrival: null, departed: null, passport: null } as Record<UploadKey, string | null>,
+  },
+];
 
-export default function VisaPage() {
+function VisaForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+  const isEdit = !!id;
+  const existing = isEdit ? MOCK_VISAS.find(v => v.id === Number(id)) ?? null : null;
 
-  const visaRef     = useRef<HTMLInputElement>(null);
-  const arrivalRef  = useRef<HTMLInputElement>(null);
-  const departedRef = useRef<HTMLInputElement>(null);
   const refs: Record<UploadKey, React.RefObject<HTMLInputElement>> = {
-    visa: visaRef, arrival: arrivalRef, departed: departedRef,
+    visa:      useRef<HTMLInputElement>(null),
+    arrival:   useRef<HTMLInputElement>(null),
+    departed:  useRef<HTMLInputElement>(null),
+    passport:  useRef<HTMLInputElement>(null),
   };
 
-  const [images, setImages] = useState<Record<UploadKey, string | null>>({
-    visa: null, arrival: null, departed: null,
-  });
+  const [images, setImages] = useState<Record<UploadKey, string | null>>(
+    existing?.images ?? { visa: null, arrival: null, departed: null, passport: null }
+  );
 
   const [form, setForm] = useState({
-    passport: '', placeOfIssue: '',
-    validFrom: '', validUntil: '',
-    visaType: '', numberOfEntries: '',
-    sex: '', givenName: '', surname: '',
-    dateOfBirth: '', nationality: '', remarks: '',
+    passport:        existing?.passport        ?? '',
+    placeOfIssue:    existing?.placeOfIssue    ?? '',
+    validFrom:       existing?.validFrom       ?? '',
+    validUntil:      existing?.validUntil      ?? '',
+    visaType:        existing?.visaType        ?? '',
+    numberOfEntries: existing?.numberOfEntries ?? '',
+    sex:             existing?.sex             ?? '',
+    givenName:       existing?.givenName       ?? '',
+    surname:         existing?.surname         ?? '',
+    dateOfBirth:     existing?.dateOfBirth     ?? '',
+    nationality:     existing?.nationality     ?? '',
+    remarks:         existing?.remarks         ?? '',
   });
 
   function set(key: keyof typeof form) {
@@ -75,7 +106,9 @@ export default function VisaPage() {
         >
           <RiArrowLeftLine size={18} />
         </button>
-        <h1 className="text-2xl font-semibold text-primary">Add My Visa</h1>
+        <h1 className="text-2xl font-semibold text-primary">
+          {isEdit ? 'Edit Visa' : 'Add Visa'}
+        </h1>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -138,20 +171,20 @@ export default function VisaPage() {
 
         <hr className="border-gray-100" />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {UPLOAD_SLOTS.map(({ key, title }) => (
             <div
               key={key}
               onClick={() => refs[key].current?.click()}
-              className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-primary/50 transition min-h-60 bg-gray-50 p-4 text-center"
+              className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-primary/50 transition min-h-36 bg-gray-50 p-4 text-center"
             >
               {images[key] ? (
-                <img src={images[key]!} alt={key} className="w-full h-full object-contain rounded-xl max-h-36" />
+                <img src={images[key]!} alt={key} className="w-full h-full object-contain rounded-xl max-h-28" />
               ) : (
                 <div className="flex flex-col items-center gap-2 text-gray-400 select-none">
-                  
-                  <p className="text-sm font-medium text-gray-500 whitespace-pre-line">{title}</p>
-                  <p className="text-xs">Drop file here or click to upload</p>
+                  <FiUpload size={20} />
+                  <p className="text-xs font-medium text-gray-500 whitespace-pre-line">{title}</p>
+                  <p className="text-[11px]">Drop file here or click to upload</p>
                 </div>
               )}
               <input ref={refs[key]} type="file" accept="image/*" onChange={handleFile(key)} className="hidden" />
@@ -169,5 +202,13 @@ export default function VisaPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function VisaPage() {
+  return (
+    <Suspense>
+      <VisaForm />
+    </Suspense>
   );
 }
