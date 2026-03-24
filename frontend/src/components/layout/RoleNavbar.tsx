@@ -6,8 +6,8 @@ import {
   RiUserStarLine,
   RiLogoutBoxLine,
   RiUser3Line,
-  RiFileTextLine,
   RiNotification3Line,
+  RiSettings3Line,
 } from 'react-icons/ri';
 import { IconType } from 'react-icons';
 import { clsx } from 'clsx';
@@ -34,12 +34,12 @@ const navConfig: Record<string, NavItem[]> = {
     { href: '/advisor/students', label: 'Student Management', icon: BsPeopleFill },
   ],
   staff: [
-    { href: '/staff/dashboard', label: 'Dashboard', icon: AiFillPieChart },
-    { href: '/staff/advisors', label: 'Teacher Management', icon: RiUserStarLine },
-    { href: '/staff/request', label: 'Request Management', icon: TbClipboardList },
-    { href: '/staff/students', label: 'Student Management', icon: BsPeopleFill },
-    { href: '/staff/documents', label: 'Documents', icon: RiFileTextLine },
-    { href: '/staff/notification', label: 'Notification', icon: RiNotification3Line },
+    { href: '/staff/dashboard',    label: 'Dashboard',          icon: AiFillPieChart },
+    { href: '/staff/advisors',     label: 'Teacher Management', icon: RiUserStarLine },
+    { href: '/staff/request',      label: 'Request Management', icon: TbClipboardList },
+    { href: '/staff/students',     label: 'Student Management', icon: BsPeopleFill },
+    { href: '/staff/notification', label: 'Notification',       icon: RiNotification3Line },
+    { href: '/staff/settings',     label: 'Settings',           icon: RiSettings3Line },
   ],
 };
 

@@ -33,7 +33,7 @@ export default function StaffDashboardPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {statCards.map(({ label, value, icon: Icon, iconBg, iconColor }) => (
-          <div key={label} className="bg-white rounded-2xl shadow-sm px-4 md:px-8 flex items-center gap-3 md:gap-4 h-[100px]  2xl:h-[130px] ">
+          <div key={label} className="bg-white rounded-2xl shadow-sm px-4 md:px-8 flex items-center gap-3 md:gap-4 h-[100px] md:h-[130px]">
             <div className="rounded-full p-3 md:p-6 flex-shrink-0" style={{ backgroundColor: iconBg }}>
               <Icon className="w-5 h-5 md:w-8 md:h-8 2xl:w-10 :h-10" style={{ color: iconColor }} />
             </div>

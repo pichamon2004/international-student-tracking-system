@@ -6,13 +6,13 @@ import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserSta
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 
-type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED';
+type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED';
 
 interface LogEntry {
   date: string;
   detail: string;
   stepStatus: 'pending' | 'finished';
-  action: 'approve' | 'view';
+  action: 'approve' | 'view' | 'forward_dean';
 }
 
 interface RequestDetail {
@@ -37,6 +37,18 @@ const mockDetails: Record<string, RequestDetail> = {
       { date: '01/01/1001', detail: 'Create New Request',        stepStatus: 'finished', action: 'view' },
     ],
   },
+  '4': {
+    reqId: 'Req004', name: 'Monica Sofia', documentType: 'Leave Request Form',
+    startRequest: '01/01/1001', advisor: 'Asst. Prof. Pusadee Seresangtakul',
+    status: 'STAFF_APPROVED',
+    logs: [
+      { date: '01/01/1001', detail: 'Forward to Dean',           stepStatus: 'pending',  action: 'forward_dean' },
+      { date: '01/01/1001', detail: 'Staff of College Approved', stepStatus: 'finished', action: 'view' },
+      { date: '01/01/1001', detail: 'Advisor Approved',          stepStatus: 'finished', action: 'view' },
+      { date: '01/01/1001', detail: 'Pending',                   stepStatus: 'finished', action: 'view' },
+      { date: '01/01/1001', detail: 'Create New Request',        stepStatus: 'finished', action: 'view' },
+    ],
+  },
 };
 
 const statusLabelConfig: Record<RequestStatus, { label: string; className: string }> = {
@@ -44,8 +56,11 @@ const statusLabelConfig: Record<RequestStatus, { label: string; className: strin
   FORWARDED_TO_ADVISOR: { label: 'Forwarded to Advisor',  className: 'bg-blue-100 text-blue-700' },
   ADVISOR_APPROVED:     { label: 'Advisor Approved',      className: 'bg-teal-100 text-teal-700' },
   ADVISOR_REJECTED:     { label: 'Advisor Rejected',      className: 'bg-orange-100 text-orange-700' },
-  STAFF_APPROVED:       { label: 'Completed',             className: 'bg-green-100 text-green-700' },
+  STAFF_APPROVED:       { label: 'Staff Approved',        className: 'bg-indigo-100 text-indigo-700' },
   STAFF_REJECTED:       { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  FORWARDED_TO_DEAN:    { label: 'Forwarded to Dean',     className: 'bg-purple-100 text-purple-700' },
+  DEAN_APPROVED:        { label: 'Completed',             className: 'bg-green-100 text-green-700' },
+  DEAN_REJECTED:        { label: 'Dean Rejected',         className: 'bg-red-100 text-red-600' },
 };
 
 export default function StaffRequestDetailPage() {
@@ -149,6 +164,8 @@ export default function StaffRequestDetailPage() {
                     <td className="py-3 px-4 text-center">
                       {log.action === 'approve' ? (
                         <Button variant="success" label="Approve" onClick={() => {}} />
+                      ) : log.action === 'forward_dean' ? (
+                        <Button variant="primary" label="Forward to Dean" onClick={() => {}} />
                       ) : (
                         <Button variant="info" onClick={() => {}} />
                       )}
