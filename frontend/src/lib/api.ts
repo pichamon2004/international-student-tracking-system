@@ -115,4 +115,64 @@ export const requestApi = {
     api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}/status`, { status, comment }),
 };
 
+// ── Students ───────────────────────────────────────────────────
+
+export interface ApiStudent {
+  id: number;
+  studentId: string | null;
+
+  // Names
+  titleEn: string | null;
+  firstNameEn: string | null;
+  middleNameEn: string | null;
+  lastNameEn: string | null;
+
+  // Personal
+  dateOfBirth: string | null;
+  gender: string | null;
+  nationality: string | null;
+  religion: string | null;
+  homeCountry: string | null;
+
+  // Contact & address
+  email: string | null;
+  phone: string | null;
+  addressInThailand: string | null;
+  homeAddress: string | null;
+
+  // Emergency contact
+  emergencyContact: string | null;
+  emergencyEmail: string | null;
+  emergencyPhone: string | null;
+  emergencyRelation: string | null;
+
+  // Academic (staff-filled at Phase 2 completion)
+  faculty: string | null;
+  program: string | null;
+  level: string | null;
+  enrollmentDate: string | null;
+  expectedGraduation: string | null;
+  scholarship: string | null;
+  advisorId: number | null;
+
+  registrationStatus: string;
+  registrationStep: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const studentApi = {
+  getAll: (params?: { search?: string; page?: number; limit?: number }) =>
+    api.get<{ success: boolean; data: ApiStudent[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>('/students', { params }),
+
+  getById: (id: number) =>
+    api.get<{ success: boolean; data: ApiStudent }>(`/students/${id}`),
+
+  update: (id: number, data: Partial<ApiStudent & { registrationStatus: string; registrationStep: number }>) =>
+    api.put<{ success: boolean; data: ApiStudent }>(`/students/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete<{ success: boolean }>(`/students/${id}`),
+};
+
 export default api;

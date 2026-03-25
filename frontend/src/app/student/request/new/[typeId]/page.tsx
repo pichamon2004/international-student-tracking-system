@@ -722,10 +722,10 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   }
 
   return (
-    <div className="flex flex-col gap-5 w-full">
+    <div className="flex flex-col gap-5 w-full ">
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-primary to-blue-400 px-6 py-5">
+        <div className="bg-primary">
           <div className="flex items-center gap-3">
             <button onClick={() => router.back()}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/20 text-white hover:bg-white/30 transition">

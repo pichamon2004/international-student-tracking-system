@@ -691,7 +691,7 @@ export default function SettingsPage() {
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-primary">Settings</h1>
+        <h1 className="text-2xl font-bold text-primary">Settings</h1>
         <p className="text-sm text-gray-400 mt-0.5">Manage templates and request types used across the system.</p>
       </div>
 
