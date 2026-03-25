@@ -32,8 +32,8 @@ enum AcademicLevel {
 enum RegistrationStatus {
   PENDING_APPROVAL
   REJECTED
-  PHASE2_INCOMPLETE
   ACTIVE
+  SUSPENDED
 }
 
 enum VisaStatus {
@@ -114,24 +114,32 @@ model Student {
   userId    Int     @unique
   studentId String? @unique
 
-  titleTh     String?
-  firstNameTh String?
-  lastNameTh  String?
-  titleEn     String?
-  firstNameEn String?
-  lastNameEn  String?
+  // Names (EN only, with middle name)
+  titleEn       String?
+  firstNameEn   String?
+  middleNameEn  String?
+  lastNameEn    String?
+
+  // Personal info
   dateOfBirth DateTime?
   gender      Gender?
   nationality String?
   religion    String?
+  homeCountry String?
 
-  email             String?
-  phone             String?
-  address           String?  @db.Text
+  // Contact & address
+  email               String?
+  phone               String?
+  addressInThailand   String?  @db.Text
+  homeAddress         String?  @db.Text
+
+  // Emergency contact
   emergencyContact  String?
+  emergencyEmail    String?
   emergencyPhone    String?
   emergencyRelation String?
 
+  // Academic info (filled by staff at Phase 2 completion)
   faculty            String?
   program            String?
   level              AcademicLevel?
@@ -142,7 +150,7 @@ model Student {
   advisorId          Int?
 
   registrationStatus RegistrationStatus @default(PENDING_APPROVAL)
-  registrationStep   Int                @default(1)
+  registrationStep   Int                @default(0)
   rejectionReason    String?            @db.Text
 
   createdAt DateTime @default(now())
