@@ -15,7 +15,7 @@ import {
   RiHeartPulseLine, RiBookOpenLine, RiCalendarLine, RiExchangeLine,
   RiClipboardLine, RiAddLine, RiArrowLeftSLine, RiArrowRightSLine,
 } from 'react-icons/ri';
-import { requestTypeApi, requestApi, type ApiRequestType, type ApiRequest } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, type ApiRequestType, type ApiRequest } from '@/lib/api';
 
 /* ─── Icon map ──────────────────────────────────────────────── */
 const ICON_MAP: Record<string, IconType> = {
@@ -76,8 +76,8 @@ export default function StudentRequestPage() {
       .catch(e => console.error('Failed to load request types:', e))
       .finally(() => setLoadingTypes(false));
 
-    // DEMO: studentId = 1 (seeded). Replace with auth lookup in production.
-    requestApi.getAll({ studentId: 1 })
+    studentMeApi.get()
+      .then(res => requestApi.getAll({ studentId: res.data.data.id }))
       .then(res => setHistory(res.data.data))
       .catch(e => console.error('Failed to load history:', e))
       .finally(() => setLoadingHistory(false));

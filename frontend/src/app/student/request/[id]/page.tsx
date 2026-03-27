@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { requestApi } from '@/lib/api';
 import { clsx } from 'clsx';
 import {
   RiArrowLeftLine, RiCheckLine, RiTimeLine, RiCloseCircleLine,
@@ -174,13 +175,48 @@ export default function StudentRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [showPreview, setShowPreview] = useState(false);
+  const [reqData, setReqData] = useState<RequestDetail | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const req = mockRequests[id] ?? mockRequests['1'];
+  useEffect(() => {
+    if (!id) return;
+    requestApi.getById(Number(id))
+      .then(res => {
+        const r = res.data.data;
+        setReqData({
+          id: r.id,
+          title: r.title,
+          requestType: r.requestType?.name ?? r.title,
+          submittedDate: new Date(r.createdAt).toLocaleDateString('en-GB'),
+          updatedDate: new Date(r.updatedAt).toLocaleDateString('en-GB'),
+          status: r.status as RequestStatus,
+          staffComment: r.description ?? null,
+          description: r.description ?? null,
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  // fallback to mock while loading
+  const req: RequestDetail = reqData ?? (mockRequests[id] ?? mockRequests['1']);
   const statusCfg = STATUS_CONFIG[req.status];
   const timeline = buildTimeline(req.status);
 
   const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
   const isCompleted = req.status === 'DEAN_APPROVED';
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-5 w-full animate-pulse">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm h-28" />
+        <div className="flex gap-5">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm h-64 lg:w-64 shrink-0" />
+          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm h-64" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5 w-full">
@@ -373,13 +409,22 @@ export default function StudentRequestDetailPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-              <div className="bg-white shadow-lg rounded-lg p-10 min-h-[400px] flex items-center justify-center">
+              <div id="request-doc-print" className="bg-white shadow-lg rounded-lg p-10 min-h-[400px] flex items-center justify-center">
                 <p className="text-gray-400 text-sm">Document content will appear here when connected to API.</p>
               </div>
             </div>
             <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
               <button
-                onClick={() => window.print()}
+                onClick={() => {
+                  const el = document.getElementById('request-doc-print');
+                  if (!el) return;
+                  const pw = window.open('', '_blank');
+                  if (!pw) return;
+                  pw.document.write(`<!DOCTYPE html><html><head><title>${req.title}</title><style>body{margin:25mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;line-height:2;}@media print{@page{margin:0;}body{margin:25mm 20mm;}}</style></head><body>${el.innerHTML}</body></html>`);
+                  pw.document.close();
+                  pw.focus();
+                  pw.print();
+                }}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition"
               >
                 <RiPrinterLine size={14} /> Print

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { RiSearchLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
+import { requestApi, type ApiRequest } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 type RequestStatus =
   | 'PENDING'
@@ -18,29 +20,10 @@ type RequestStatus =
   | 'DEAN_REJECTED'
   | 'CANCELLED';
 
-interface Request {
-  id: number;
-  name: string;
-  documentType: string;
-  submissionDate: string;
-  status: RequestStatus;
-  note?: string;
-}
-
-const mockRequests: Request[] = [
-  { id: 1, name: 'Joanna Sofia',   documentType: 'Travel Letter',      submissionDate: '01/01/1001', status: 'PENDING' },
-  { id: 2, name: 'Cristina Sofia', documentType: 'Transcript',         submissionDate: '01/01/1001', status: 'FORWARDED_TO_ADVISOR' },
-  { id: 3, name: 'Cristina Sofia', documentType: 'Transcript',         submissionDate: '01/01/1001', status: 'ADVISOR_APPROVED' },
-  { id: 4, name: 'Monica Sofia',   documentType: 'Leave Request Form', submissionDate: '01/01/1001', status: 'STAFF_APPROVED' },
-  { id: 5, name: 'Joanna Sofia',   documentType: 'Enrollment Letter',  submissionDate: '01/01/1001', status: 'FORWARDED_TO_DEAN' },
-  { id: 6, name: 'Monica Sofia',   documentType: 'Leave Request Form', submissionDate: '01/01/1001', status: 'DEAN_APPROVED',  note: '-' },
-  { id: 7, name: 'Monica Sofia',   documentType: 'Leave Request Form', submissionDate: '01/01/1001', status: 'CANCELLED',     note: 'Incomplete document' },
-];
-
 const DONE_STATUSES: RequestStatus[] = ['DEAN_APPROVED', 'STAFF_REJECTED', 'DEAN_REJECTED', 'CANCELLED'];
-const isDone = (s: RequestStatus) => DONE_STATUSES.includes(s);
+const isDone = (s: string) => DONE_STATUSES.includes(s as RequestStatus);
 
-const statusConfig: Record<RequestStatus, { label: string; className: string }> = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   PENDING:              { label: 'รออนุมัติ',           className: 'bg-yellow-100 text-yellow-700' },
   FORWARDED_TO_ADVISOR: { label: 'ส่งให้อาจารย์แล้ว',    className: 'bg-blue-100 text-blue-700' },
   ADVISOR_APPROVED:     { label: 'อาจารย์อนุมัติแล้ว',   className: 'bg-teal-100 text-teal-700' },
@@ -58,18 +41,46 @@ type FilterType = typeof STATUS_FILTERS[number];
 
 export default function StaffRequestPage() {
   const router = useRouter();
+  const [requests, setRequests] = useState<ApiRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
 
-  const filtered = mockRequests.filter(req => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await requestApi.getAll();
+      setRequests(res.data.data);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = requests.filter(req => {
     const q = search.toLowerCase();
-    const matchSearch = req.name.toLowerCase().includes(q) || req.documentType.toLowerCase().includes(q);
+    const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ').toLowerCase();
+    const docType = req.requestType?.name?.toLowerCase() ?? req.title.toLowerCase();
+    const matchSearch = studentName.includes(q) || docType.includes(q) || req.title.toLowerCase().includes(q);
     const matchFilter =
       filter === 'All' ||
       (filter === 'Active' && !isDone(req.status)) ||
       (filter === 'Done'   &&  isDone(req.status));
     return matchSearch && matchFilter;
   });
+
+  async function updateStatus(id: number, status: string, comment?: string) {
+    try {
+      await requestApi.updateStatus(id, status, comment);
+      toast.success('Status updated');
+      load();
+    } catch {
+      toast.error('Failed to update status');
+    }
+  }
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl shadow-sm p-6 flex flex-col gap-5">
@@ -104,7 +115,7 @@ export default function StaffRequestPage() {
         </div>
       </div>
 
-      {/* Single Table */}
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-t">
           <thead>
@@ -117,17 +128,28 @@ export default function StaffRequestPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b animate-pulse">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <td key={j} className="py-3 px-4"><div className="h-4 bg-gray-100 rounded" /></td>
+                  ))}
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="py-10 text-center text-gray-400 text-sm">No requests found</td>
               </tr>
             ) : filtered.map(req => {
-              const cfg = statusConfig[req.status];
+              const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
+              const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
+              const docType = req.requestType?.name ?? req.title;
+              const submittedDate = new Date(req.createdAt).toLocaleDateString('en-GB');
               return (
                 <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
-                  <td className="py-3 px-4 text-primary font-medium">{req.name}</td>
-                  <td className="py-3 px-4 text-primary">{req.documentType}</td>
-                  <td className="py-3 px-4 text-primary">{req.submissionDate}</td>
+                  <td className="py-3 px-4 text-primary font-medium">{studentName}</td>
+                  <td className="py-3 px-4 text-primary">{docType}</td>
+                  <td className="py-3 px-4 text-primary">{submittedDate}</td>
                   <td className="py-3 px-4 text-center">
                     <span className={clsx('px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap', cfg.className)}>
                       {cfg.label}
@@ -137,22 +159,22 @@ export default function StaffRequestPage() {
                     <div className="flex items-center justify-center gap-2">
                       {req.status === 'PENDING' && (
                         <>
-                          <Button variant="danger"  label="Reject"          onClick={() => {}} />
+                          <Button variant="danger"  label="Reject"          onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
                           <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
-                          <Button variant="primary" label="Send to Advisor" onClick={() => {}} />
+                          <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus(req.id, 'FORWARDED_TO_ADVISOR')} />
                         </>
                       )}
                       {req.status === 'FORWARDED_TO_ADVISOR' && (
                         <>
-                          <Button variant="danger" label="Reject" onClick={() => {}} />
+                          <Button variant="danger" label="Reject" onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
                           <Button variant="info"   onClick={() => router.push(`/staff/request/${req.id}`)} />
                         </>
                       )}
                       {req.status === 'ADVISOR_APPROVED' && (
                         <>
-                          <Button variant="danger"  label="Reject"  onClick={() => {}} />
+                          <Button variant="danger"  label="Reject"  onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
                           <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
-                          <Button variant="success" label="Approve" onClick={() => {}} />
+                          <Button variant="success" label="Approve" onClick={() => updateStatus(req.id, 'STAFF_APPROVED')} />
                         </>
                       )}
                       {req.status === 'ADVISOR_REJECTED' && (
@@ -161,7 +183,7 @@ export default function StaffRequestPage() {
                       {req.status === 'STAFF_APPROVED' && (
                         <>
                           <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
-                          <Button variant="primary" label="Forward to Dean" onClick={() => {}} />
+                          <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus(req.id, 'FORWARDED_TO_DEAN')} />
                         </>
                       )}
                       {(req.status === 'FORWARDED_TO_DEAN' || isDone(req.status)) && (

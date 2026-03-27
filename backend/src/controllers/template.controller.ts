@@ -1,5 +1,17 @@
 import { Request, Response } from 'express';
+import sanitizeHtml from 'sanitize-html';
 import prisma from '../utils/prisma';
+
+const sanitizeOptions: sanitizeHtml.IOptions = {
+  allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+    'h1', 'h2', 'h3', 'u', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  ]),
+  allowedAttributes: {
+    ...sanitizeHtml.defaults.allowedAttributes,
+    '*': ['style', 'class'],
+    img: ['src', 'alt', 'width', 'height'],
+  },
+};
 
 // GET /api/templates
 export const getTemplates = async (_req: Request, res: Response): Promise<void> => {
@@ -18,11 +30,12 @@ export const getTemplates = async (_req: Request, res: Response): Promise<void> 
 export const createTemplate = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, description, body, variables, isActive } = req.body;
+    const cleanBody = body ? sanitizeHtml(body, sanitizeOptions) : body;
     const template = await prisma.documentTemplate.create({
       data: {
         name,
         description,
-        body,
+        body: cleanBody,
         variables: variables ? JSON.stringify(variables) : null,
         isActive: isActive ?? true,
       },
@@ -38,12 +51,13 @@ export const createTemplate = async (req: Request, res: Response): Promise<void>
 export const updateTemplate = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, description, body, variables, isActive } = req.body;
+    const cleanBody = body ? sanitizeHtml(body, sanitizeOptions) : undefined;
     const template = await prisma.documentTemplate.update({
       where: { id: parseInt(req.params.id) },
       data: {
         name,
         description,
-        body,
+        ...(cleanBody !== undefined && { body: cleanBody }),
         variables: variables !== undefined ? JSON.stringify(variables) : undefined,
         isActive,
       },

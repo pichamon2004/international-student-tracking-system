@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
 import { useRouter } from 'next/navigation';
 import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine } from 'react-icons/ri';
 import Button from '@/components/ui/Button';
-import type { ApiStudent } from '@/lib/api';
+import { studentApi, type ApiStudent } from '@/lib/api';
+import CustomSelect from '@/components/ui/CustomSelect';
 
 const LEVEL_LABELS: Record<string, string> = { BACHELOR: "Bachelor's", MASTER: "Master's", PHD: 'Ph.D.' };
 
@@ -29,92 +30,11 @@ function fullName(s: ApiStudent) {
   return parts.length ? parts.join(' ') : '—';
 }
 
-/* helper to build a null-filled ApiStudent base */
-const base = (overrides: Partial<ApiStudent> & Pick<ApiStudent, 'id' | 'registrationStatus' | 'registrationStep' | 'createdAt' | 'updatedAt'>): ApiStudent => ({
-  studentId: null,
-  titleEn: null, firstNameEn: null, middleNameEn: null, lastNameEn: null,
-  dateOfBirth: null, gender: null, nationality: null, religion: null, homeCountry: null,
-  email: null, phone: null, addressInThailand: null, homeAddress: null,
-  emergencyContact: null, emergencyEmail: null, emergencyPhone: null, emergencyRelation: null,
-  faculty: null, program: null, level: null,
-  enrollmentDate: null, expectedGraduation: null, scholarship: null, advisorId: null,
-  ...overrides,
-});
-
-/* ── Mock students covering all onboarding states ── */
-const mockStudents: ApiStudent[] = [
-  base({
-    id: 1, studentId: '663040001-8',
-    titleEn: 'Mr.', firstNameEn: 'Aung', lastNameEn: 'Kyaw',
-    email: 'aung.kyaw@kkumail.com', phone: '+95-9-123-4567',
-    nationality: 'Myanmar', homeCountry: 'Myanmar',
-    dateOfBirth: '1998-05-10', gender: 'MALE', religion: 'Buddhism',
-    addressInThailand: '88/2 KKU Dormitory, Mueang Khon Kaen 40002',
-    homeAddress: '45 Bogyoke Road, Yangon, Myanmar',
-    emergencyContact: 'Ma Aye', emergencyEmail: 'ma.aye@gmail.com',
-    emergencyPhone: '+95-9-876-5432', emergencyRelation: 'Parent',
-    faculty: 'College of Computing', program: 'M.Sc. Computer Science and Information Technology',
-    level: 'MASTER', enrollmentDate: '2024-08-01', expectedGraduation: '2026-07-31',
-    scholarship: 'ASEAN & GMS', advisorId: 1,
-    registrationStatus: 'ACTIVE', registrationStep: 2,
-    createdAt: '2024-07-01T09:00:00Z', updatedAt: '2024-08-15T10:30:00Z',
-  }),
-  base({
-    id: 2, studentId: '663040002-6',
-    titleEn: 'Ms.', firstNameEn: 'Liu', lastNameEn: 'Chen',
-    email: 'liu.chen@kkumail.com', phone: '+86-135-0000-1234',
-    nationality: 'Chinese', homeCountry: 'China',
-    dateOfBirth: '1997-11-20', gender: 'FEMALE', religion: 'Buddhism',
-    addressInThailand: '12/1 Near KKU International House, Khon Kaen 40002',
-    homeAddress: '28 Wangfujing Street, Beijing, China',
-    emergencyContact: 'Chen Wei', emergencyEmail: 'chen.wei@gmail.com',
-    emergencyPhone: '+86-138-0000-5678', emergencyRelation: 'Parent',
-    faculty: 'College of Computing', program: 'Ph.D. Geo-Informatics',
-    level: 'PHD', enrollmentDate: '2024-08-01', expectedGraduation: '2028-07-31',
-    scholarship: 'ทุนลุ่มแม่น้ำโขง', advisorId: 1,
-    registrationStatus: 'ACTIVE', registrationStep: 2,
-    createdAt: '2024-07-02T09:00:00Z', updatedAt: '2024-08-16T10:30:00Z',
-  }),
-  base({
-    id: 3, studentId: '673040003-4',
-    titleEn: 'Ms.', firstNameEn: 'Maria', lastNameEn: 'Santos',
-    email: 'maria.santos@kkumail.com', phone: '+63-917-000-1234',
-    nationality: 'Filipino', homeCountry: 'Philippines',
-    addressInThailand: '12/3 Moo 4, Nai Mueang, Mueang Khon Kaen 40000',
-    homeAddress: '45 Rizal Street, Manila, Philippines',
-    registrationStatus: 'PENDING_APPROVAL', registrationStep: 2,
-    createdAt: '2025-01-10T09:00:00Z', updatedAt: '2025-03-01T08:00:00Z',
-  }),
-  base({
-    id: 4, studentId: '673040004-2',
-    titleEn: 'Mr.', firstNameEn: 'Rahul', lastNameEn: 'Sharma',
-    email: 'rahul.sharma@kkumail.com', phone: '+91-98765-43210',
-    nationality: 'Indian', homeCountry: 'India',
-    registrationStatus: 'PENDING_APPROVAL', registrationStep: 1,
-    createdAt: '2025-02-15T09:00:00Z', updatedAt: '2025-02-20T10:00:00Z',
-  }),
-  base({
-    id: 5, studentId: '673040005-9',
-    firstNameEn: 'Joanna', lastNameEn: 'Sofia',
-    email: 'joanna.sofia@gmail.com',
-    registrationStatus: 'PENDING_APPROVAL', registrationStep: 0,
-    createdAt: '2025-03-20T11:00:00Z', updatedAt: '2025-03-20T11:00:00Z',
-  }),
-  base({
-    id: 6, studentId: '663040006-7',
-    titleEn: 'Mr.', firstNameEn: 'Mohammed', lastNameEn: 'Al-Rashid',
-    email: 'mohammed.r@kkumail.com', phone: '+966-50-000-1234',
-    nationality: 'Saudi Arabian', homeCountry: 'Saudi Arabia',
-    faculty: 'College of Computing', program: 'M.Sc. Data Science and Artificial Intelligence (International Program)',
-    level: 'MASTER', enrollmentDate: '2023-08-01', expectedGraduation: '2025-07-31',
-    scholarship: 'Self-support', advisorId: 2,
-    registrationStatus: 'SUSPENDED', registrationStep: 2,
-    createdAt: '2023-07-01T09:00:00Z', updatedAt: '2025-01-10T09:00:00Z',
-  }),
-];
+const PREFIXES = ['Mr.', 'Mrs.', 'Ms.', 'Miss', 'Dr.'];
 
 /* ── Add Student Modal ── */
 interface AddStudentFormData {
+  titleEn: string;
   email: string;
   studentId: string;
   firstNameEn: string;
@@ -129,7 +49,7 @@ const labelCls = 'text-xs font-semibold text-primary/60 uppercase tracking-wide'
 
 function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data: AddStudentFormData) => void }) {
   const [form, setForm] = useState<AddStudentFormData>({
-    email: '', studentId: '', firstNameEn: '', middleNameEn: '', lastNameEn: '',
+    titleEn: '', email: '', studentId: '', firstNameEn: '', middleNameEn: '', lastNameEn: '',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof AddStudentFormData, string>>>({});
 
@@ -178,11 +98,22 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
             Pre-register a student account. They will log in and complete their profile in Phase 1 &amp; 2.
           </p>
 
-          {/* Name row */}
+          {/* Prefix + First + Middle */}
           <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className={labelCls}>Prefix</label>
+              <CustomSelect value={form.titleEn}
+                onChange={(val) => setForm(f => ({ ...f, titleEn: val }))}
+                options={PREFIXES}
+                placeholder="—" />
+            </div>
             {field('firstNameEn',  'First Name',   'e.g. Maria')}
             {field('middleNameEn', 'Middle Name',  'optional', 'text', false)}
-            {field('lastNameEn',   'Last Name',    'e.g. Santos')}
+          </div>
+
+          {/* Last Name */}
+          <div>
+            {field('lastNameEn', 'Last Name', 'e.g. Santos')}
           </div>
 
           {/* Email */}
@@ -204,18 +135,36 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
 /* ── Page ── */
 export default function StaffStudentPage() {
   const router = useRouter();
-  const [students, setStudents] = useState<ApiStudent[]>(mockStudents);
+  const [students, setStudents] = useState<ApiStudent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('All');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
+
+  const loadStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await studentApi.getAll({ search, page: 1, limit: 200 });
+      setStudents(res.data.data);
+      setPagination({
+        page: res.data.pagination.page,
+        total: res.data.pagination.total,
+        totalPages: res.data.pagination.totalPages,
+      });
+    } catch {
+      // Keep existing students on error
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    const t = setTimeout(loadStudents, 300);
+    return () => clearTimeout(t);
+  }, [loadStudents]);
 
   const filtered = students.filter(s => {
-    const q = search.toLowerCase();
-    const name = fullName(s).toLowerCase();
-    const matchSearch =
-      name.includes(q) ||
-      (s.studentId ?? '').includes(q) ||
-      (s.email ?? '').toLowerCase().includes(q);
     const status = s.registrationStatus;
     const step = s.registrationStep;
     const matchFilter =
@@ -223,24 +172,24 @@ export default function StaffStudentPage() {
       (filter === 'Active'   && status === 'ACTIVE') ||
       (filter === 'Pending'  && status === 'PENDING_APPROVAL') ||
       (filter === 'Inactive' && (status === 'REJECTED' || status === 'SUSPENDED'));
-    return matchSearch && matchFilter;
+    return matchFilter;
   });
 
-  const handleAdd = (data: AddStudentFormData) => {
-    const newStudent: ApiStudent = base({
-      id: Date.now(),
-      studentId: data.studentId,
-      firstNameEn: data.firstNameEn || null,
-      middleNameEn: data.middleNameEn || null,
-      lastNameEn: data.lastNameEn || null,
-      email: data.email,
-      registrationStatus: 'PENDING_APPROVAL',
-      registrationStep: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    setStudents(prev => [newStudent, ...prev]);
-    setShowAddModal(false);
+  const handleAdd = async (data: AddStudentFormData) => {
+    try {
+      await studentApi.create({
+        titleEn: data.titleEn || undefined,
+        email: data.email,
+        studentId: data.studentId || undefined,
+        firstNameEn: data.firstNameEn,
+        middleNameEn: data.middleNameEn || undefined,
+        lastNameEn: data.lastNameEn,
+      });
+      setShowAddModal(false);
+      loadStudents();
+    } catch {
+      // error handled silently; form stays open
+    }
   };
 
   return (
@@ -254,7 +203,7 @@ export default function StaffStudentPage() {
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
         >
           <RiAddLine size={16} />
-          + Student
+          Student
         </button>
       </div>
 
@@ -292,7 +241,17 @@ export default function StaffStudentPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b animate-pulse">
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <td key={j} className="py-3 px-4">
+                      <div className="h-4 bg-gray-100 rounded w-full" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
               <tr><td colSpan={7} className="py-10 text-center text-gray-400">No students found</td></tr>
             ) : filtered.map(s => {
               const { label, cls } = registrationLabel(s.registrationStatus, s.registrationStep);

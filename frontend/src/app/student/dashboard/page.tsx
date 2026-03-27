@@ -1,37 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiEyeLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { FaPlus } from "react-icons/fa6";
+import { FaPlus } from 'react-icons/fa6';
 import { FaIdCard, FaPassport } from 'react-icons/fa6';
-import { RiHealthBookFill } from "react-icons/ri";
-
-
-
-const statCards = [
-  { label: 'Passport Remaining',        addLabel: 'Passport',        value: 1, icon: FaPassport,       iconBg: '#FFC5C6', iconColor: '#FF0000' },
-  { label: 'Visa Remaining',            addLabel: 'VISA',            value: 2, icon: FaIdCard,         iconBg: '#DFC2FF', iconColor: '#8B2CF5' },
-  { label: 'Health Insurance Remaining',addLabel: 'Health Insurance',value: null, icon: RiHealthBookFill, iconBg: '#DEEBFF', iconColor: '#578FCA' },
-];
-
+import { RiHealthBookFill } from 'react-icons/ri';
+import { studentMeApi, requestApi, type ApiRequest } from '@/lib/api';
 
 const STEPS = ['Submitted', 'In Review', 'Approved', 'Processing', 'Completed'];
 
-interface Request {
-  id: string;
-  title: string;
-  startReq: string;
-  updateReq: string;
-  detail: string;
-  step: number;
+function daysRemaining(expiryDate: string): number {
+  return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000);
 }
 
-const mockRequests: Request[] = [
-  { id: '1', title: 'ADDED VISA', startReq: '01/01/2001', updateReq: '01/01/2001', detail: '', step: 4 },
-  { id: '2', title: 'ADDED VISA', startReq: '01/01/2001', updateReq: '01/01/2001', detail: '', step: 3 },
-];
+function statusToStep(status: string): number {
+  switch (status) {
+    case 'PENDING':               return 0;
+    case 'FORWARDED_TO_ADVISOR':  return 1;
+    case 'ADVISOR_APPROVED':      return 2;
+    case 'STAFF_APPROVED':        return 3;
+    case 'COMPLETED':             return 4;
+    default:                      return 0;
+  }
+}
 
 function StepDots({ step }: { step: number }) {
   return (
@@ -53,149 +46,71 @@ function StepDots({ step }: { step: number }) {
   );
 }
 
-const PREFIXES = ['Mr.', 'Mrs.', 'Ms.', 'Miss'];
-const COUNTRIES = ['Thailand', 'China', 'Japan', 'Vietnam', 'Myanmar', 'Cambodia', 'Laos', 'Indonesia', 'Other'];
-const PROGRAMS = ['Computer Engineering', 'Computer Science', 'Information Technology', 'Electrical Engineering', 'Other'];
-const DEGREES = ["Bachelor's Degree", "Master's Degree", "Ph.D."];
+export default function StudentDashboardPage() {
+  const router = useRouter();
 
-function CreateAccountModal({ onClose }: { onClose: () => void }) {
-  const [sent, setSent] = useState(false);
-  const [form, setForm] = useState({
-    prefix: '', firstName: '', middleName: '', lastName: '',
-    email: '', country: '', program: '', degree: '', birthDate: '',
-    reEntry: false,
-  });
+  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<ApiRequest[]>([]);
+  const [passportDays, setPassportDays] = useState<number | null>(null);
+  const [visaDays, setVisaDays] = useState<number | null>(null);
+  const [insuranceDays, setInsuranceDays] = useState<number | null>(null);
 
-  function setField(key: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm(prev => ({ ...prev, [key]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
-  }
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [meRes, reqRes] = await Promise.all([
+          studentMeApi.get(),
+          requestApi.getAll(),
+        ]);
 
-  const inputCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-primary";
-  const selectCls = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-500 focus:outline-none focus:border-primary bg-white";
-  const labelCls = "text-xs font-semibold text-primary mb-1";
+        const me = meRes.data.data;
 
-  if (sent) {
+        // Passport days
+        const currentPassport = me.passports?.find((p) => p.isCurrent);
+        if (currentPassport) setPassportDays(daysRemaining(currentPassport.expiryDate));
+
+        // Visa days
+        const currentVisa = me.visas?.find((v) => v.isCurrent);
+        if (currentVisa) setVisaDays(daysRemaining(currentVisa.expiryDate));
+
+        // Health insurance days
+        const currentInsurance = me.healthInsurances?.find((h) => h.isCurrent);
+        if (currentInsurance) setInsuranceDays(daysRemaining(currentInsurance.expiryDate));
+
+        setRequests(reqRes.data.data);
+      } catch {
+        // Silently handle errors — page remains visible with nulls
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const statCards = [
+    { label: 'Passport Remaining',         addLabel: 'Passport',         value: passportDays,  icon: FaPassport,        iconBg: '#FFC5C6', iconColor: '#FF0000' },
+    { label: 'Visa Remaining',             addLabel: 'VISA',             value: visaDays,      icon: FaIdCard,          iconBg: '#DFC2FF', iconColor: '#8B2CF5' },
+    { label: 'Health Insurance Remaining', addLabel: 'Health Insurance', value: insuranceDays, icon: RiHealthBookFill,  iconBg: '#DEEBFF', iconColor: '#578FCA' },
+  ];
+
+  const latestRequests = requests.slice(0, 2);
+
+  if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-10 flex flex-col items-center gap-6">
-          <div className="w-24 h-24 rounded-full bg-green-500 flex items-center justify-center">
-            <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <div className="flex flex-col items-center gap-2 text-center">
-            <p className="text-2xl font-bold text-primary">Wait</p>
-            <p className="text-sm text-gray-500">Wait for your staff improve, we will send result to email</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="bg-primary text-white text-sm font-semibold px-10 py-2.5 rounded-xl hover:bg-primary/90 transition"
-          >
-            Close
-          </button>
+      <div className="flex flex-col gap-6 flex-1 animate-pulse">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-10">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="bg-white rounded-2xl shadow-sm h-[100px] 2xl:h-[130px]" />
+          ))}
         </div>
+        <div className="bg-white rounded-2xl shadow-sm flex-1 h-64" />
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-8">
-        <h2 className="text-2xl font-bold text-primary mb-6">Create Account</h2>
-
-        <div className="flex flex-col gap-4">
-          {/* Row 1 */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col">
-              <label className={labelCls}>Prefix</label>
-              <select value={form.prefix} onChange={setField('prefix')} className={selectCls}>
-                <option value="">— Select —</option>
-                {PREFIXES.map(p => <option key={p}>{p}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className={labelCls}>First Name</label>
-              <input value={form.firstName} onChange={setField('firstName')} placeholder="First Name" className={inputCls} />
-            </div>
-            <div className="flex flex-col">
-              <label className={labelCls}>Middle Name</label>
-              <input value={form.middleName} onChange={setField('middleName')} placeholder="Middle Name" className={inputCls} />
-            </div>
-          </div>
-
-          {/* Row 2 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col">
-              <label className={labelCls}>Last Name</label>
-              <input value={form.lastName} onChange={setField('lastName')} placeholder="Last Name" className={inputCls} />
-            </div>
-            <div className="flex flex-col">
-              <label className={labelCls}>Email</label>
-              <input value={form.email} onChange={setField('email')} placeholder="Email" type="email" className={inputCls} />
-            </div>
-          </div>
-
-          {/* Row 3 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col">
-              <label className={labelCls}>Country</label>
-              <select value={form.country} onChange={setField('country')} className={selectCls}>
-                <option value="">Select Country</option>
-                {COUNTRIES.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className={labelCls}>Program</label>
-              <select value={form.program} onChange={setField('program')} className={selectCls}>
-                <option value="">Select Program</option>
-                {PROGRAMS.map(p => <option key={p}>{p}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 4 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col">
-              <label className={labelCls}>Degree</label>
-              <select value={form.degree} onChange={setField('degree')} className={selectCls}>
-                <option value="">Select Degree</option>
-                {DEGREES.map(d => <option key={d}>{d}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className={labelCls}>Birth Date</label>
-              <input value={form.birthDate} onChange={setField('birthDate')} type="date" className={inputCls} />
-            </div>
-          </div>
-
-          {/* Checkbox */}
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-            <input type="checkbox" checked={form.reEntry} onChange={setField('reEntry')} className="w-4 h-4 accent-primary" />
-            I have already applied for a re-entry permit
-          </label>
-        </div>
-
-        <div className="flex justify-end mt-6">
-          <button
-            onClick={() => setSent(true)}
-            className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition"
-          >
-            Send
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function StudentDashboardPage() {
-  const router = useRouter();
-  const [showCreateAccount, setShowCreateAccount] = useState(true); // true = first login
-
-  return (
     <div className="flex flex-col gap-6 flex-1">
-      {showCreateAccount && <CreateAccountModal onClose={() => setShowCreateAccount(false)} />}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-10">
@@ -224,7 +139,7 @@ export default function StudentDashboardPage() {
       {/* Latest Request */}
       <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col gap-4 flex-1">
         <div className="flex items-center justify-between">
-          <p className=" font-bold text-primary text-2xl">Latest Request</p>
+          <p className="font-bold text-primary text-2xl">Latest Request</p>
           <button
             onClick={() => router.push('/student/request')}
             className="flex items-center gap-2 bg-primary text-white text-sm font-medium px-3 py-2 rounded-lg hover:bg-primary/90 transition"
@@ -233,37 +148,42 @@ export default function StudentDashboardPage() {
           </button>
         </div>
         <hr />
-        <div className={clsx('flex flex-col gap-6', mockRequests.length === 0 && 'flex-1 items-center justify-center')}>
-          {mockRequests.length === 0 && (
+        <div className={clsx('flex flex-col gap-6', latestRequests.length === 0 && 'flex-1 items-center justify-center')}>
+          {latestRequests.length === 0 && (
             <p className="text-sm text-gray-400 text-center">There are no requests at this time.</p>
           )}
-          {mockRequests.slice(0, 2).map(req => (
-            <div key={req.id} className="bg-secondary rounded-xl p-4 flex flex-col gap-8">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex flex-col ">
-                  <p className="text-lg font-semibold text-primary">{req.title}</p>
+          {latestRequests.map((req) => {
+            const step = statusToStep(req.status);
+            const startDate = new Date(req.createdAt).toLocaleDateString();
+            const updateDate = new Date(req.updatedAt).toLocaleDateString();
+            return (
+              <div key={req.id} className="bg-secondary rounded-xl p-4 flex flex-col gap-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col">
+                    <p className="text-lg font-semibold text-primary">{req.title}</p>
+                  </div>
+                  <StepDots step={step} />
                 </div>
-                <StepDots step={req.step} />
+                <div className="flex justify-between">
+                  <div>
+                    <p className="text-sm text-gray-400">Start REQ : {startDate}</p>
+                    <p className="text-sm text-gray-400">Update REQ : {updateDate}</p>
+                    <p className="text-sm text-gray-400">Detail Update : {req.description ?? ''}</p>
+                  </div>
+                  <div className="flex items-end justify-end">
+                    <button
+                      onClick={() => router.push(`/student/request/${req.id}`)}
+                      className="flex items-center gap-1.5 bg-primary text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-primary/90 transition"
+                    >
+                      <RiEyeLine size={13} /> view
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">Start REQ : {req.startReq}</p>
-                  <p className="text-sm text-gray-400">Update REQ : {req.updateReq}</p>
-                  <p className="text-sm text-gray-400">Detail Update : {req.detail}</p>
-                </div>
-                <div className='flex items-end justify-end '>
-                  <button
-                    onClick={() => router.push(`/student/request/${req.id}`)}
-                    className="flex items-center gap-1.5 bg-primary text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-primary/90 transition"
-                  >
-                    <RiEyeLine size={13} /> view
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-        {mockRequests.length >= 1 && (
+        {requests.length >= 1 && (
           <div className="flex justify-center mt-3">
             <button
               onClick={() => router.push('/student/request')}

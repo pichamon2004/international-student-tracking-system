@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'STAFF';
+export type Role = 'ADMIN' | 'STAFF' | 'STUDENT' | 'ADVISOR';
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export type VisaStatus = 'ACTIVE' | 'EXPIRED' | 'PENDING' | 'CANCELLED';
 

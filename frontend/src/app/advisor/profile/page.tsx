@@ -1,28 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FiUpload } from "react-icons/fi";
 import { MdModeEditOutline } from "react-icons/md";
-
-const mockAdvisor = {
-    prefix: 'Asst. Prof.',
-    firstName: 'Pusadee',
-    middleName: '',
-    lastName: 'Seresangtakul',
-    telNo: '+66 43 202 222',
-    email: 'pusadees@kku.ac.th',
-    nationality: 'Thai',
-    workPermitIssue: '01/01/2020',
-    workPermitExpiry: '31/12/2026',
-    workPermitNo: 'WP-12345678',
-    workPermitImageUrl: 'https://scontent.fkkc3-1.fna.fbcdn.net/v/t39.30808-6/598526615_25528114996801169_2991659731747781961_n.jpg?stp=dst-jpg_s590x590_tt6&_nc_cat=105&ccb=1-7&_nc_sid=13d280&_nc_ohc=C26kKgNcJtkQ7kNvwHmHivI&_nc_oc=AdrJI8CBg8SX5Fy89oiP7kjxvp5IdB-cYMFe3Eqr-7jUY_aujEqbSTdrv23CJztVOiU&_nc_zt=23&_nc_ht=scontent.fkkc3-1.fna&_nc_gid=Eaxs4gJ1rbBC7vg_cV_fJA&_nc_ss=7a32e&oh=00_AfyJdku8VKV0d9buMKoMUmdygL9Sc8lXHQhc237QfQVqsA&oe=69C76F64',
-};
+import { advisorApi, type ApiAdvisor } from '@/lib/api';
+import toast from 'react-hot-toast';
+import DateSelect from '@/components/ui/DateSelect';
 
 function ViewField({ label, value }: { label: string; value: string }) {
     return (
         <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-primary/50">{label}</span>
-            <span className="text-sm font-semibold text-primary">{value}</span>
+            <span className="text-sm font-semibold text-primary">{value || '—'}</span>
         </div>
     );
 }
@@ -40,12 +29,110 @@ function EditField({ label, value, onChange }: { label: string; value: string; o
     );
 }
 
+type FormState = {
+    prefix: string;
+    firstName: string;
+    middleName: string;
+    lastName: string;
+    telNo: string;
+    email: string;
+    nationality: string;
+    workPermitIssue: string;
+    workPermitExpiry: string;
+    workPermitNo: string;
+};
+
+function mapAdvisorToForm(a: ApiAdvisor): FormState {
+    return {
+        prefix:          a.titleEn ?? '',
+        firstName:       a.firstNameEn ?? '',
+        middleName:      '',
+        lastName:        a.lastNameEn ?? '',
+        telNo:           a.phone ?? '',
+        email:           a.email ?? '',
+        nationality:     a.nationality ?? '',
+        workPermitIssue:  a.workPermitIssue ? a.workPermitIssue.slice(0, 10) : '',
+        workPermitExpiry: a.workPermitExpiry ? a.workPermitExpiry.slice(0, 10) : '',
+        workPermitNo:     a.workPermitNumber ?? '',
+    };
+}
+
 function AdvisorProfilePage() {
     const [editing, setEditing] = useState(false);
-    const [form, setForm] = useState(mockAdvisor);
+    const [advisor, setAdvisor] = useState<ApiAdvisor | null>(null);
+    const [form, setForm] = useState<FormState>({
+        prefix: '', firstName: '', middleName: '', lastName: '',
+        telNo: '', email: '', nationality: '',
+        workPermitIssue: '', workPermitExpiry: '', workPermitNo: '',
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    function set(key: keyof typeof mockAdvisor) {
+    useEffect(() => {
+        advisorApi.getMe()
+            .then(res => {
+                const data = res.data.data;
+                setAdvisor(data);
+                setForm(mapAdvisorToForm(data));
+                setPhotoUrl(data.photoUrl ?? null);
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, []);
+
+    async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingPhoto(true);
+        try {
+            const res = await advisorApi.uploadPhoto(file);
+            setPhotoUrl(res.data.data.url);
+            toast.success('Photo updated');
+        } catch {
+            toast.error('Failed to upload photo');
+        } finally {
+            setUploadingPhoto(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    }
+
+    function set(key: keyof FormState) {
         return (v: string) => setForm(prev => ({ ...prev, [key]: v }));
+    }
+
+    async function handleSave() {
+        setSaving(true);
+        try {
+            const res = await advisorApi.update({
+                titleEn:           form.prefix || undefined,
+                firstNameEn:       form.firstName || undefined,
+                lastNameEn:        form.lastName || undefined,
+                phone:             form.telNo || undefined,
+                workPermitNumber:  form.workPermitNo || undefined,
+                workPermitIssue:   form.workPermitIssue || undefined,
+                workPermitExpiry:  form.workPermitExpiry || undefined,
+            });
+            setAdvisor(res.data.data);
+            toast.success('Profile updated');
+            setEditing(false);
+        } catch {
+            toast.error('Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    if (loading) {
+        return (
+            <div className="bg-white w-full flex-1 rounded-2xl p-6 animate-pulse flex flex-col gap-4">
+                <div className="h-8 bg-gray-100 rounded w-1/4" />
+                <div className="h-32 bg-gray-100 rounded-2xl" />
+                <div className="h-64 bg-gray-100 rounded-2xl" />
+            </div>
+        );
     }
 
     return (
@@ -54,11 +141,27 @@ function AdvisorProfilePage() {
             <div className="w-full h-full flex flex-col gap-3">
 
                 <div className="flex items-center justify-start gap-6 border rounded-2xl px-6 py-4">
-                    <img src="https://api.computing.kku.ac.th//storage/images/1661876218-pusadeeseresangtakul1_1.png" alt="Photo" className="w-24 h-24 rounded-xl object-cover" />
+                    <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-primary flex items-center justify-center text-white text-3xl font-bold shrink-0">
+                        {photoUrl
+                            ? <img src={photoUrl} alt="profile" className="w-full h-full object-cover" />
+                            : [form.firstName, form.lastName].filter(Boolean).map(w => w[0]).join('').toUpperCase() || '?'
+                        }
+                    </div>
                     <div className="flex flex-col items-start justify-around gap-3 h-full">
-                        <p className="text-xl font-medium">{form.prefix} {form.firstName} {form.middleName} {form.lastName}</p>
-                        <button className="text-primary bg-secondary px-3 py-2 rounded-xl flex items-center justify-center gap-3">
-                            <FiUpload /> Upload New Photo
+                        <p className="text-xl font-medium">{[form.prefix, form.firstName, form.middleName, form.lastName].filter(Boolean).join(' ')}</p>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handlePhotoChange}
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploadingPhoto}
+                            className="text-primary bg-secondary px-3 py-2 rounded-xl flex items-center justify-center gap-3 disabled:opacity-50"
+                        >
+                            <FiUpload /> {uploadingPhoto ? 'Uploading…' : 'Upload New Photo'}
                         </button>
                     </div>
                 </div>
@@ -70,16 +173,17 @@ function AdvisorProfilePage() {
                             {editing ? (
                                 <>
                                     <button
-                                        onClick={() => setEditing(false)}
+                                        onClick={() => { setForm(advisor ? mapAdvisorToForm(advisor) : form); setEditing(false); }}
                                         className="flex items-center gap-2 border border-gray-300 rounded-full px-4 py-2 text-sm text-gray-500 hover:bg-gray-50"
                                     >
                                         Cancel
                                     </button>
                                     <button
-                                        onClick={() => setEditing(false)}
-                                        className="flex items-center gap-2 bg-primary rounded-full px-4 py-2 text-sm text-white hover:bg-primary/90"
+                                        onClick={handleSave}
+                                        disabled={saving}
+                                        className="flex items-center gap-2 bg-primary rounded-full px-4 py-2 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
                                     >
-                                        Save
+                                        {saving ? 'Saving…' : 'Save'}
                                     </button>
                                 </>
                             ) : (
@@ -107,16 +211,15 @@ function AdvisorProfilePage() {
                                 </div>
                                 <hr />
                                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                                    <EditField label="Work Permit Issue" value={form.workPermitIssue} onChange={set('workPermitIssue')} />
-                                    <EditField label="Work Permit Expiry" value={form.workPermitExpiry} onChange={set('workPermitExpiry')} />
-                                    <EditField label="Work Permit No." value={form.workPermitNo} onChange={set('workPermitNo')} />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-medium text-primary">Work Permit Image</label>
-                                    <div className='flex gap-3 flex-col md:flex-row'>
-                                        <img src={form.workPermitImageUrl} alt="Work Permit" className="w-48 rounded-xl border border-gray-200 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                        <button className="self-start text-primary bg-secondary px-3 py-2 rounded-xl flex items-center gap-2 text-sm"><FiUpload /> Upload New Image</button>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-medium text-primary">Work Permit Issue</label>
+                                        <DateSelect value={form.workPermitIssue} onChange={set('workPermitIssue')} />
                                     </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs font-medium text-primary">Work Permit Expiry</label>
+                                        <DateSelect value={form.workPermitExpiry} onChange={set('workPermitExpiry')} />
+                                    </div>
+                                    <EditField label="Work Permit No." value={form.workPermitNo} onChange={set('workPermitNo')} />
                                 </div>
                             </>
                         ) : (
@@ -131,14 +234,10 @@ function AdvisorProfilePage() {
                                     <ViewField label="Nationality" value={form.nationality} />
                                 </div>
                                 <hr className="border-gray-100" />
-                                <div className="grid grid-cols-1 md:grid-cols-4 2xl:grid-cols-3 gap-x-8 gap-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-5">
                                     <ViewField label="Work Permit Issue" value={form.workPermitIssue} />
                                     <ViewField label="Work Permit Expiry" value={form.workPermitExpiry} />
                                     <ViewField label="Work Permit No." value={form.workPermitNo} />
-                                <div className="flex flex-col gap-2">
-                                    <span className="text-xs font-medium text-primary/50">Work Permit Image</span>
-                                    <img src={form.workPermitImageUrl} alt="Work Permit" className="w-48 rounded-xl border border-gray-200 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                </div>
                                 </div>
                             </>
                         )}

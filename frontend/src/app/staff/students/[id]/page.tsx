@@ -1,16 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { studentApi } from '@/lib/api';
+import { studentApi, visaApi, healthInsuranceApi, dependentApi, academicDocumentApi, type ApiStudentDetail, type ApiVisa, type ApiHealthInsurance, type ApiDependent, type ApiAcademicDocument } from '@/lib/api';
 import { RiArrowLeftLine, RiMailLine, RiPhoneLine, RiMapPinLine, RiCheckboxCircleLine, RiCloseLine } from 'react-icons/ri';
+import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import { BsPeopleFill } from 'react-icons/bs';
 import Button from '@/components/ui/Button';
 import { RenewalDetailModal, type RenewalModalData } from '@/components/RenewalDetailModal';
+import CustomSelect from '@/components/ui/CustomSelect';
+import DateSelect from '@/components/ui/DateSelect';
 
 type VisaStatus = 'Active' | 'Expired' | 'Expiring Soon';
-type Tab = 'Student Information' | 'Passport & Visa' | 'Health Insurance' | 'Recent Activity' | 'Renewal History';
+type Tab = 'Student Information' | 'Passport & Visa' | 'Health Insurance' | 'Academic Record' | 'Dependents' | 'Recent Activity' | 'Renewal History';
 
 /* ─── Types ───────────────────────────────────────────────── */
 
@@ -75,7 +78,24 @@ interface StudentDetail {
   activity: { date: string; type: string; detail: string; status: string }[];
 }
 
-/* ─── Mock Data ───────────────────────────────────────────── */
+/* ─── Helpers ─────────────────────────────────────────────── */
+
+function fmt(date: string | null | undefined): string {
+  if (!date) return '—';
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? date : d.toLocaleDateString('en-GB');
+}
+
+function getVisaStatus(visas: ApiVisa[]): VisaStatus {
+  const current = visas.find(v => v.isCurrent) ?? visas[0];
+  if (!current) return 'Active';
+  const days = Math.ceil((new Date(current.expiryDate).getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return 'Expired';
+  if (days <= 45) return 'Expiring Soon';
+  return 'Active';
+}
+
+/* ─── DEAD CODE (kept for reference) ──────────────────────── */
 
 const mockStudents: Record<string, StudentDetail> = {
   '1': {
@@ -300,19 +320,24 @@ const SCHOLARSHIP_OPTIONS = [
   'อื่นๆ',
 ] as const;
 
-function Phase2ApproveModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) {
+function Phase2ApproveModal({ studentDbId, onClose, onConfirm }: { studentDbId: number; onClose: () => void; onConfirm: () => void }) {
   const modalInputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition bg-white disabled:bg-gray-50 disabled:text-gray-400';
   const modalLabelCls = 'text-xs font-semibold text-gray-600 mb-1 block';
 
-  const [form, setForm] = useState({ enrollmentDate: '', expectedGraduation: '', scholarship: '' });
+  const [form, setForm] = useState({
+    faculty: 'College of Computing',
+    enrollmentDate: '',
+    expectedGraduation: '',
+    scholarship: '',
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const validate = () => {
     const e: Record<string, string> = {};
+    if (!form.faculty)            e.faculty            = 'Required';
     if (!form.enrollmentDate)     e.enrollmentDate     = 'Required';
     if (!form.expectedGraduation) e.expectedGraduation = 'Required';
-    if (!form.scholarship)        e.scholarship        = 'Required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -320,9 +345,21 @@ function Phase2ApproveModal({ onClose, onConfirm }: { onClose: () => void; onCon
   const handleConfirm = async () => {
     if (!validate()) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    setSaving(false);
-    onConfirm();
+    try {
+      await studentApi.update(studentDbId, {
+        faculty: form.faculty,
+        enrollmentDate: new Date(form.enrollmentDate).toISOString(),
+        expectedGraduation: new Date(form.expectedGraduation).toISOString(),
+        scholarship: form.scholarship || undefined,
+        registrationStatus: 'ACTIVE',
+        registrationStep: 2,
+      });
+      onConfirm();
+    } catch {
+      setErrors({ general: 'Failed to save. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -338,36 +375,38 @@ function Phase2ApproveModal({ onClose, onConfirm }: { onClose: () => void; onCon
 
         <div className="p-6 flex flex-col gap-4">
           <p className="text-sm text-gray-500">
-            Fill in the student&apos;s current study details at College of Computing, KKU.
+            Fill in the student&apos;s academic details to complete Phase 2 registration.
           </p>
+
+          <div className="flex flex-col gap-1">
+            <label className={modalLabelCls}>Faculty / College <span className="text-red-400">*</span></label>
+            <input value={form.faculty} onChange={e => setForm(p => ({ ...p, faculty: e.target.value }))}
+              placeholder="e.g. College of Computing"
+              className={clsx(modalInputCls, errors.faculty && 'border-red-400')} />
+            {errors.faculty && <p className="text-xs text-red-500">{errors.faculty}</p>}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className={modalLabelCls}>Enrollment Date <span className="text-red-400">*</span></label>
-              <input type="date" value={form.enrollmentDate}
-                onChange={e => setForm(p => ({ ...p, enrollmentDate: e.target.value }))}
-                className={clsx(modalInputCls, errors.enrollmentDate && 'border-red-400')} />
+              <DateSelect value={form.enrollmentDate} onChange={(v) => setForm(p => ({ ...p, enrollmentDate: v }))} />
               {errors.enrollmentDate && <p className="text-xs text-red-500">{errors.enrollmentDate}</p>}
             </div>
             <div className="flex flex-col gap-1">
               <label className={modalLabelCls}>Expected Graduation <span className="text-red-400">*</span></label>
-              <input type="date" value={form.expectedGraduation}
-                onChange={e => setForm(p => ({ ...p, expectedGraduation: e.target.value }))}
-                className={clsx(modalInputCls, errors.expectedGraduation && 'border-red-400')} />
+              <DateSelect value={form.expectedGraduation} onChange={(v) => setForm(p => ({ ...p, expectedGraduation: v }))} />
               {errors.expectedGraduation && <p className="text-xs text-red-500">{errors.expectedGraduation}</p>}
             </div>
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className={modalLabelCls}>Scholarship<span className="text-red-400">*</span></label>
-            <select value={form.scholarship}
-              onChange={e => setForm(p => ({ ...p, scholarship: e.target.value }))}
-              className={clsx(modalInputCls, errors.scholarship && 'border-red-400')}>
-              <option value="">Select scholarship type...</option>
-              {SCHOLARSHIP_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-            {errors.scholarship && <p className="text-xs text-red-500">{errors.scholarship}</p>}
+            <label className={modalLabelCls}>Scholarship</label>
+            <input value={form.scholarship} onChange={e => setForm(p => ({ ...p, scholarship: e.target.value }))}
+              placeholder="e.g. KKU Scholarship (leave blank if none)"
+              className={modalInputCls} />
           </div>
+
+          {errors.general && <p className="text-sm text-red-500">{errors.general}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
@@ -377,7 +416,7 @@ function Phase2ApproveModal({ onClose, onConfirm }: { onClose: () => void; onCon
           </button>
           <button onClick={handleConfirm} disabled={saving}
             className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 transition-all disabled:opacity-50">
-            {saving ? 'Saving…' : '✓ Approve & Activate'}
+            {saving ? 'Saving…' : 'Approve & Activate'}
           </button>
         </div>
       </div>
@@ -385,7 +424,7 @@ function Phase2ApproveModal({ onClose, onConfirm }: { onClose: () => void; onCon
   );
 }
 
-const TABS: Tab[] = ['Student Information', 'Passport & Visa', 'Health Insurance', 'Recent Activity', 'Renewal History'];
+const TABS: Tab[] = ['Student Information', 'Passport & Visa', 'Health Insurance', 'Academic Record', 'Dependents', 'Recent Activity', 'Renewal History'];
 
 const visaStatusConfig: Record<VisaStatus, string> = {
   'Active':        'bg-green-100 text-green-700',
@@ -527,26 +566,30 @@ function Phase2Form({ studentDbId }: { studentDbId: number }) {
         </div>
         <div>
           <label className={labelCls}>Degree Level <span className="text-red-400">*</span></label>
-          <select value={form.level} onChange={e => setForm(p => ({ ...p, level: e.target.value, program: '' }))} className={inputCls}>
-            <option value="">Select level...</option>
-            {LEVEL_OPTIONS.map(l => <option key={l} value={l}>{LEVEL_LABELS[l]}</option>)}
-          </select>
+          <CustomSelect
+            value={form.level}
+            onChange={(val) => setForm(p => ({ ...p, level: val, program: '' }))}
+            options={LEVEL_OPTIONS.map(l => ({ label: LEVEL_LABELS[l], value: l }))}
+            placeholder="Select level..."
+          />
         </div>
         <div>
           <label className={labelCls}>Program <span className="text-red-400">*</span></label>
-          <select value={form.program} onChange={e => setForm(p => ({ ...p, program: e.target.value }))} className={inputCls}
-            disabled={!form.level}>
-            <option value="">{form.level ? 'Select program...' : 'Select level first'}</option>
-            {programs.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <CustomSelect
+            value={form.program}
+            onChange={(val) => setForm(p => ({ ...p, program: val }))}
+            options={programs}
+            placeholder={form.level ? 'Select program...' : 'Select level first'}
+            disabled={!form.level}
+          />
         </div>
         <div>
           <label className={labelCls}>Enrollment Date (ปีที่เข้าศึกษา) <span className="text-red-400">*</span></label>
-          <input type="date" value={form.enrollmentDate} onChange={e => setForm(p => ({ ...p, enrollmentDate: e.target.value }))} className={inputCls} />
+          <DateSelect value={form.enrollmentDate} onChange={(v) => setForm(p => ({ ...p, enrollmentDate: v }))} />
         </div>
         <div>
           <label className={labelCls}>Expected Graduation (ปีที่จบ) <span className="text-red-400">*</span></label>
-          <input type="date" value={form.expectedGraduation} onChange={e => setForm(p => ({ ...p, expectedGraduation: e.target.value }))} className={inputCls} />
+          <DateSelect value={form.expectedGraduation} onChange={(v) => setForm(p => ({ ...p, expectedGraduation: v }))} />
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Scholarship</label>
@@ -563,7 +606,7 @@ function Phase2Form({ studentDbId }: { studentDbId: number }) {
           disabled={saving}
           className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition disabled:opacity-50"
         >
-          {saving ? 'Saving…' : '✓ Complete Registration (Phase 2)'}
+          {saving ? 'Saving…' : 'Complete Registration (Phase 2)'}
         </button>
       </div>
     </div>
@@ -580,17 +623,133 @@ export default function StaffStudentDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Student Information');
   const [renewalModal, setRenewalModal] = useState<RenewalModalData | null>(null);
   const [approval, setApproval] = useState<ApprovalState>('idle');
+  const [student, setStudent] = useState<ApiStudentDetail | null>(null);
+  const [allVisas, setAllVisas] = useState<ApiVisa[]>([]);
+  const [allInsurances, setAllInsurances] = useState<ApiHealthInsurance[]>([]);
+  const [dependents, setDependents] = useState<ApiDependent[]>([]);
+  const [academicDocs, setAcademicDocs] = useState<ApiAcademicDocument[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const s = mockStudents[id] ?? mockStudents['1'];
-  const regStep   = s.registrationStep   ?? 2;
-  const regStatus = s.registrationStatus ?? 'ACTIVE';
+  useEffect(() => {
+    if (!id) return;
+    const numId = Number(id);
+    Promise.all([
+      studentApi.getById(numId),
+      visaApi.getAll(numId),
+      healthInsuranceApi.getAll(numId),
+      dependentApi.getAll(numId),
+      academicDocumentApi.getAll(numId),
+    ])
+      .then(([sRes, vRes, iRes, dRes, aRes]) => {
+        setStudent(sRes.data.data);
+        setAllVisas(vRes.data.data);
+        setAllInsurances(iRes.data.data);
+        setDependents(dRes.data.data);
+        setAcademicDocs(aRes.data.data);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="bg-white w-full flex-1 rounded-2xl p-6 animate-pulse flex flex-col gap-6">
+        <div className="h-8 bg-gray-100 rounded w-1/3" />
+        <div className="flex gap-6 flex-1">
+          <div className="w-64 bg-gray-100 rounded-2xl h-80" />
+          <div className="flex-1 bg-gray-100 rounded-2xl h-80" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!student) {
+    return (
+      <div className="bg-white w-full flex-1 rounded-2xl p-8 flex flex-col items-center justify-center gap-4">
+        <p className="text-gray-400">Student not found</p>
+        <button onClick={() => router.back()} className="text-primary text-sm hover:underline">Back</button>
+      </div>
+    );
+  }
+
+  const numId = Number(id);
+  const regStep   = student.registrationStep   ?? 2;
+  const regStatus = student.registrationStatus ?? 'ACTIVE';
   const isPending = regStatus === 'PENDING_APPROVAL' && approval === 'idle';
   const needsApproval = isPending && (regStep === 1 || regStep === 2);
 
-  const rawName = s.name.trim().replace('—', '');
+  const rawName = [student.titleEn, student.firstNameEn, student.lastNameEn].filter(Boolean).join(' ');
   const initials = rawName
-    ? rawName.split(' ').map((w: string) => w[0]).join('').toUpperCase()
-    : s.email.slice(0, 2).toUpperCase();
+    ? rawName.split(' ').filter(w => /^[A-Z]/i.test(w)).map(w => w[0]).join('').toUpperCase()
+    : (student.email ?? '??').slice(0, 2).toUpperCase();
+
+  const visaStatus = getVisaStatus(allVisas);
+  const currentPassport = student.passports?.find(p => p.isCurrent) ?? student.passports?.[0] ?? null;
+  const currentVisa = allVisas.find(v => v.isCurrent) ?? allVisas[0] ?? null;
+  const currentInsurance = allInsurances.find(i => i.isCurrent) ?? allInsurances[0] ?? null;
+
+  const hasPersonal = !!(student.firstNameEn || student.lastNameEn);
+  const missingCount = [student.firstNameEn, student.nationality, student.email].filter(v => !v).length;
+
+  const personalItems = [
+    { label: 'Prefix (EN)',         value: student.titleEn ?? '—' },
+    { label: 'First Name (EN)',      value: student.firstNameEn ?? '—' },
+    { label: 'Middle Name (EN)',     value: student.middleNameEn ?? '—' },
+    { label: 'Last Name (EN)',       value: student.lastNameEn ?? '—' },
+    { label: 'Date of Birth',        value: fmt(student.dateOfBirth) },
+    { label: 'Gender',               value: student.gender ?? '—' },
+    { label: 'Religion',             value: student.religion ?? '—' },
+    { label: 'Nationality',          value: student.nationality ?? '—' },
+    { label: 'Home Country',         value: student.homeCountry ?? '—' },
+    { label: 'Address in Thailand',  value: student.addressInThailand ?? '—' },
+    { label: 'Home Address',         value: student.homeAddress ?? '—' },
+    { label: 'Phone',                value: student.phone ?? '—' },
+  ];
+
+  const passportItems = currentPassport ? [
+    { label: 'Passport No.',    value: currentPassport.passportNumber },
+    { label: 'Issuing Country', value: currentPassport.issuingCountry },
+    { label: 'Place of Issue',  value: currentPassport.placeOfIssue ?? '—' },
+    { label: 'Date of Issue',   value: fmt(currentPassport.issueDate) },
+    { label: 'Expiry Date',     value: fmt(currentPassport.expiryDate) },
+  ] : [];
+
+  const visaItems = currentVisa ? [
+    { label: 'Visa Type',       value: currentVisa.visaType },
+    { label: 'Issuing Country', value: currentVisa.issuingCountry },
+    { label: 'Place of Issue',  value: currentVisa.issuingPlace ?? '—' },
+    { label: 'Valid From',      value: fmt(currentVisa.issueDate) },
+    { label: 'Valid Until',     value: fmt(currentVisa.expiryDate) },
+    { label: 'Entries',         value: currentVisa.entries ?? '—' },
+  ] : [];
+
+  const insuranceItems = currentInsurance ? [
+    { label: 'Provider',      value: currentInsurance.provider },
+    { label: 'Policy No.',    value: currentInsurance.policyNumber ?? '—' },
+    { label: 'Coverage Type', value: currentInsurance.coverageType ?? '—' },
+    { label: 'Valid From',    value: fmt(currentInsurance.startDate) },
+    { label: 'Valid Until',   value: fmt(currentInsurance.expiryDate) },
+  ] : [];
+
+  async function handleApprove() {
+    try {
+      await studentApi.approve(numId);
+      setApproval('approved');
+      toast.success(`Phase ${regStep} approved — student can now proceed.`);
+    } catch {
+      toast.error('Failed to approve. Please try again.');
+    }
+  }
+
+  async function handleReject() {
+    try {
+      await studentApi.reject(numId, 'Rejected by staff');
+      setApproval('rejected');
+      toast.error('Registration rejected. The student has been notified.');
+    } catch {
+      toast.error('Failed to reject. Please try again.');
+    }
+  }
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-6">
@@ -609,13 +768,13 @@ export default function StaffStudentDetailPage() {
         {needsApproval && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setApproval('rejected')}
+              onClick={handleReject}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-primary/30 text-primary hover:bg-primary/5 transition-all"
             >
               Reject
             </button>
             <button
-              onClick={() => regStep === 2 ? setApproval('approving_p2') : setApproval('approved')}
+              onClick={() => regStep === 2 ? setApproval('approving_p2') : handleApprove()}
               className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 transition-all"
             >
               Approve
@@ -632,18 +791,6 @@ export default function StaffStudentDetailPage() {
         </div>
       )}
 
-      {/* Post-action banners */}
-      {approval === 'approved' && (
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
-          <RiCheckboxCircleLine size={18} />
-          Phase {regStep} approved — student can now proceed.
-        </div>
-      )}
-      {approval === 'rejected' && (
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-red-50 border border-red-200 text-red-600 text-sm font-medium">
-          Registration rejected. The student has been notified.
-        </div>
-      )}
 
       {/* Content */}
       <div className="flex flex-col lg:flex-row gap-6">
@@ -658,12 +805,12 @@ export default function StaffStudentDetailPage() {
             </div>
             <div className="text-center">
               {rawName ? (
-                <p className="font-semibold text-primary">{s.name}</p>
+                <p className="font-semibold text-primary">{rawName}</p>
               ) : (
                 <p className="text-sm text-gray-400 italic">Name not yet provided</p>
               )}
-              <p className="text-xs text-gray-400 font-mono mt-0.5">{s.studentId}</p>
-              <p className="text-xs text-gray-500 mt-1">{s.nationality !== '—' ? s.nationality : ''}</p>
+              <p className="text-xs text-gray-400 font-mono mt-0.5">{student.studentId ?? '—'}</p>
+              <p className="text-xs text-gray-500 mt-1">{student.nationality ?? ''}</p>
               {isPending && (
                 <span className={clsx('mt-1 inline-block px-2.5 py-0.5 rounded-full text-xs font-medium',
                   regStep === 0 ? 'bg-gray-100 text-gray-600' :
@@ -674,17 +821,17 @@ export default function StaffStudentDetailPage() {
               )}
             </div>
             {!isPending && (
-              <span className={clsx('px-3 py-1 rounded-full text-xs font-medium', visaStatusConfig[s.visaStatus])}>
-                Visa: {s.visaStatus}
+              <span className={clsx('px-3 py-1 rounded-full text-xs font-medium', visaStatusConfig[visaStatus])}>
+                Visa: {visaStatus}
               </span>
             )}
           </div>
 
           {/* Info Status */}
-          {s.infoStatus === 'not_added' ? (
+          {missingCount > 0 ? (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between gap-3">
               <p className="text-sm text-red-600 font-medium">
-                Missing {s.missingCount} item{s.missingCount !== 1 ? 's' : ''}
+                Missing {missingCount} item{missingCount !== 1 ? 's' : ''}
               </p>
               <Button variant="warning" label="Follow Up" onClick={() => {}} />
             </div>
@@ -699,33 +846,33 @@ export default function StaffStudentDetailPage() {
             <p className="text-xs font-semibold text-primary/60 uppercase tracking-wide">Contact</p>
             <div className="flex items-start gap-2.5 text-sm text-primary">
               <RiMailLine size={15} className="shrink-0 mt-0.5 text-primary/50" />
-              <span className="break-all">{s.email}</span>
+              <span className="break-all">{student.email ?? '—'}</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-primary">
               <RiPhoneLine size={15} className="shrink-0 text-primary/50" />
-              <span>{s.phone}</span>
+              <span>{student.phone ?? '—'}</span>
             </div>
             <div className="flex items-start gap-2.5 text-sm text-primary">
               <RiMapPinLine size={15} className="shrink-0 mt-0.5 text-primary/50" />
-              <span>{s.address}</span>
+              <span>{student.addressInThailand ?? student.homeAddress ?? '—'}</span>
             </div>
           </div>
 
           {/* Emergency Contact */}
           <div className="bg-secondary rounded-2xl p-5 flex flex-col gap-3">
             <p className="text-xs font-semibold text-primary/60 uppercase tracking-wide">Emergency Contact</p>
-            <span className="text-sm font-semibold text-primary mt-1">{s.ecName}</span>
+            <span className="text-sm font-semibold text-primary mt-1">{student.emergencyContact ?? '—'}</span>
             <div className="flex items-start gap-2.5 text-sm text-primary">
               <RiMailLine size={15} className="shrink-0 mt-0.5 text-primary/50" />
-              <span className="break-all">{s.ecEmail}</span>
+              <span className="break-all">{student.emergencyEmail ?? '—'}</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-primary">
               <RiPhoneLine size={15} className="shrink-0 text-primary/50" />
-              <span>{s.ecPhone}</span>
+              <span>{student.emergencyPhone ?? '—'}</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-primary">
               <BsPeopleFill size={15} className="shrink-0 text-primary/50" />
-              <span>{s.ecRelationship}</span>
+              <span>{student.emergencyRelation ?? '—'}</span>
             </div>
           </div>
         </div>
@@ -754,9 +901,9 @@ export default function StaffStudentDetailPage() {
           {/* ── Student Information ── */}
           {activeTab === 'Student Information' && (
             <div className="flex flex-col gap-3">
-              {s.personal.length > 0 ? (
+              {hasPersonal ? (
                 <div className="bg-secondary rounded-2xl p-6">
-                  <InfoGrid items={s.personal} />
+                  <InfoGrid items={personalItems} />
                 </div>
               ) : (
                 <div className="py-12 text-center text-gray-400 text-sm">
@@ -769,16 +916,16 @@ export default function StaffStudentDetailPage() {
           {/* ── Passport & Visa ── */}
           {activeTab === 'Passport & Visa' && (
             <div className="flex flex-col gap-3">
-              {s.passport.length > 0 ? (
+              {passportItems.length > 0 ? (
                 <div className="flex flex-col lg:flex-row gap-4">
                   {/* Passport column */}
                   <div className="flex-1 flex flex-col gap-3">
                     <div className="bg-secondary rounded-2xl p-6 flex flex-col gap-4">
                       <p className="text-sm font-semibold text-primary">Passport Information</p>
-                      <InfoGrid items={s.passport} />
+                      <InfoGrid items={passportItems} />
                     </div>
-                    {s.passportImageUrl && (
-                      <img src={s.passportImageUrl} alt="Passport"
+                    {currentPassport?.imageUrl && (
+                      <img src={currentPassport.imageUrl} alt="Passport"
                         className="w-full md:w-3/5 object-cover rounded-xl bg-gray-200"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                     )}
@@ -787,15 +934,13 @@ export default function StaffStudentDetailPage() {
                   <div className="flex-1 flex flex-col gap-3">
                     <div className="bg-secondary rounded-2xl p-6 flex flex-col gap-4">
                       <p className="text-sm font-semibold text-primary">Visa Information</p>
-                      <InfoGrid items={s.visa} />
+                      <InfoGrid items={visaItems} />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {s.visaImageUrls.map((url, i) => (
-                        <img key={i} src={url} alt={`Visa stamp ${i + 1}`}
-                          className="h-36 w-full object-contain rounded-xl bg-gray-200"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ))}
-                    </div>
+                    {currentVisa?.imageUrl && (
+                      <img src={currentVisa.imageUrl} alt="Visa stamp"
+                        className="h-36 w-full object-contain rounded-xl bg-gray-200"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    )}
                   </div>
                 </div>
               ) : (
@@ -809,13 +954,13 @@ export default function StaffStudentDetailPage() {
           {/* ── Health Insurance ── */}
           {activeTab === 'Health Insurance' && (
             <div className="flex flex-col gap-3">
-              {s.insurance.length > 0 ? (
+              {insuranceItems.length > 0 ? (
                 <div className="flex flex-col lg:flex-row gap-4">
                   <div className="flex-1 bg-secondary rounded-2xl p-6 flex flex-col gap-4">
-                    <InfoGrid items={s.insurance} />
+                    <InfoGrid items={insuranceItems} />
                   </div>
-                  {s.insuranceImageUrl && (
-                    <img src={s.insuranceImageUrl} alt="Insurance"
+                  {currentInsurance?.fileUrl && (
+                    <img src={currentInsurance.fileUrl} alt="Insurance"
                       className="w-full lg:w-1/2 object-cover rounded-xl bg-gray-200"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   )}
@@ -829,37 +974,81 @@ export default function StaffStudentDetailPage() {
           )}
 
 
+          {/* ── Academic Record ── */}
+          {activeTab === 'Academic Record' && (
+            <div className="flex flex-col gap-4">
+              <div className="bg-secondary rounded-2xl p-6">
+                <InfoGrid items={[
+                  { label: 'Faculty',              value: student.faculty ?? '—' },
+                  { label: 'Program',              value: student.program ?? '—' },
+                  { label: 'Level',                value: student.level ?? '—' },
+                  { label: 'Enrollment Date',      value: fmt(student.enrollmentDate) },
+                  { label: 'Expected Graduation',  value: fmt(student.expectedGraduation) },
+                  { label: 'Scholarship',          value: student.scholarship ?? '—' },
+                ]} />
+              </div>
+              {academicDocs.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-primary/50 uppercase tracking-wide">Academic Documents</p>
+                  <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Type</th>
+                          <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Institution</th>
+                          <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {academicDocs.map(doc => (
+                          <tr key={doc.id}>
+                            <td className="py-3 px-4 text-primary font-medium">{doc.docType}</td>
+                            <td className="py-3 px-4 text-primary">{doc.institution}</td>
+                            <td className="py-3 px-4 text-primary">{fmt(doc.issueDate)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Dependents ── */}
+          {activeTab === 'Dependents' && (
+            <div className="bg-secondary rounded-2xl p-6">
+              {dependents.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">No dependents recorded</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-3 font-semibold text-primary/70 text-xs">Name</th>
+                      <th className="text-left py-2 px-3 font-semibold text-primary/70 text-xs">Relation</th>
+                      <th className="text-left py-2 px-3 font-semibold text-primary/70 text-xs">Nationality</th>
+                      <th className="text-left py-2 px-3 font-semibold text-primary/70 text-xs">Passport No.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dependents.map((d) => (
+                      <tr key={d.id} className="border-b border-gray-100 last:border-none">
+                        <td className="py-2.5 px-3 text-primary font-medium">{[d.firstName, d.lastName].filter(Boolean).join(' ')}</td>
+                        <td className="py-2.5 px-3 text-gray-500">{d.relationship}</td>
+                        <td className="py-2.5 px-3 text-gray-500">{d.nationality}</td>
+                        <td className="py-2.5 px-3 font-mono text-gray-500 text-xs">{d.passportNumber ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           {/* ── Recent Activity ── */}
           {activeTab === 'Recent Activity' && (
-            <div className="border border-gray-100 rounded-2xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Date</th>
-                    <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Type</th>
-                    <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Detail</th>
-                    <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Status</th>
-                    <th className="text-center py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {s.activity.map((a, i) => (
-                    <tr key={i} className="hover:bg-gray-50 transition">
-                      <td className="py-3 px-4 text-gray-400 text-xs whitespace-nowrap">{a.date}</td>
-                      <td className="py-3 px-4 text-primary font-medium">{a.type}</td>
-                      <td className="py-3 px-4 text-primary">{a.detail || '—'}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                          {a.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <Button variant="info" onClick={() => {}} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="py-12 text-center text-gray-400 text-sm">
+              No recent activity recorded
             </div>
           )}
 
@@ -882,23 +1071,29 @@ export default function StaffStudentDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.passports.map((p, i) => (
-                        <tr key={i} onClick={() => setRenewalModal({ kind: 'passport', data: {
-                            ...p,
-                            extraItems: s.passport.map(it =>
-                              it.label === 'Date of Issue' ? { ...it, value: p.issueDate } :
-                              it.label === 'Expiry Date'   ? { ...it, value: p.expiryDate } :
-                              it
-                            ),
-                          } })}
+                      {student.passports?.length ? student.passports.map((p) => (
+                        <tr key={p.id}
+                          onClick={() => setRenewalModal({ kind: 'passport', data: {
+                            passportNumber: p.passportNumber,
+                            issuingCountry: p.issuingCountry,
+                            issueDate: fmt(p.issueDate),
+                            expiryDate: fmt(p.expiryDate),
+                            isCurrent: p.isCurrent,
+                            imageUrl: p.imageUrl ?? undefined,
+                            mrzLine1: p.mrzLine1 ?? undefined,
+                            mrzLine2: p.mrzLine2 ?? undefined,
+                            extraItems: passportItems,
+                          }})}
                           className={clsx('cursor-pointer hover:bg-secondary/40 transition', p.isCurrent && 'bg-green-50/40')}>
                           <td className="py-3 px-4 font-mono text-primary font-medium">{p.passportNumber}</td>
                           <td className="py-3 px-4 text-primary">{p.issuingCountry}</td>
-                          <td className="py-3 px-4 text-primary">{p.issueDate}</td>
-                          <td className="py-3 px-4 text-primary">{p.expiryDate}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(p.issueDate)}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(p.expiryDate)}</td>
                           <td className="py-3 px-4 text-center">{p.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
                         </tr>
-                      ))}
+                      )) : (
+                        <tr><td colSpan={5} className="py-6 text-center text-gray-400 text-sm">No passport records</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -919,16 +1114,28 @@ export default function StaffStudentDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.visas.map((v, i) => (
-                        <tr key={i} onClick={() => setRenewalModal({ kind: 'visa', data: { ...v } })}
+                      {allVisas.length ? allVisas.map((v) => (
+                        <tr key={v.id}
+                          onClick={() => setRenewalModal({ kind: 'visa', data: {
+                            passportNo: '—',
+                            visaType: v.visaType,
+                            placeOfIssue: v.issuingPlace ?? '—',
+                            validFrom: fmt(v.issueDate),
+                            validUntil: fmt(v.expiryDate),
+                            entries: v.entries ?? '—',
+                            isCurrent: v.isCurrent,
+                            imageUrls: v.imageUrl ? [v.imageUrl] : undefined,
+                          }})}
                           className={clsx('cursor-pointer hover:bg-secondary/40 transition', v.isCurrent && 'bg-green-50/40')}>
-                          <td className="py-3 px-4 font-mono text-primary">{v.passportNo}</td>
+                          <td className="py-3 px-4 font-mono text-primary">{v.visaNumber ?? '—'}</td>
                           <td className="py-3 px-4 text-primary font-medium">{v.visaType}</td>
-                          <td className="py-3 px-4 text-primary">{v.validFrom}</td>
-                          <td className="py-3 px-4 text-primary">{v.validUntil}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(v.issueDate)}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(v.expiryDate)}</td>
                           <td className="py-3 px-4 text-center">{v.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
                         </tr>
-                      ))}
+                      )) : (
+                        <tr><td colSpan={5} className="py-6 text-center text-gray-400 text-sm">No visa records</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -949,16 +1156,27 @@ export default function StaffStudentDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {s.insurances.map((ins, i) => (
-                        <tr key={i} onClick={() => setRenewalModal({ kind: 'insurance', data: { ...ins } })}
+                      {allInsurances.length ? allInsurances.map((ins) => (
+                        <tr key={ins.id}
+                          onClick={() => setRenewalModal({ kind: 'insurance', data: {
+                            provider: ins.provider,
+                            policyNumber: ins.policyNumber ?? '—',
+                            coverageType: ins.coverageType ?? '—',
+                            startDate: fmt(ins.startDate),
+                            expiryDate: fmt(ins.expiryDate),
+                            isCurrent: ins.isCurrent,
+                            imageUrl: ins.fileUrl ?? undefined,
+                          }})}
                           className={clsx('cursor-pointer hover:bg-secondary/40 transition', ins.isCurrent && 'bg-green-50/40')}>
                           <td className="py-3 px-4 text-primary font-medium">{ins.provider}</td>
-                          <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber}</td>
-                          <td className="py-3 px-4 text-primary">{ins.startDate}</td>
-                          <td className="py-3 px-4 text-primary">{ins.expiryDate}</td>
+                          <td className="py-3 px-4 font-mono text-primary">{ins.policyNumber ?? '—'}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(ins.startDate)}</td>
+                          <td className="py-3 px-4 text-primary">{fmt(ins.expiryDate)}</td>
                           <td className="py-3 px-4 text-center">{ins.isCurrent ? <CurrentBadge /> : <PastBadge />}</td>
                         </tr>
-                      ))}
+                      )) : (
+                        <tr><td colSpan={5} className="py-6 text-center text-gray-400 text-sm">No insurance records</td></tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -979,6 +1197,7 @@ export default function StaffStudentDetailPage() {
 
       {approval === 'approving_p2' && (
         <Phase2ApproveModal
+          studentDbId={numId}
           onClose={() => setApproval('idle')}
           onConfirm={() => setApproval('approved')}
         />

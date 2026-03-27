@@ -3,6 +3,11 @@ from flask_cors import CORS
 import os
 import tempfile
 import traceback
+import warnings
+
+# Suppress FutureWarnings from passporteye/scikit-image deprecated API usage
+warnings.filterwarnings('ignore', category=FutureWarning, module='skimage')
+warnings.filterwarnings('ignore', category=FutureWarning, module='passporteye')
 
 from passport_scanner import scan_passport_image
 

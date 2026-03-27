@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, useRef, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setProgressField } from '@/lib/progressStore';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiUpload } from 'react-icons/fi';
+import { studentMeApi, visaApi } from '@/lib/api';
+import toast from 'react-hot-toast';
+import CustomSelect from '@/components/ui/CustomSelect';
+import DateSelect from '@/components/ui/DateSelect';
 
 const VISA_TYPES = ['ED', 'Non-ED', 'Tourist', 'Transit', 'Business', 'Other'];
 const SEX_OPTIONS = ['M', 'F'];
 const NATIONALITIES = ['Thai', 'Chinese', 'Japanese', 'Vietnamese', 'Myanmar', 'Cambodian', 'Laotian', 'Indonesian', 'American', 'British', 'Other'];
-const PASSPORT_OPTIONS = ['UA51234567', 'E12345678', 'A98765432'];
+const COUNTRIES = ['Thailand', 'China', 'Japan', 'Vietnam', 'Myanmar', 'Cambodia', 'Laos', 'Indonesia', 'USA', 'UK', 'Other'];
 
 type UploadKey = 'visa' | 'arrival' | 'departed' | 'passport';
 
@@ -21,7 +25,6 @@ const UPLOAD_SLOTS: { key: UploadKey; title: string }[] = [
 ];
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:border-primary';
-const selectCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-500 bg-white focus:outline-none focus:border-primary';
 const labelCls = 'text-xs font-medium text-primary mb-1';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -33,31 +36,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const MOCK_VISAS = [
-  {
-    id: 1,
-    passport: 'UA51234567',
-    placeOfIssue: 'Bangkok',
-    validFrom: '2024-01-01',
-    validUntil: '2026-12-31',
-    visaType: 'ED',
-    numberOfEntries: 'Multiple',
-    sex: 'F',
-    givenName: 'Pichamon',
-    surname: 'Phongphrathapet',
-    dateOfBirth: '1998-03-15',
-    nationality: 'Thai',
-    remarks: 'Study purposes',
-    images: { visa: null, arrival: null, departed: null, passport: null } as Record<UploadKey, string | null>,
-  },
-];
-
 function VisaForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const isEdit = !!id;
-  const existing = isEdit ? MOCK_VISAS.find(v => v.id === Number(id)) ?? null : null;
 
   const refs: Record<UploadKey, React.RefObject<HTMLInputElement>> = {
     visa:      useRef<HTMLInputElement>(null),
@@ -67,23 +50,69 @@ function VisaForm() {
   };
 
   const [images, setImages] = useState<Record<UploadKey, string | null>>(
-    existing?.images ?? { visa: null, arrival: null, departed: null, passport: null }
+    { visa: null, arrival: null, departed: null, passport: null }
   );
 
   const [form, setForm] = useState({
-    passport:        existing?.passport        ?? '',
-    placeOfIssue:    existing?.placeOfIssue    ?? '',
-    validFrom:       existing?.validFrom       ?? '',
-    validUntil:      existing?.validUntil      ?? '',
-    visaType:        existing?.visaType        ?? '',
-    numberOfEntries: existing?.numberOfEntries ?? '',
-    sex:             existing?.sex             ?? '',
-    givenName:       existing?.givenName       ?? '',
-    surname:         existing?.surname         ?? '',
-    dateOfBirth:     existing?.dateOfBirth     ?? '',
-    nationality:     existing?.nationality     ?? '',
-    remarks:         existing?.remarks         ?? '',
+    passport:        '',
+    issuingCountry:  '',
+    placeOfIssue:    '',
+    validFrom:       '',
+    validUntil:      '',
+    visaType:        '',
+    numberOfEntries: '',
+    sex:             '',
+    givenName:       '',
+    surname:         '',
+    dateOfBirth:     '',
+    nationality:     '',
+    remarks:         '',
   });
+
+  const [passportOptions, setPassportOptions] = useState<string[]>([]);
+  const [studentNumId, setStudentNumId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    studentMeApi.get().then(res => {
+      const s = res.data.data;
+      setStudentNumId(s.id);
+      setPassportOptions(s.passports.map(p => p.passportNumber));
+
+      setForm(prev => ({
+        ...prev,
+        givenName:   s.firstNameEn ?? '',
+        surname:     s.lastNameEn ?? '',
+        dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : '',
+        nationality: s.nationality ?? '',
+        sex: s.gender === 'Male' ? 'M' : s.gender === 'Female' ? 'F' : '',
+      }));
+
+      if (isEdit && id) {
+        return visaApi.getAll(s.id).then(vRes => {
+          const visa = vRes.data.data.find(v => v.id === Number(id));
+          if (visa) {
+            setForm(prev => ({
+              ...prev,
+              issuingCountry:  visa.issuingCountry ?? '',
+              placeOfIssue:    visa.issuingPlace ?? '',
+              validFrom:       visa.issueDate ? visa.issueDate.slice(0, 10) : '',
+              validUntil:      visa.expiryDate ? visa.expiryDate.slice(0, 10) : '',
+              visaType:        visa.visaType ?? '',
+              numberOfEntries: visa.entries ?? '',
+              remarks:         visa.remarks ?? '',
+            }));
+            setImages({
+              visa:      visa.imageUrl ?? null,
+              arrival:   visa.arrivalImageUrl ?? null,
+              departed:  visa.departedImageUrl ?? null,
+              passport:  visa.passportImageUrl ?? null,
+            });
+          }
+        });
+      }
+    }).catch(() => {});
+  }, [isEdit, id]);
 
   function set(key: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -95,6 +124,76 @@ function VisaForm() {
       const file = e.target.files?.[0];
       if (file) setImages(prev => ({ ...prev, [slotKey]: URL.createObjectURL(file) }));
     };
+  }
+
+  async function handleSave() {
+    if (!studentNumId) return;
+    if (!form.visaType || !form.issuingCountry || !form.validFrom || !form.validUntil) {
+      toast.error('Please fill in Visa Type, Issuing Country, Valid From, and Valid Until');
+      return;
+    }
+    setSaving(true);
+    try {
+      // Upload images for each slot that has a new file selected
+      const { default: api } = await import('@/lib/api');
+      const uploadSlot = async (key: UploadKey): Promise<string | undefined> => {
+        const file = refs[key].current?.files?.[0];
+        if (!file) return undefined;
+        const fd = new FormData();
+        fd.append('image', file);
+        const res = await api.post(`/students/${studentNumId}/visas/image`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return res.data.data.url as string;
+      };
+
+      const [imageUrl, arrivalImageUrl, departedImageUrl, passportImageUrl] = await Promise.all([
+        uploadSlot('visa'),
+        uploadSlot('arrival'),
+        uploadSlot('departed'),
+        uploadSlot('passport'),
+      ]);
+
+      const imagePayload = {
+        ...(imageUrl          !== undefined && { imageUrl }),
+        ...(arrivalImageUrl   !== undefined && { arrivalImageUrl }),
+        ...(departedImageUrl  !== undefined && { departedImageUrl }),
+        ...(passportImageUrl  !== undefined && { passportImageUrl }),
+      };
+
+      if (isEdit && id) {
+        await visaApi.update(studentNumId, Number(id), {
+          visaType:       form.visaType,
+          issuingCountry: form.issuingCountry,
+          issuingPlace:   form.placeOfIssue || undefined,
+          issueDate:      form.validFrom,
+          expiryDate:     form.validUntil,
+          entries:        form.numberOfEntries || undefined,
+          remarks:        form.remarks || undefined,
+          ...imagePayload,
+        });
+      } else {
+        await visaApi.create(studentNumId, {
+          visaType:       form.visaType,
+          issuingCountry: form.issuingCountry,
+          issuingPlace:   form.placeOfIssue || undefined,
+          issueDate:      form.validFrom,
+          expiryDate:     form.validUntil,
+          entries:        form.numberOfEntries || undefined,
+          remarks:        form.remarks || undefined,
+          status:         'ACTIVE',
+          ...imagePayload,
+        });
+      }
+      setProgressField('visaCompleted', true);
+      toast.success(isEdit ? 'Visa updated' : 'Visa added');
+      router.back();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -114,25 +213,22 @@ function VisaForm() {
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Field label="Select Passport">
-            <select value={form.passport} onChange={set('passport')} className={selectCls}>
-              <option value=""></option>
-              {PASSPORT_OPTIONS.map(p => <option key={p}>{p}</option>)}
-            </select>
+            <CustomSelect value={form.passport} onChange={(val) => setForm(p => ({ ...p, passport: val }))} options={passportOptions} />
           </Field>
-          <Field label="Place of issue">
+          <Field label="Issuing Country *">
+            <CustomSelect value={form.issuingCountry} onChange={(val) => setForm(p => ({ ...p, issuingCountry: val }))} options={COUNTRIES} />
+          </Field>
+          <Field label="Place of Issue">
             <input value={form.placeOfIssue} onChange={set('placeOfIssue')} className={inputCls} />
           </Field>
-          <Field label="Valid From">
-            <input value={form.validFrom} onChange={set('validFrom')} type="date" className={inputCls} />
+          <Field label="Valid From *">
+            <DateSelect value={form.validFrom} onChange={(v) => setForm(p => ({ ...p, validFrom: v }))} />
           </Field>
-          <Field label="Valid Until">
-            <input value={form.validUntil} onChange={set('validUntil')} type="date" className={inputCls} />
+          <Field label="Valid Until *">
+            <DateSelect value={form.validUntil} onChange={(v) => setForm(p => ({ ...p, validUntil: v }))} />
           </Field>
-          <Field label="Type of Visa / Category">
-            <select value={form.visaType} onChange={set('visaType')} className={selectCls}>
-              <option value=""></option>
-              {VISA_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
+          <Field label="Type of Visa / Category *">
+            <CustomSelect value={form.visaType} onChange={(val) => setForm(p => ({ ...p, visaType: val }))} options={VISA_TYPES} />
           </Field>
         </div>
 
@@ -141,10 +237,7 @@ function VisaForm() {
             <input value={form.numberOfEntries} onChange={set('numberOfEntries')} className={inputCls} />
           </Field>
           <Field label="Sex">
-            <select value={form.sex} onChange={set('sex')} className={selectCls}>
-              <option value=""></option>
-              {SEX_OPTIONS.map(s => <option key={s}>{s}</option>)}
-            </select>
+            <CustomSelect value={form.sex} onChange={(val) => setForm(p => ({ ...p, sex: val }))} options={SEX_OPTIONS} />
           </Field>
           <Field label="Given Name">
             <input value={form.givenName} onChange={set('givenName')} className={inputCls} />
@@ -153,16 +246,13 @@ function VisaForm() {
             <input value={form.surname} onChange={set('surname')} className={inputCls} />
           </Field>
           <Field label="Date of Birth">
-            <input value={form.dateOfBirth} onChange={set('dateOfBirth')} type="date" className={inputCls} />
+            <DateSelect value={form.dateOfBirth} onChange={(v) => setForm(p => ({ ...p, dateOfBirth: v }))} />
           </Field>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Field label="Nationality">
-            <select value={form.nationality} onChange={set('nationality')} className={selectCls}>
-              <option value=""></option>
-              {NATIONALITIES.map(n => <option key={n}>{n}</option>)}
-            </select>
+            <CustomSelect value={form.nationality} onChange={(val) => setForm(p => ({ ...p, nationality: val }))} options={NATIONALITIES} />
           </Field>
           <Field label="Remarks">
             <input value={form.remarks} onChange={set('remarks')} className={inputCls} />
@@ -195,10 +285,11 @@ function VisaForm() {
 
       <div className="flex justify-end mt-2">
         <button
-          onClick={() => { setProgressField('visaCompleted', true); router.back(); }}
-          className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition"
+          disabled={saving}
+          onClick={handleSave}
+          className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
         >
-          Save
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
     </div>

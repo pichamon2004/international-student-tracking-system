@@ -1,12 +1,17 @@
 import { Router } from 'express';
-import { getPassport, upsertPassport, scanPassport } from '../controllers/passport.controller';
+import { getPassport, upsertPassport, uploadPassportImage, scanPassport } from '../controllers/passport.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { upload } from '../middleware/upload.middleware';
+import { requireStudentOwnership, requireStudentSelf } from '../middleware/ownership.middleware';
+import { uploadImage, uploadImageLarge } from '../middleware/upload.middleware';
 
 const router = Router();
 
-router.get('/:id/passport', authenticate, getPassport);
-router.put('/:id/passport', authenticate, upsertPassport);
-router.post('/:id/passport/scan', authenticate, upload.single('image'), scanPassport);
+// READ: student เห็นของตัวเอง, STAFF/ADVISOR เห็นทั้งหมด
+router.get('/:id/passport', authenticate, requireStudentOwnership, getPassport);
+
+// WRITE: student เท่านั้น
+router.put('/:id/passport', authenticate, requireStudentSelf, upsertPassport);
+router.post('/:id/passport/image', authenticate, requireStudentSelf, uploadImage.single('image'), uploadPassportImage);
+router.post('/:id/passport/scan', authenticate, requireStudentOwnership, uploadImageLarge.single('image'), scanPassport);
 
 export default router;

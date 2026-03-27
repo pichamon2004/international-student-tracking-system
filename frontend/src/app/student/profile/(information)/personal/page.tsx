@@ -1,12 +1,14 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
+import { studentMeApi } from '@/lib/api';
 
 const labelCls = 'text-xs font-medium text-primary/70';
 const valueCls = 'text-sm font-medium text-gray-800';
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className={labelCls}>{label}</span>
@@ -15,34 +17,38 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const mock = {
-  prefix: 'Miss',
-  firstName: 'Pichamon',
-  middleName: '',
-  lastName: 'Phongphrathapet',
-  dateOfBirth: '15 Mar 1998',
-  gender: 'Female',
-  religion: 'Buddhism',
-  nationality: 'Thai',
-  homeCountry: 'Thailand',
-  homeAddress: '123 Moo 4, Muang, Khon Kaen 40000',
-  email: 'pichamon.p@kkumail.com',
-  phone: '+66 81 234 5678',
-  faculty: 'College of Computing',
-  degree: 'Doctoral Degree',
-  program: 'Computer Science',
-  photo:
-    'https://api.computing.kku.ac.th//storage/images/1661876218-pusadeeseresangtakul1_1.png',
-  ecPrefix: 'Mr.',
-  ecFirstName: 'Somchai',
-  ecLastName: 'Phongphrathapet',
-  ecEmail: 'somchai@gmail.com',
-  ecPhone: '+66 89 876 5432',
-  ecRelationship: 'Parent',
-};
-
 export default function PersonalPage() {
   const router = useRouter();
+  const [student, setStudent] = useState<Awaited<ReturnType<typeof studentMeApi.get>>['data']['data'] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    studentMeApi.get().then(res => setStudent(res.data.data)).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4 flex-1 animate-pulse">
+        <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col gap-6 flex-1">
+          <div className="h-8 bg-gray-100 rounded w-1/2" />
+          <div className="flex items-start gap-5">
+            <div className="w-24 h-24 rounded-2xl bg-gray-100" />
+            <div className="flex flex-col gap-2 pt-1 flex-1">
+              <div className="h-4 bg-gray-100 rounded w-1/3" />
+              <div className="h-4 bg-gray-100 rounded w-1/4" />
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-4">
+            {[...Array(12)].map((_, i) => <div key={i} className="h-10 bg-gray-100 rounded" />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const s = student;
+  const fullName = [s?.titleEn, s?.firstNameEn, s?.middleNameEn, s?.lastNameEn].filter(Boolean).join(' ');
+  const dob = s?.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
 
   return (
     <div className="flex flex-col gap-4 flex-1">
@@ -66,17 +72,17 @@ export default function PersonalPage() {
         </div>
         {/* Profile top */}
         <div className="flex items-start gap-5">
-          <img
-            src={mock.photo}
-            alt="Profile"
-            className="w-24 h-24 rounded-2xl object-cover border border-gray-200"
-          />
+          <div className="w-24 h-24 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-400 overflow-hidden">
+            {s?.photoUrl ? (
+              <img src={s.photoUrl} alt={fullName || 'Profile'} className="w-full h-full object-cover" />
+            ) : (
+              fullName ? fullName.charAt(0).toUpperCase() : '?'
+            )}
+          </div>
           <div className="flex flex-col gap-1 pt-1">
-            <p className="text-base font-semibold text-gray-900">
-              {mock.prefix} {mock.firstName} {mock.middleName} {mock.lastName}
-            </p>
-            <p className="text-sm text-gray-500">{mock.faculty}</p>
-            <p className="text-sm text-gray-500">{mock.degree} — {mock.program}</p>
+            <p className="text-base font-semibold text-gray-900">{fullName || '—'}</p>
+            <p className="text-sm text-gray-500">{s?.faculty || '—'}</p>
+            <p className="text-sm text-gray-500">{s?.level || '—'}{s?.program ? ` — ${s.program}` : ''}</p>
           </div>
         </div>
 
@@ -84,18 +90,18 @@ export default function PersonalPage() {
         <div className="flex flex-col gap-3">
           <p className="text-sm font-semibold text-gray-700">Personal Details</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <InfoRow label="Prefix" value={mock.prefix} />
-            <InfoRow label="First Name" value={mock.firstName} />
-            <InfoRow label="Middle Name" value={mock.middleName} />
-            <InfoRow label="Last Name" value={mock.lastName} />
-            <InfoRow label="Date of Birth" value={mock.dateOfBirth} />
-            <InfoRow label="Gender" value={mock.gender} />
-            <InfoRow label="Religion" value={mock.religion} />
-            <InfoRow label="Nationality" value={mock.nationality} />
-            <InfoRow label="Home Country" value={mock.homeCountry} />
-            <InfoRow label="Email" value={mock.email} />
-            <InfoRow label="Phone" value={mock.phone} />
-            <InfoRow label="Home Address" value={mock.homeAddress} />
+            <InfoRow label="Title" value={s?.titleEn} />
+            <InfoRow label="First Name" value={s?.firstNameEn} />
+            <InfoRow label="Middle Name" value={s?.middleNameEn} />
+            <InfoRow label="Last Name" value={s?.lastNameEn} />
+            <InfoRow label="Date of Birth" value={dob} />
+            <InfoRow label="Gender" value={s?.gender} />
+            <InfoRow label="Religion" value={s?.religion} />
+            <InfoRow label="Nationality" value={s?.nationality} />
+            <InfoRow label="Home Country" value={s?.homeCountry} />
+            <InfoRow label="Email" value={s?.email} />
+            <InfoRow label="Phone" value={s?.phone} />
+            <InfoRow label="Home Address" value={s?.homeAddress} />
           </div>
         </div>
 
@@ -105,12 +111,10 @@ export default function PersonalPage() {
         <div className="flex flex-col gap-3">
           <p className="text-sm font-semibold text-gray-700">Emergency Contact</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <InfoRow label="Prefix" value={mock.ecPrefix} />
-            <InfoRow label="First Name" value={mock.ecFirstName} />
-            <InfoRow label="Last Name" value={mock.ecLastName} />
-            <InfoRow label="Email" value={mock.ecEmail} />
-            <InfoRow label="Phone" value={mock.ecPhone} />
-            <InfoRow label="Relationship" value={mock.ecRelationship} />
+            <InfoRow label="Name" value={s?.emergencyContact} />
+            <InfoRow label="Email" value={s?.emergencyEmail} />
+            <InfoRow label="Phone" value={s?.emergencyPhone} />
+            <InfoRow label="Relationship" value={s?.emergencyRelation} />
           </div>
         </div>
 

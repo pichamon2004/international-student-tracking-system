@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import prisma from '../utils/prisma';
 import { AuthRequest } from '../types';
+import { uploadToR2 } from '../services/r2.service';
 
 export const getVisas = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -16,23 +17,36 @@ export const getVisas = async (req: AuthRequest, res: Response): Promise<void> =
 
 export const createVisa = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const { issueDate, expiryDate, ...rest } = req.body;
     const visa = await prisma.visa.create({
-      data: { ...req.body, studentId: parseInt(req.params.id) },
+      data: {
+        ...rest,
+        studentId:  parseInt(req.params.id),
+        issueDate:  new Date(issueDate),
+        expiryDate: new Date(expiryDate),
+      },
     });
     res.status(201).json({ success: true, data: visa });
-  } catch {
+  } catch (error) {
+    console.error('[createVisa] error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
 export const updateVisa = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const { issueDate, expiryDate, ...rest } = req.body;
     const visa = await prisma.visa.update({
       where: { id: parseInt(req.params.visaId) },
-      data: req.body,
+      data: {
+        ...rest,
+        ...(issueDate  && { issueDate:  new Date(issueDate)  }),
+        ...(expiryDate && { expiryDate: new Date(expiryDate) }),
+      },
     });
     res.json({ success: true, data: visa });
   } catch (error: unknown) {
+    console.error('[updateVisa] error:', error);
     if ((error as { code?: string }).code === 'P2025') {
       res.status(404).json({ success: false, message: 'Visa not found' });
       return;
@@ -51,5 +65,20 @@ export const deleteVisa = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// POST /api/students/:id/visas/image — upload visa image, return R2 URL
+export const uploadVisaImage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'No image file provided' });
+      return;
+    }
+    const { url } = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype, 'visas');
+    res.json({ success: true, data: { url } });
+  } catch (error) {
+    console.error('[uploadVisaImage] error:', error);
+    res.status(500).json({ success: false, message: 'Failed to upload image' });
   }
 };

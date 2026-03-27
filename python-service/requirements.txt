@@ -1,6 +1,8 @@
 flask==3.0.3
 flask-cors==4.0.0
 passporteye==2.2.0
+scikit-image>=0.22,<0.27
 pytesseract==0.3.10
 Pillow==10.3.0
 numpy==1.26.4
+opencv-python-headless==4.9.0.80

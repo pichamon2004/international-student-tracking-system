@@ -1,8 +1,7 @@
 import { Response } from 'express';
-import fs from 'fs';
-import path from 'path';
 import prisma from '../utils/prisma';
 import { AuthRequest } from '../types';
+import { uploadToR2, deleteFromR2, keyFromUrl } from '../services/r2.service';
 
 export const getDocuments = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -22,14 +21,23 @@ export const uploadDocument = async (req: AuthRequest, res: Response): Promise<v
       res.status(400).json({ success: false, message: 'No file provided' });
       return;
     }
+
+    const { url } = await uploadToR2(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype,
+      'documents'
+    );
+
     const document = await prisma.document.create({
       data: {
-        studentId: parseInt(req.params.id),
-        name: req.body.name || req.file.originalname,
+        studentId:   parseInt(req.params.id),
+        name:        req.body.name || req.file.originalname,
         description: req.body.description,
-        fileUrl: `/uploads/${req.file.filename}`,
-        fileType: req.file.mimetype,
-        fileSize: req.file.size,
+        fileUrl:     url,
+        fileType:    req.file.mimetype,
+        fileSize:    req.file.size,
+        uploadedBy:  req.user!.userId,
       },
     });
     res.status(201).json({ success: true, data: document });
@@ -47,8 +55,8 @@ export const deleteDocument = async (req: AuthRequest, res: Response): Promise<v
       res.status(404).json({ success: false, message: 'Document not found' });
       return;
     }
-    const filePath = path.join(__dirname, '../../', document.fileUrl);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await deleteFromR2(keyFromUrl(document.fileUrl));
     await prisma.document.delete({ where: { id: document.id } });
     res.json({ success: true, message: 'Document deleted successfully' });
   } catch {

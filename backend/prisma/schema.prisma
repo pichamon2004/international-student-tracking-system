@@ -33,7 +33,6 @@ enum RegistrationStatus {
   PENDING_APPROVAL
   REJECTED
   ACTIVE
-  SUSPENDED
 }
 
 enum VisaStatus {
@@ -89,8 +88,10 @@ enum NotificationType {
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
+  password  String?
   googleId  String?  @unique
   name      String
+  phone     String?
   image     String?
   role      Role?
   isActive  Boolean  @default(true)
@@ -149,6 +150,8 @@ model Student {
   scholarship        String?
   advisorId          Int?
 
+  photoUrl           String?
+
   registrationStatus RegistrationStatus @default(PENDING_APPROVAL)
   registrationStep   Int                @default(0)
   rejectionReason    String?            @db.Text
@@ -167,6 +170,7 @@ model Student {
   visaRenewals       VisaRenewal[]
   interserviceChecks InterserviceCheck[]
   generatedDocuments GeneratedDocument[]
+  academicDocuments  AcademicDocument[]
 
   @@map("students")
 }
@@ -178,9 +182,6 @@ model Student {
 model Advisor {
   id          Int     @id @default(autoincrement())
   userId      Int     @unique
-  titleTh     String?
-  firstNameTh String?
-  lastNameTh  String?
   titleEn     String?
   firstNameEn String?
   lastNameEn  String?
@@ -210,7 +211,7 @@ model Advisor {
 
 model Passport {
   id             Int      @id @default(autoincrement())
-  studentId      Int
+  studentId      Int      @unique
   passportNumber String
   issuingCountry String
   issueDate      DateTime
@@ -245,10 +246,13 @@ model Visa {
   expiryDate     DateTime
   entries        String?
   remarks        String?    @db.Text
-  imageUrl       String?
-  isCurrent      Boolean    @default(true)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  imageUrl         String?
+  arrivalImageUrl  String?
+  departedImageUrl String?
+  passportImageUrl String?
+  isCurrent        Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -286,10 +290,10 @@ model Dependent {
   studentId    Int
   relationship String
 
-  firstNameEn String
-  lastNameEn  String
-  firstNameTh String?
-  lastNameTh  String?
+  title       String?
+  firstName   String
+  middleName  String?
+  lastName    String
   dateOfBirth DateTime
   gender      Gender
   nationality String
@@ -300,6 +304,8 @@ model Dependent {
   visaType         String?
   visaExpiry       DateTime?
   visaImageUrl     String?
+  arrivalImageUrl  String?
+  departedImageUrl String?
   visaStatus       VisaStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
@@ -334,6 +340,26 @@ model Document {
   dependent Dependent? @relation(fields: [dependentId], references: [id], onDelete: Cascade)
 
   @@map("documents")
+}
+
+// ─────────────────────────────────────────────────────
+// ACADEMIC DOCUMENT
+// ─────────────────────────────────────────────────────
+
+model AcademicDocument {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  docType     String   // Transcript, Degree Certificate, Enrollment Certificate, Other
+  institution String
+  issueDate   DateTime
+  fileUrl     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("academic_documents")
 }
 
 // ─────────────────────────────────────────────────────
@@ -458,7 +484,7 @@ model EmailTemplate {
 
 model VisaRenewal {
   id            Int      @id @default(autoincrement())
-  studentId     Int
+  studentId     Int      @unique
   daysRemaining Int
   notifiedAt    DateTime @default(now())
   isResolved    Boolean  @default(false)

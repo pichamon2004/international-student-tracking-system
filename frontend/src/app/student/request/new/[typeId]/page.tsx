@@ -10,11 +10,11 @@ import {
   RiEyeLine, RiEditLine, RiInformationLine, RiCloseLine,
 } from 'react-icons/ri';
 import {
-  mockStudentProfile,
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, advisorApi, userApi } from '@/lib/api';
+import DateSelect from '@/components/ui/DateSelect';
 
 /* ─── Variable labels ────────────────────────────────────────── */
 const VARIABLE_LABELS: Record<string, string> = {
@@ -48,9 +48,19 @@ function extractVarTokens(body: string): string[] {
       Array.from(body.matchAll(/data-var="(\{\{[^"]+\}\})"/g)).map(m => m[1])
     ));
   }
-  return Array.from(new Set(
-    Array.from(body.matchAll(/\{\{(\w+)\}\}/g)).map(m => `{{${m[1]}}}`)
-  ));
+  if (body.includes('{{')) {
+    return Array.from(new Set(
+      Array.from(body.matchAll(/\{\{(\w+)\}\}/g)).map(m => `{{${m[1]}}}`)
+    ));
+  }
+  // Old chip format: <span ...>Label</span> without data-var
+  const tokens: string[] = [];
+  const spanTexts = Array.from(body.matchAll(/<span[^>]*>([^<]+)<\/span>/g)).map(m => m[1].trim());
+  for (const text of spanTexts) {
+    const key = CHIP_LABEL_TO_KEY[text];
+    if (key) tokens.push(`{{${key}}}`);
+  }
+  return Array.from(new Set(tokens));
 }
 
 function buildBaseVarMap(profile: StudentProfile): Record<string, string> {
@@ -71,28 +81,52 @@ function buildBaseVarMap(profile: StudentProfile): Record<string, string> {
   };
 }
 
+const CHIP_LABEL_TO_KEY: Record<string, string> = {
+  'Student Name': 'student_name', 'Student Full Name': 'student_name',
+  'Student ID': 'student_id', 'Title (Mr./Mrs./Miss)': 'student_title',
+  'Thai Tel. No.': 'thai_tel', 'Email': 'email', 'Email Address': 'email',
+  'Education Level': 'education_level', 'Funding Type': 'funding_type',
+  'Scholarship Name': 'scholarship_name', 'Program': 'program',
+  'Destination City & Country': 'destination', 'Destination (City & Country)': 'destination',
+  'Purpose of Leave': 'purpose', 'Purpose of Travel': 'purpose',
+  'Duration (days/months)': 'duration_days', 'Leave Start Date': 'leave_start',
+  'Leave End Date': 'leave_end', 'Leave Return Date': 'leave_end',
+  'Visa Expiry': 'visa_expiry', 'Visa Expiry Date': 'visa_expiry',
+  'Advisor Name': 'advisor_name', 'Current Date': 'date',
+};
+
 function mergeTemplateToHtml(body: string, vars: Record<string, string>): string {
-  if (body.startsWith('<') || body.includes('data-var=')) {
+  if (body.includes('data-var=')) {
+    // New format: chips have data-var attribute
     return body.replace(
       /<span[^>]*data-var="(\{\{[^"]+\}\})"[^>]*>[^<]*<\/span>/g,
       (_, varToken) => {
+        if (varToken.startsWith('{{sig_')) return '';
         const key = varToken.slice(2, -2);
-        if (varToken.startsWith('{{sig_')) {
-          const val = vars[key] ?? '';
-          return `<div style="display:flex;align-items:center;gap:8px;margin:12px 0;padding:8px 16px;border:1.5px dashed #ccc;border-radius:6px;color:#666;font-size:13px;">✍ ${varLabel(varToken)} ..........................${val ? `&nbsp;<strong>${val}</strong>` : ''}</div>`;
-        }
         const value = vars[key];
         if (!value || value === '—') return `<mark style="background:#FFF3CD;border-radius:3px;padding:2px 6px;color:#b45309;">${varToken}</mark>`;
-        return `<strong style="color:#0776BC;">${value}</strong>`;
+        return value;
       }
     );
   }
+  if (body.startsWith('<')) {
+    // Old format: chips saved as <span>Label</span> without data-var (Chrome strips data-var)
+    return body.replace(/<span[^>]*>([^<]+)<\/span>/g, (match, text) => {
+      const trimmed = text.trim();
+      const key = CHIP_LABEL_TO_KEY[trimmed];
+      if (!key) return trimmed;
+      const value = vars[key];
+      if (!value || value === '—') return `<mark style="background:#FFF3CD;border-radius:3px;padding:2px 6px;color:#b45309;">${trimmed}</mark>`;
+      return value;
+    });
+  }
+  // Plain text with {{key}} tokens
   const escaped = body
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = vars[key];
       if (!value || value === '—') return `<mark style="background:#FFF3CD;border-radius:3px;padding:2px 6px;color:#b45309;">{{${key}}}</mark>`;
-      return `<strong style="color:#0776BC;">${value}</strong>`;
+      return value;
     })
     .replace(/\n/g, '<br>');
   return `<div style="white-space:pre-wrap;font-family:'Times New Roman',serif;line-height:2;">${escaped}</div>`;
@@ -175,19 +209,70 @@ function DocumentPreviewModal({
   varMap,
   onClose,
   onConfirm,
+  deanName,
+  irStaffName,
 }: {
   docs: DocTemplate[];
   varMap: Record<string, string>;
   onClose: () => void;
   onConfirm: () => void;
+  deanName?: string;
+  irStaffName?: string;
 }) {
   const [activeDoc, setActiveDoc] = useState(0);
-  const missingVars = getMissingVars(docs[activeDoc]?.body ?? '', varMap);
-  const mergedHtml = mergeTemplateToHtml(docs[activeDoc]?.body ?? '', varMap);
-  const allTokens = extractVarTokens(docs[activeDoc]?.body ?? '').filter(v => !v.startsWith('{{sig_'));
+  const currentDoc = docs[activeDoc];
+  const missingVars = getMissingVars(currentDoc?.body ?? '', varMap);
+  const mergedHtml = mergeTemplateToHtml(currentDoc?.body ?? '', varMap);
+  const allTokens = extractVarTokens(currentDoc?.body ?? '').filter(v => !v.startsWith('{{sig_'));
+  const sigVars = (currentDoc?.variables ?? []).filter((v: string) => v.startsWith('{{sig_'));
+  const SIG_NAMES: Record<string, string> = {
+    '{{sig_student}}':  varMap['student_name'] || '',
+    '{{sig_advisor}}':  varMap['advisor_name'] || '',
+    '{{sig_ir_staff}}': irStaffName ?? '',
+    '{{sig_dean}}':     deanName ?? '',
+  };
+  const SIG_ROLES: Record<string, string> = {
+    '{{sig_student}}':  'Student',
+    '{{sig_advisor}}':  'Advisor',
+    '{{sig_ir_staff}}': 'IR Staff',
+    '{{sig_dean}}':     'Dean',
+  };
   const filledCount = allTokens.filter(v => { const k = v.slice(2, -2); return varMap[k] && varMap[k] !== '—'; }).length;
   const totalVars = allTokens.length;
   const fillPct = totalVars ? Math.round((filledCount / totalVars) * 100) : 100;
+
+  function handlePrint() {
+    const sigBlockHtml = sigVars.length > 0 ? `
+      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;">
+        <div style="display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px;">
+          ${sigVars.map((sv: string) => `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+              <div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px;"></div>
+              ${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center;">${SIG_NAMES[sv]}</span>` : ''}
+              <span style="font-size:11px;color:#6b7280;">${SIG_ROLES[sv] ?? sv}</span>
+              <span style="font-size:10px;color:#9ca3af;">Date ....../....../......</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>` : '';
+
+    const pw = window.open('', '_blank');
+    if (!pw) return;
+    const origin = window.location.origin;
+    const printBody = mergedHtml.replace(/src="\/kkulogo2\.png"/g, `src="${origin}/kkulogo2.png"`);
+    pw.document.write(`<!DOCTYPE html><html><head><title>Document</title>
+      <style>
+        body { margin: 0; padding: 25mm 20mm; font-family: 'Times New Roman', serif; font-size: 14px; color: #222; line-height: 2; }
+        @media print { @page { margin: 0; } body { padding: 25mm 20mm; } }
+      </style>
+    </head><body>
+      ${printBody}
+      ${sigBlockHtml}
+    </body></html>`);
+    pw.document.close();
+    pw.focus();
+    pw.print();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -244,17 +329,32 @@ function DocumentPreviewModal({
         <div className="flex-1 overflow-y-auto bg-gray-100 px-6 pb-4">
           {/* A4 paper */}
           <div className="bg-white shadow-xl mx-auto" style={{ width: '100%', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif" }}>
-            {/* Document content — exactly as defined in the template */}
+            {/* Document content */}
             <div
               style={{ fontSize: '14px', color: '#222', lineHeight: '2' }}
               dangerouslySetInnerHTML={{ __html: mergedHtml }}
             />
+            {/* Signature block */}
+            {sigVars.length > 0 && (
+              <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
+                  {sigVars.map((sv: string) => (
+                    <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <div style={{ width: '100%', height: '40px', borderBottom: '2px solid #1f2937', marginTop: '16px' }} />
+                      {SIG_NAMES[sv] && <span style={{ fontSize: '11px', fontWeight: 600, textAlign: 'center' }}>{SIG_NAMES[sv]}</span>}
+                      <span style={{ fontSize: '11px', color: '#6b7280' }}>{SIG_ROLES[sv] ?? sv}</span>
+                      <span style={{ fontSize: '10px', color: '#9ca3af' }}>Date ....../....../......</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0 bg-white">
-          <button onClick={() => window.print()}
+          <button onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
             <RiPrinterLine size={15} /> Print
           </button>
@@ -384,8 +484,8 @@ function buildLeaveVarMap(form: LeaveForm, profile: StudentProfile): Record<stri
   };
 }
 
-function LeaveRequestForm({ requiredDocs, onSubmit }: { requiredDocs: DocTemplate[]; onSubmit: () => void }) {
-  const p = mockStudentProfile;
+function LeaveRequestForm({ requiredDocs, onSubmit, profile }: { requiredDocs: DocTemplate[]; onSubmit: () => void; profile: StudentProfile }) {
+  const p = profile;
   const [form, setForm] = useState<LeaveForm>({
     prefix: p.titleEn, fullName: `${p.firstNameEn} ${p.lastNameEn}`, studentId: p.studentId,
     thaiTel: p.phone, email: p.email, educationLevel: levelLabel[p.level] ?? '', educationOther: '',
@@ -459,9 +559,9 @@ function LeaveRequestForm({ requiredDocs, onSubmit }: { requiredDocs: DocTemplat
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="Start Date" required><input value={form.startDate} onChange={setText('startDate')} type="date" className={inputCls} /></Field>
-              <Field label="End Date" required><input value={form.endDate} onChange={setText('endDate')} type="date" className={inputCls} /></Field>
-              <Field label="Visa Expiry Date"><input value={form.visaExpiryDate} onChange={setText('visaExpiryDate')} type="date" className={inputCls} /></Field>
+              <Field label="Start Date" required><DateSelect value={form.startDate} onChange={(v) => setForm(p => ({ ...p, startDate: v }))} /></Field>
+              <Field label="End Date" required><DateSelect value={form.endDate} onChange={(v) => setForm(p => ({ ...p, endDate: v }))} /></Field>
+              <Field label="Visa Expiry Date"><DateSelect value={form.visaExpiryDate} onChange={(v) => setForm(p => ({ ...p, visaExpiryDate: v }))} /></Field>
             </div>
           </div>
         </SectionCard>
@@ -511,42 +611,77 @@ const USER_INPUT_FIELD_DEFS: Record<string, { label: string; type: 'text' | 'dat
   duration_days: { label: 'Duration (days/months)',         type: 'text',    placeholder: 'e.g. 14 days' },
   leave_start:   { label: 'Start Date',                     type: 'date' },
   leave_end:     { label: 'Return Date',                    type: 'date' },
+  // Profile fields that may be empty — show as input if not filled
+  student_title:    { label: 'Title (Mr./Mrs./Miss)',  type: 'text',  placeholder: 'e.g. Mr.' },
+  thai_tel:         { label: 'Thai Tel. No.',          type: 'text',  placeholder: '0XX-XXX-XXXX' },
+  education_level:  { label: 'Education Level',        type: 'text',  placeholder: 'e.g. Master\'s' },
+  funding_type:     { label: 'Funding Type',           type: 'text',  placeholder: 'e.g. Scholarship' },
+  scholarship_name: { label: 'Scholarship Name',       type: 'text',  placeholder: 'Scholarship name' },
+  advisor_name:     { label: 'Advisor Name',           type: 'text',  placeholder: 'Advisor full name' },
+  visa_expiry:      { label: 'Visa Expiry Date',       type: 'date' },
 };
 
-function DynamicRequestForm({ typeName, requiredDocs, onSubmit }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: () => void }) {
-  const p = mockStudentProfile;
-  const baseVarMap = useMemo(() => buildBaseVarMap(p), []);
+function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: () => void; profile: StudentProfile; deanName?: string; irStaffName?: string }) {
+  const p = profile;
+  const baseVarMap = useMemo(() => buildBaseVarMap(p), [p]);
 
   const allVarTokens = useMemo(() => Array.from(new Set(
     requiredDocs.flatMap(d => extractVarTokens(d.body).filter(v => !v.startsWith('{{sig_')))
   )), [requiredDocs]);
 
-  const userInputKeys = useMemo(() => allVarTokens
-    .map(v => v.slice(2, -2))
-    .filter(k => !PROFILE_AUTO_FILL_KEYS.has(k) && USER_INPUT_FIELD_DEFS[k]), [allVarTokens]);
+  // All profile fields with their values
+  const ALL_PROFILE_FIELDS: Record<string, { label: string; value: string }> = {
+    student_name:     { label: 'Full Name',       value: [p.titleEn, p.firstNameEn, p.lastNameEn].filter(Boolean).join(' ') },
+    student_id:       { label: 'Student ID',      value: p.studentId },
+    email:            { label: 'Email',            value: p.email },
+    program:          { label: 'Program',          value: p.program },
+    student_title:    { label: 'Title',            value: p.titleEn },
+    thai_tel:         { label: 'Thai Tel. No.',    value: p.phone },
+    education_level:  { label: 'Education Level', value: baseVarMap['education_level'] ?? '' },
+    funding_type:     { label: 'Funding Type',     value: p.fundingType },
+    scholarship_name: { label: 'Scholarship',      value: p.scholarship },
+    advisor_name:     { label: 'Advisor',          value: p.advisorName },
+    visa_expiry:      { label: 'Visa Expiry',      value: p.visaExpiry },
+  };
 
-  const [formData, setFormData] = useState<Record<string, string>>(Object.fromEntries(userInputKeys.map(k => [k, ''])));
+  // Classify template variables: auto-filled (has value) vs needs input (empty or non-profile)
+  const { autoFilledFields, missingProfileKeys, userInputKeys } = useMemo(() => {
+    const auto: { label: string; value: string; key: string }[] = [];
+    const missingProfile: string[] = [];
+    const userInput: string[] = [];
+
+    allVarTokens.forEach(token => {
+      const key = token.slice(2, -2);
+      if (PROFILE_AUTO_FILL_KEYS.has(key)) {
+        const profileField = ALL_PROFILE_FIELDS[key];
+        if (profileField && profileField.value && profileField.value !== '—') {
+          auto.push({ label: profileField.label, value: profileField.value, key });
+        } else if (USER_INPUT_FIELD_DEFS[key]) {
+          missingProfile.push(key); // has profile key but value is empty
+        }
+      } else if (USER_INPUT_FIELD_DEFS[key]) {
+        userInput.push(key);
+      }
+    });
+    return { autoFilledFields: auto, missingProfileKeys: missingProfile, userInputKeys: userInput };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allVarTokens, p]);
+
+  const allInputKeys = [...missingProfileKeys, ...userInputKeys];
+  const [formData, setFormData] = useState<Record<string, string>>(() =>
+    Object.fromEntries(allInputKeys.map(k => [k, baseVarMap[k] || '']))
+  );
   const [note, setNote] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
   const varMap: Record<string, string> = useMemo(() => ({
     ...baseVarMap,
-    ...Object.fromEntries(userInputKeys.map(k => [k, formData[k] || '—'])),
-  }), [baseVarMap, userInputKeys, formData]);
+    ...Object.fromEntries(allInputKeys.map(k => [k, formData[k] || '—'])),
+  }), [baseVarMap, allInputKeys, formData]);
 
-  const hasUserInputFields = userInputKeys.length > 0;
-  const allInputsFilled = userInputKeys.every(k => formData[k]?.trim());
-
-  const autoFilledFields = [
-    { label: 'Full Name',   value: `${p.titleEn} ${p.firstNameEn} ${p.lastNameEn}`, key: 'student_name' },
-    { label: 'Student ID',  value: p.studentId,   key: 'student_id' },
-    { label: 'Email',       value: p.email,       key: 'email' },
-    { label: 'Program',     value: p.program,     key: 'program' },
-    { label: 'Advisor',     value: p.advisorName, key: 'advisor_name' },
-    { label: 'Visa Expiry', value: p.visaExpiry,  key: 'visa_expiry' },
-  ].filter(item => allVarTokens.some(v => v.slice(2, -2) === item.key));
-
-  const submitDisabled = hasUserInputFields && !allInputsFilled;
+  const hasInputFields = allInputKeys.length > 0;
+  const allInputsFilled = allInputKeys.every(k => formData[k]?.trim());
+  const submitDisabled = hasInputFields && !allInputsFilled;
 
   return (
     <>
@@ -565,11 +700,11 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit }: { typeName: st
           </SectionCard>
         )}
 
-        {hasUserInputFields && (
+        {hasInputFields && (
           <SectionCard icon={<RiEditLine size={14} />} title="Additional Information Required"
             subtitle="Please fill in the following fields" color="amber">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {userInputKeys.map(key => {
+              {allInputKeys.map(key => {
                 const def = USER_INPUT_FIELD_DEFS[key];
                 if (!def) return null;
                 return (
@@ -609,6 +744,8 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit }: { typeName: st
           varMap={varMap}
           onClose={() => setShowPreview(false)}
           onConfirm={() => { setShowPreview(false); onSubmit(); }}
+          deanName={deanName}
+          irStaffName={irStaffName}
         />
       )}
     </>
@@ -648,6 +785,12 @@ function SuccessScreen({ onBack }: { onBack: () => void }) {
 /* ═══════════════════════════════════════════════════════════════
    PAGE
 ═══════════════════════════════════════════════════════════════ */
+const EMPTY_PROFILE: StudentProfile = {
+  studentId: '', titleEn: '', firstNameEn: '', lastNameEn: '',
+  email: '', phone: '', faculty: '', program: '',
+  level: 'BACHELOR', scholarship: '', fundingType: '', advisorName: '', visaExpiry: '',
+};
+
 export default function NewRequestFormPage({ params }: { params: { typeId: string } }) {
   const { typeId } = params;
   const router = useRouter();
@@ -656,12 +799,32 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const [submitting, setSubmitting] = useState(false);
   const [config, setConfig] = useState<{ id: number; name: string; description: string } | null>(null);
   const [requiredDocs, setRequiredDocs] = useState<DocTemplate[]>([]);
+  const [profile, setProfile] = useState<StudentProfile>(EMPTY_PROFILE);
+  const [studentDbId, setStudentDbId] = useState<number>(0);
+  const [deanName, setDeanName] = useState<string>('');
+  const [irStaffName, setIrStaffName] = useState<string>('');
 
   useEffect(() => {
-    async function loadType() {
+    Promise.all([
+      advisorApi.getDean(),
+      userApi.getIRStaff(),
+    ]).then(([deanRes, staffRes]) => {
+      const d = deanRes.data.data;
+      if (d) setDeanName([d.titleEn, d.firstNameEn, d.lastNameEn].filter(Boolean).join(' '));
+      const s = staffRes.data.data;
+      if (s) setIrStaffName(s.name);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    async function loadData() {
       try {
-        const res = await requestTypeApi.getAll();
-        const rt = res.data.data.find(r => r.id === Number(typeId));
+        const [typeRes, meRes] = await Promise.all([
+          requestTypeApi.getAll(),
+          studentMeApi.get(),
+        ]);
+
+        const rt = typeRes.data.data.find(r => r.id === Number(typeId));
         if (rt) {
           setConfig({ id: rt.id, name: rt.name, description: rt.description ?? '' });
           setRequiredDocs(
@@ -677,21 +840,46 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
               }))
           );
         }
+
+        const s = meRes.data.data;
+        setStudentDbId(s.id);
+        const adv = s.advisor;
+        const advisorName = adv
+          ? [adv.titleEn, adv.firstNameEn, adv.lastNameEn].filter(Boolean).join(' ')
+          : '';
+        const visaExpiry = s.visas?.[0]?.expiryDate?.slice(0, 10) ?? '';
+        const levelMap: Record<string, StudentProfile['level']> = {
+          PHD: 'PHD', MASTER: 'MASTER', BACHELOR: 'BACHELOR',
+        };
+        setProfile({
+          studentId:   s.studentId ?? '',
+          titleEn:     s.titleEn ?? '',
+          firstNameEn: s.firstNameEn ?? '',
+          lastNameEn:  s.lastNameEn ?? '',
+          email:       s.email ?? '',
+          phone:       s.phone ?? '',
+          faculty:     s.faculty ?? '',
+          program:     s.program ?? '',
+          level:       levelMap[s.level ?? ''] ?? 'BACHELOR',
+          scholarship: s.scholarship ?? '',
+          fundingType: '',
+          advisorName,
+          visaExpiry,
+        });
       } catch (e) {
-        console.error('Failed to load request type:', e);
+        console.error('Failed to load data:', e);
       } finally {
         setLoading(false);
       }
     }
-    loadType();
+    loadData();
   }, [typeId]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      // DEMO: student DB id = 1 (seeded). Replace with auth token lookup in production.
       await requestApi.create({
-        studentId: 1,
+        studentId: studentDbId,
         requestTypeId: Number(typeId),
         title: config?.name ?? 'New Request',
         description: '',
@@ -726,7 +914,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
       {/* Header */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="bg-primary">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 px-4 py-3">
             <button onClick={() => router.back()}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/20 text-white hover:bg-white/30 transition">
               <RiArrowLeftLine size={18} />
@@ -747,10 +935,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
         )}
       </div>
 
-      {typeId === '1'
-        ? <LeaveRequestForm requiredDocs={requiredDocs} onSubmit={handleSubmit} />
-        : <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} />
-      }
+      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} deanName={deanName} irStaffName={irStaffName} />
 
       {submitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">

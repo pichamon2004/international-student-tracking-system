@@ -19,10 +19,15 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 };
 
-export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== 'ADMIN') {
-    res.status(403).json({ success: false, message: 'Admin access required' });
-    return;
-  }
-  next();
-};
+/* requireRole — accepts one or more roles, e.g. requireRole('STAFF', 'ADVISOR') */
+export const requireRole = (...roles: string[]) =>
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403).json({ success: false, message: 'Forbidden' });
+      return;
+    }
+    next();
+  };
+
+/** @deprecated use requireRole('STAFF') */
+export const requireAdmin = requireRole('STAFF');

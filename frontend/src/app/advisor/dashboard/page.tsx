@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiUser3Line } from 'react-icons/ri';
 import StudentWorldMap from '@/components/ui/StudentWorldMap';
@@ -8,34 +9,111 @@ import { BsFillPersonFill } from 'react-icons/bs';
 import { IoDocumentText } from 'react-icons/io5';
 import { FaIdCard } from 'react-icons/fa6';
 import { FaPassport } from 'react-icons/fa6';
+import { requestApi, advisorApi, type ApiRequest } from '@/lib/api';
 
-const mockPendingRequests = [
-  { id: 1, name: 'Joanna Sofia', documentType: 'Travel Letter',   submissionDate: '01/01/1001' },
-  { id: 4, name: 'Maria Santos', documentType: 'Travel Letter',   submissionDate: '10/03/2025' },
-];
+const COUNTRY_COORDINATES: Record<string, [number, number]> = {
+  'China':        [104.19, 35.86],
+  'Myanmar':      [95.96,  21.92],
+  'Vietnam':      [108.28, 14.06],
+  'Laos':         [102.50, 17.97],
+  'Thailand':     [100.99, 15.87],
+  'Cambodia':     [104.99, 12.57],
+  'Indonesia':    [113.92, -0.79],
+  'India':        [78.96,  20.59],
+  'Philippines':  [121.77, 12.88],
+  'Japan':        [138.25, 36.20],
+  'South Korea':  [127.77, 35.91],
+  'Saudi Arabia': [45.08,  23.89],
+};
 
-const statCards = [
-  { label: 'Total Students',         value: 8,                           icon: BsFillPersonFill, iconBg: '#DEEBFF', iconColor: '#578FCA' },
-  { label: 'Pending Requests',       value: mockPendingRequests.length,  icon: IoDocumentText,   iconBg: '#DFC2FF', iconColor: '#8B2CF5' },
-  { label: 'Visa Expiring Soon',     value: 3,                           icon: FaIdCard,         iconBg: '#FFC5C6', iconColor: '#FF0000' },
-  { label: 'Passport Expiring Soon', value: 10,                          icon: FaPassport,       iconBg: '#FFC5C6', iconColor: '#FF0000' },
-];
+const COUNTRY_FLAGS: Record<string, string> = {
+  'China': '🇨🇳', 'Myanmar': '🇲🇲', 'Vietnam': '🇻🇳', 'Laos': '🇱🇦',
+  'Thailand': '🇹🇭', 'Cambodia': '🇰🇭', 'Indonesia': '🇮🇩', 'India': '🇮🇳',
+  'Philippines': '🇵🇭', 'Japan': '🇯🇵', 'South Korea': '🇰🇷', 'Saudi Arabia': '🇸🇦',
+};
 
-const expiringVisas = [
-  { name: 'Liu Chen',      country: 'China',   daysLeft: 10, expireDate: '2025-10-10' },
-  { name: 'Aung Kyaw',    country: 'Myanmar', daysLeft: 15, expireDate: '2025-10-10' },
-  { name: 'Tran Van Minh', country: 'Vietnam', daysLeft: 20, expireDate: '2025-10-10' },
-];
-
-const countryStats = [
-  { country: 'China',   count: 3, percent: 37, coordinates: [104.19, 35.86] as [number, number], flag: '🇨🇳' },
-  { country: 'Myanmar', count: 2, percent: 25, coordinates: [95.96,  21.92] as [number, number], flag: '🇲🇲' },
-  { country: 'Vietnam', count: 2, percent: 25, coordinates: [108.28, 14.06] as [number, number], flag: '🇻🇳' },
-  { country: 'Laos',    count: 1, percent: 13, coordinates: [102.50, 17.97] as [number, number], flag: '🇱🇦' },
-];
+function buildCountryStats(students: Array<{ homeCountry: string | null }>) {
+  const counts: Record<string, number> = {};
+  for (const s of students) {
+    if (s.homeCountry) {
+      counts[s.homeCountry] = (counts[s.homeCountry] ?? 0) + 1;
+    }
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([country, count]) => ({
+      country,
+      count,
+      percent: Math.round((count / total) * 100),
+      coordinates: (COUNTRY_COORDINATES[country] ?? [100, 15]) as [number, number],
+      flag: COUNTRY_FLAGS[country] ?? '🌍',
+    }));
+}
 
 export default function AdvisorDashboardPage() {
   const router = useRouter();
+
+  const [pendingRequests, setPendingRequests] = useState<ApiRequest[]>([]);
+  const [expiringVisas, setExpiringVisas] = useState<Array<{ id: number; name: string; country: string; daysRemaining: number; expireDate: string }>>([]);
+  const [countryStats, setCountryStats] = useState<ReturnType<typeof buildCountryStats>>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [visaExpiringSoon, setVisaExpiringSoon] = useState(0);
+  const [passportExpiringSoon, setPassportExpiringSoon] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [reqRes, advisorRes] = await Promise.all([
+          requestApi.getAll(),
+          advisorApi.getMe(),
+        ]);
+
+        const requests = reqRes.data.data;
+        const myStudents = advisorRes.data.data.students ?? [];
+
+        const daysLeft = (dateStr: string) =>
+          Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000);
+
+        const expiring = myStudents
+          .filter(s => s.visas?.[0]?.expiryDate)
+          .map(s => ({
+            id: s.id,
+            name: [s.firstNameEn, s.lastNameEn].filter(Boolean).join(' ') || 'Unknown',
+            country: s.homeCountry ?? '—',
+            daysRemaining: daysLeft(s.visas![0].expiryDate),
+            expireDate: new Date(s.visas![0].expiryDate).toISOString().slice(0, 10),
+          }))
+          .filter(s => s.daysRemaining < 90)
+          .sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+        setPendingRequests(requests.filter((r) => r.status === 'PENDING' || r.status === 'FORWARDED_TO_ADVISOR'));
+        setExpiringVisas(expiring);
+        setTotalStudents(myStudents.length);
+        setCountryStats(buildCountryStats(myStudents));
+        setVisaExpiringSoon(expiring.filter(s => s.daysRemaining < 14).length);
+        setPassportExpiringSoon(myStudents.filter(s => {
+          const exp = s.passports?.[0]?.expiryDate;
+          return exp ? daysLeft(exp) < 14 : false;
+        }).length);
+      } catch {
+        // Silently handle errors — page remains visible with zeros
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const statCards = [
+    { label: 'Total Students',         value: totalStudents,            icon: BsFillPersonFill, iconBg: '#DEEBFF', iconColor: '#578FCA' },
+    { label: 'Pending Requests',       value: pendingRequests.length,   icon: IoDocumentText,   iconBg: '#DFC2FF', iconColor: '#8B2CF5' },
+    { label: 'Visa Expiring Soon',     value: visaExpiringSoon,     icon: FaIdCard,   iconBg: '#FFC5C6', iconColor: '#FF0000' },
+    { label: 'Passport Expiring Soon', value: passportExpiringSoon, icon: FaPassport, iconBg: '#FFC5C6', iconColor: '#FF0000' },
+  ];
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
@@ -48,14 +126,15 @@ export default function AdvisorDashboardPage() {
               <Icon className="w-5 h-5 md:w-8 md:h-8 2xl:w-10 :h-10" style={{ color: iconColor }} />
             </div>
             <div className="flex-1 text-right flex items-end flex-col justify-between h-full py-5 2xl:py-10">
-              <p className="text-xl md:text-2xl 2xl:text-3xl font-bold text-primary">{value}</p>
+              <p className="text-xl md:text-2xl 2xl:text-3xl font-bold text-primary">
+                {loading ? '—' : value}
+              </p>
               <p className="text-xs 2xl:text-sm font-medium text-primary">{label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      
       {/* Bottom Grid: Visa Expiring + World Map */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
 
@@ -64,18 +143,28 @@ export default function AdvisorDashboardPage() {
           <h2 className="text-2xl font-semibold text-primary">Visa Expiring Soon</h2>
           <hr className="my-4" />
           <div className="space-y-3">
-            {expiringVisas.map((s) => (
-              <div key={s.name} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition border">
+            {loading && (
+              <div className="animate-pulse space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-16 bg-gray-100 rounded-xl" />
+                ))}
+              </div>
+            )}
+            {!loading && expiringVisas.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-6">No expiring visas at this time.</p>
+            )}
+            {!loading && expiringVisas.map((v) => (
+              <div key={v.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition border">
                 <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
                   <RiUser3Line size={18} className="text-primary" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                  <p className="text-xs text-gray-400">{s.country}</p>
+                  <p className="text-sm font-medium text-gray-800">{v.name}</p>
+                  <p className="text-xs text-gray-400">{v.country}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-red-500">{s.daysLeft} Days</p>
-                  <p className="text-xs text-gray-400">{s.expireDate}</p>
+                  <p className={`text-sm font-semibold ${v.daysRemaining < 14 ? 'text-red-500' : 'text-orange-400'}`}>{v.daysRemaining} Days</p>
+                  <p className="text-xs text-gray-400">{v.expireDate}</p>
                 </div>
               </div>
             ))}
@@ -90,7 +179,6 @@ export default function AdvisorDashboardPage() {
           <div className="space-y-3 mt-4">
             {countryStats.map((c) => (
               <div key={c.country} className="flex items-center gap-3">
-                <span className="text-xl w-8 text-center">{c.flag}</span>
                 <div className="flex-1">
                   <div className="flex justify-between text-sm mb-1">
                     <span className="font-medium text-gray-700">{c.country}</span>

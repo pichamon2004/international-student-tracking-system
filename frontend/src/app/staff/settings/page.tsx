@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { IconType } from 'react-icons';
-import { templateApi, requestTypeApi, type ApiRequestType } from '@/lib/api';
+import { templateApi, requestTypeApi, emailTemplateApi, type ApiRequestType } from '@/lib/api';
 import { clsx } from 'clsx';
 import DocTemplateModal, { DocTemplate, ALL_VARIABLES } from '@/components/DocTemplateModal';
 import EmailTemplateModal, { EmailTemplate } from '@/components/EmailTemplateModal';
@@ -219,19 +219,71 @@ function DeleteDialog({ title = 'Delete', name, onConfirm, onCancel }: { title?:
 
 /* ─── Email Templates Tab ────────────────────────────────────── */
 function EmailTemplatesTab() {
-  const [templates, setTemplates] = useState<EmailTemplate[]>(initialEmailTemplates);
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<null | 'create' | EmailTemplate>(null);
   const [deleteTarget, setDeleteTarget] = useState<EmailTemplate | null>(null);
 
-  const handleSave = (data: Partial<EmailTemplate> & { id?: number }) => {
-    if (modal === 'create' || !data.id) {
-      const newId = Math.max(0, ...templates.map(t => t.id)) + 1;
-      setTemplates(prev => [...prev, { id: newId, name: data.name ?? '', subject: data.subject ?? '', isActive: data.isActive ?? true, variables: data.variables ?? [], body: data.body ?? '' }]);
-    } else {
-      setTemplates(prev => prev.map(t => t.id === data.id ? { ...t, ...data } as EmailTemplate : t));
+  useEffect(() => {
+    emailTemplateApi.getAll()
+      .then(res => setTemplates(res.data.data.map(t => ({
+        id: t.id,
+        name: t.name,
+        subject: t.subject,
+        body: t.body,
+        isActive: t.isActive,
+        variables: t.variables ? JSON.parse(t.variables) : [],
+      }))))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async (data: Partial<EmailTemplate> & { id?: number }) => {
+    try {
+      if (modal === 'create' || !data.id) {
+        const res = await emailTemplateApi.create({
+          name: data.name ?? '',
+          subject: data.subject ?? '',
+          body: data.body ?? '',
+          variables: data.variables ?? [],
+          isActive: data.isActive ?? true,
+        });
+        const t = res.data.data;
+        setTemplates(prev => [...prev, { id: t.id, name: t.name, subject: t.subject, body: t.body, isActive: t.isActive, variables: t.variables ? JSON.parse(t.variables) : [] }]);
+      } else {
+        await emailTemplateApi.update(data.id, {
+          name: data.name,
+          subject: data.subject,
+          body: data.body,
+          variables: data.variables,
+          isActive: data.isActive,
+        });
+        setTemplates(prev => prev.map(t => t.id === data.id ? { ...t, ...data } as EmailTemplate : t));
+      }
+    } catch (e) {
+      console.error('Failed to save email template:', e);
     }
     setModal(null);
   };
+
+  async function handleToggle(t: EmailTemplate) {
+    try {
+      await emailTemplateApi.update(t.id, { isActive: !t.isActive });
+      setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, isActive: !x.isActive } : x));
+    } catch (e) {
+      console.error('Failed to toggle:', e);
+    }
+  }
+
+  async function handleDelete(target: EmailTemplate) {
+    try {
+      await emailTemplateApi.delete(target.id);
+      setTemplates(prev => prev.filter(t => t.id !== target.id));
+    } catch (e) {
+      console.error('Failed to delete:', e);
+    }
+    setDeleteTarget(null);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -245,7 +297,11 @@ function EmailTemplatesTab() {
       </div>
 
       {/* Cards */}
-      {templates.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3].map(i => <div key={i} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />)}
+        </div>
+      ) : templates.length === 0 ? (
         <div className="py-16 text-center text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
           No templates yet. Click <strong>+ New Template</strong> to create one.
         </div>
@@ -254,22 +310,15 @@ function EmailTemplatesTab() {
           {templates.map(t => (
             <div key={t.id}
               className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
-              {/* Icon */}
               <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
                 t.isActive ? 'bg-[#DEEBFF] text-primary' : 'bg-gray-100 text-gray-400')}>
                 <RiMailLine size={18} />
               </div>
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-primary truncate">{t.name}</p>
                 <p className="text-xs text-gray-400 truncate mt-0.5">{t.subject}</p>
               </div>
-              {/* Status */}
-              <StatusBadge
-                active={t.isActive}
-                onToggle={() => setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, isActive: !x.isActive } : x))}
-              />
-              {/* Actions */}
+              <StatusBadge active={t.isActive} onToggle={() => handleToggle(t)} />
               <div className="flex items-center gap-1.5 shrink-0">
                 <button onClick={() => setModal(t)} title="Edit"
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-primary/10 hover:text-primary transition">
@@ -291,7 +340,7 @@ function EmailTemplatesTab() {
       )}
       {deleteTarget && (
         <DeleteDialog name={deleteTarget.name}
-          onConfirm={() => { setTemplates(prev => prev.filter(t => t.id !== deleteTarget!.id)); setDeleteTarget(null); }}
+          onConfirm={() => handleDelete(deleteTarget!)}
           onCancel={() => setDeleteTarget(null)} />
       )}
     </div>
@@ -806,8 +855,6 @@ function DocTemplatesTabControlled({ templates, modal, deleteTarget, onOpenCreat
       {modal !== null && (
         <DocTemplateModal template={modal === 'create' ? null : modal} isCreate={modal === 'create'}
           allVariables={ALL_VARIABLES} onSave={onSave} onClose={onCloseModal}
-          studentName="Zhang Wei"
-          advisorName="Asst. Prof. Dr. Somchai Rakdee"
         />
       )}
       {deleteTarget && (

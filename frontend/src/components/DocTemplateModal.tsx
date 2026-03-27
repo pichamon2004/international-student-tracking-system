@@ -4,6 +4,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line } from 'react-icons/ri';
+import CustomSelect from '@/components/ui/CustomSelect';
+import { advisorApi } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 export interface DocTemplate {
@@ -101,11 +104,10 @@ interface DocTemplateModalProps {
   allVariables: string[];
   onSave: (data: Partial<DocTemplate> & { id?: number }) => void;
   onClose: () => void;
-  studentName?: string;
-  advisorName?: string;
 }
 
-export default function DocTemplateModal({ template, isCreate, allVariables, onSave, onClose, studentName, advisorName }: DocTemplateModalProps) {
+export default function DocTemplateModal({ template, isCreate, allVariables, onSave, onClose }: DocTemplateModalProps) {
+  const currentUser = useAuthStore(s => s.user);
   const [subTab, setSubTab] = useState<DocSubTab>('Edit');
   const [name, setName] = useState(template?.name ?? '');
   const [desc, setDesc] = useState(template?.description ?? '');
@@ -116,12 +118,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const [signatories, setSignatories] = useState<string[]>(
     template?.variables?.filter(v => v.startsWith('{{sig_')) ?? SIGNATURE_VARIABLES
   );
-  const [signatoryNames, setSignatoryNames] = useState<Record<string, string>>({
-    '{{sig_student}}':  studentName ?? '',
-    '{{sig_advisor}}':  advisorName ?? '',
-    '{{sig_ir_staff}}': 'Miss Kasama Orthong',
-    '{{sig_dean}}':     'Assoc. Prof. Dr. Kanda Runapongsa Saikaew',
-  });
+  const [deanName, setDeanName] = useState<string>('');
   const [fontSize, setFontSize] = useState(14);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
   const editorRef = useRef<HTMLDivElement>(null);
@@ -133,6 +130,17 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Fetch dean name on mount
+  useEffect(() => {
+    advisorApi.getDean().then(res => {
+      const d = res.data.data;
+      if (d) {
+        const parts = [d.titleEn, d.firstNameEn, d.lastNameEn].filter(Boolean);
+        setDeanName(parts.join(' '));
+      }
+    }).catch(() => {});
+  }, []);
 
   // Track active formats, save selection range, and read font size at cursor
   useEffect(() => {
@@ -257,11 +265,60 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     handleInput();
   };
 
-  // Insert a variable chip at cursor
+  // Insert a variable chip at cursor using direct DOM manipulation
+  // (execCommand('insertHTML') strips data-var in Chrome)
+  const insertLogo = (height: number) => {
+    editorRef.current?.focus();
+    const imgHtml = `<img src="/kkulogo2.png" alt="KKU Logo" style="display:block;height:${height}px;margin:0 auto 8px auto;" />`;
+    const sel = window.getSelection();
+    const range = savedRangeRef.current ?? (sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null);
+    if (!range || !editorRef.current?.contains(range.commonAncestorContainer)) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = imgHtml;
+      while (tmp.firstChild) editorRef.current?.appendChild(tmp.firstChild);
+      handleInput();
+      return;
+    }
+    range.deleteContents();
+    const tmp = document.createElement('div');
+    tmp.innerHTML = imgHtml;
+    const imgNode = tmp.firstChild as Node;
+    range.insertNode(imgNode);
+    const after = document.createTextNode('\u200B');
+    range.setStartAfter(imgNode);
+    range.insertNode(after);
+    range.setStartAfter(after);
+    range.collapse(true);
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    savedRangeRef.current = range.cloneRange();
+    handleInput();
+  };
+
   const insertVariable = (v: string) => {
     editorRef.current?.focus();
-    const chip = makeVarChip(v);
-    document.execCommand('insertHTML', false, chip + '\u200B'); // zero-width space after chip
+    const sel = window.getSelection();
+    const range = savedRangeRef.current ?? (sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null);
+    if (!range || !editorRef.current?.contains(range.commonAncestorContainer)) {
+      // Fallback: append at end
+      const tmp = document.createElement('div');
+      tmp.innerHTML = makeVarChip(v) + '\u200B';
+      while (tmp.firstChild) editorRef.current?.appendChild(tmp.firstChild);
+      handleInput();
+      return;
+    }
+    range.deleteContents();
+    const tmp = document.createElement('div');
+    tmp.innerHTML = makeVarChip(v);
+    const chipNode = tmp.firstChild as Node;
+    range.insertNode(chipNode);
+    // Place cursor after chip
+    const after = document.createTextNode('\u200B');
+    range.setStartAfter(chipNode);
+    range.insertNode(after);
+    range.setStartAfter(after);
+    range.collapse(true);
+    if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    savedRangeRef.current = range.cloneRange();
     handleInput();
   };
 
@@ -283,7 +340,9 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const handleGeneratePDF = useCallback(() => {
     const el = document.getElementById('dtm-print'); if (!el) return;
     const w = window.open('', '_blank', 'width=900,height=700'); if (!w) return;
-    w.document.write(`<html><head><title>Document</title><style>body{margin:0;font-family:'Times New Roman',serif;}@media print{@page{size:A4;margin:20mm 25mm;}}</style></head><body>${el.innerHTML}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script></body></html>`);
+    const origin = window.location.origin;
+    const html = el.innerHTML.replace(/src="\/kkulogo2\.png"/g, `src="${origin}/kkulogo2.png"`);
+    w.document.write(`<!DOCTYPE html><html><head><title>Document</title><style>body{margin:25mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;}@media print{@page{size:A4;margin:0;}body{margin:25mm 20mm;}}</style></head><body>${html}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script></body></html>`);
     w.document.close();
   }, []);
 
@@ -387,23 +446,11 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
               <div className="w-11 shrink-0 bg-[#DEEBFF]/30 border-r border-[#0776BC]/10 flex flex-col items-center py-3 gap-1">
                 {/* Font size selector */}
                 <div className="relative w-8 mb-1" title="Font size">
-                  <select
-                    value={fontSize}
-                    onMouseDown={() => {
-                      // Snapshot current selection before dropdown steals focus
-                      const sel = window.getSelection();
-                      if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
-                        savedRangeRef.current = sel.getRangeAt(0).cloneRange();
-                      }
-                    }}
-                    onChange={e => applyFontSize(Number(e.target.value))}
-                    className="w-full appearance-none bg-white border border-[#0776BC]/20 rounded text-[10px] text-primary text-center py-0.5 outline-none cursor-pointer hover:border-primary transition-colors"
-                    style={{ paddingRight: '2px' }}
-                  >
-                    {FONT_SIZES.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+                  <CustomSelect
+                    value={String(fontSize)}
+                    onChange={(val) => applyFontSize(Number(val))}
+                    options={FONT_SIZES.map(s => ({ label: String(s), value: String(s) }))}
+                  />
                 </div>
 
                 <div className="w-5 h-px bg-[#0776BC]/20 my-0.5" />
@@ -485,6 +532,20 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
               <div className="w-52 shrink-0 bg-[#DEEBFF]/20 border-l border-[#0776BC]/10 flex flex-col overflow-hidden min-h-0">
                 <div className="px-3 pt-2.5 pb-2 border-b border-[#0776BC]/10 shrink-0 flex flex-col gap-1.5">
                   <p className="text-[10px] font-semibold text-primary/70 uppercase tracking-wide">Insert Variable</p>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-[10px] text-primary/50 font-medium">KKU Logo</p>
+                    <div className="flex gap-1">
+                      {([['S', 40], ['M', 80], ['L', 120]] as [string, number][]).map(([label, h]) => (
+                        <button
+                          key={label}
+                          onMouseDown={e => { e.preventDefault(); insertLogo(h); }}
+                          className="flex-1 py-1 rounded-lg border border-[#0776BC]/20 bg-white text-primary text-xs font-semibold hover:bg-[#DEEBFF] hover:border-primary/30 active:scale-[0.98] transition-all"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="relative">
                     <svg className="absolute left-2 top-1/2 -translate-y-1/2 text-primary/40" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     <input value={varSearch} onChange={e => setVarSearch(e.target.value)} placeholder="Search..."
@@ -507,13 +568,12 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                   </div>
                   <div className="p-2 flex flex-col gap-2">
                     {[
-                      { v: '{{sig_student}}',  label: 'Student',  placeholder: 'Student full name',  autoSource: studentName },
-                      { v: '{{sig_advisor}}',  label: 'Advisor',  placeholder: 'Advisor full name',  autoSource: advisorName },
-                      { v: '{{sig_ir_staff}}', label: 'IR Staff', placeholder: 'IR Staff full name', autoSource: undefined   },
-                      { v: '{{sig_dean}}',     label: 'Dean',     placeholder: 'Dean full name',     autoSource: undefined   },
+                      { v: '{{sig_student}}',  label: 'Student',  displayName: null,                        autoLabel: 'Auto at request time' },
+                      { v: '{{sig_advisor}}',  label: 'Advisor',  displayName: null,                        autoLabel: 'Auto at request time' },
+                      { v: '{{sig_ir_staff}}', label: 'IR Staff', displayName: currentUser?.name ?? null,   autoLabel: null },
+                      { v: '{{sig_dean}}',     label: 'Dean',     displayName: deanName || null,            autoLabel: null },
                     ].map(sig => {
                       const en = signatories.includes(sig.v);
-                      const isAutoFilled = !!sig.autoSource;
                       return (
                         <div key={sig.v} className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5">
@@ -522,21 +582,17 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                               {en && <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                             </button>
                             <span className={clsx('flex-1 text-xs font-medium px-2 py-0.5 rounded border bg-white', en ? 'border-primary/30 text-primary' : 'border-[#0776BC]/20 text-gray-400')}>{sig.label}</span>
-                            {en && isAutoFilled && <span className="text-[8px] bg-green-100 text-green-600 px-1 py-0.5 rounded font-semibold">Auto</span>}
                             {en && <button onMouseDown={e => { e.preventDefault(); insertVariable(sig.v); }} title="Insert at cursor" className="text-[9px] text-primary/40 hover:text-primary transition px-1">+</button>}
                           </div>
                           {en && (
-                            <input
-                              value={signatoryNames[sig.v] ?? ''}
-                              onChange={e => setSignatoryNames(p => ({ ...p, [sig.v]: e.target.value }))}
-                              placeholder={isAutoFilled ? `Auto: ${sig.autoSource}` : sig.placeholder}
-                              className={clsx(
-                                'w-full text-[11px] px-2 py-1 rounded border outline-none focus:border-primary transition-colors ml-5',
-                                isAutoFilled && !(signatoryNames[sig.v])
-                                  ? 'bg-green-50 border-green-200 text-green-700 placeholder:text-green-500'
-                                  : 'bg-white border-[#0776BC]/20 text-gray-700'
-                              )}
-                            />
+                            <div className="ml-5 text-[11px] px-2 py-1 rounded border bg-gray-50 border-gray-200 text-gray-600 leading-tight">
+                              {sig.autoLabel
+                                ? <span className="text-[10px] italic text-gray-400">{sig.autoLabel}</span>
+                                : sig.displayName
+                                  ? <span className="text-gray-700">{sig.displayName}</span>
+                                  : <span className="italic text-gray-400">Not found</span>
+                              }
+                            </div>
                           )}
                         </div>
                       );
@@ -557,16 +613,23 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                   {signatories.length > 0 && bodyHtml.trim() && bodyHtml !== '<br>' && (
                     <div className="mt-8 pt-6 border-t border-gray-200">
                       <div className={clsx('grid gap-4', signatories.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-4')}>
-                        {signatories.map(sv => (
-                          <div key={sv} className="flex flex-col items-center gap-1">
-                            <div className="w-full h-12 border-b-2 border-gray-800 mt-4" />
-                            {signatoryNames[sv] && (
-                              <span className="text-xs text-gray-700 font-medium text-center">{signatoryNames[sv]}</span>
-                            )}
-                            <span className="text-xs text-gray-500">{varLabel(sv).replace('✍ ', '').replace(' Signature', '')}</span>
-                            <span className="text-[10px] text-gray-400">Date ....../....../......</span>
-                          </div>
-                        ))}
+                        {signatories.map(sv => {
+                          const resolvedName =
+                            sv === '{{sig_ir_staff}}' ? (currentUser?.name ?? '') :
+                            sv === '{{sig_dean}}' ? deanName :
+                            '';
+                          return (
+                            <div key={sv} className="flex flex-col items-center gap-1">
+                              <div className="w-full h-12 border-b-2 border-gray-800 mt-4" />
+                              {resolvedName
+                                ? <span className="text-xs text-gray-700 font-medium text-center">{resolvedName}</span>
+                                : <span className="text-[10px] italic text-gray-400 text-center">(auto-filled)</span>
+                              }
+                              <span className="text-xs text-gray-500">{varLabel(sv).replace('✍ ', '').replace(' Signature', '')}</span>
+                              <span className="text-[10px] text-gray-400">Date ....../....../......</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

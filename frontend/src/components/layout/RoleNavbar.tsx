@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/auth';
 import {
   RiUserStarLine,
   RiLogoutBoxLine,
@@ -43,14 +44,6 @@ const navConfig: Record<string, NavItem[]> = {
   ],
 };
 
-const pendingCount = 2;
-
-const mockUser = {
-  name: 'Somchai Jaidee',
-  role: 'Advisor',
-  avatar: null as string | null,
-};
-
 interface RoleNavbarProps {
   role: 'student' | 'advisor' | 'staff';
 }
@@ -58,13 +51,23 @@ interface RoleNavbarProps {
 export default function RoleNavbar({ role }: RoleNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { logout, user, token, fetchMe } = useAuthStore();
   const items = navConfig[role];
 
-  const initials = mockUser.name
+  useEffect(() => {
+    if (token && !user) {
+      fetchMe();
+    }
+  }, [token, user, fetchMe]);
+
+  const displayName = user?.name ?? '';
+  const displayRole = user?.role ? user.role.charAt(0) + user.role.slice(1).toLowerCase() : role;
+  const initials = displayName
     .split(' ')
     .map((w) => w[0])
+    .filter(Boolean)
     .join('')
-    .toUpperCase();
+    .toUpperCase() || '?';
 
   // 🔥 คุมทีละ item
   const [activeItem, setActiveItem] = useState<string | null>(null);
@@ -100,8 +103,6 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
       <div className="flex items-center gap-1 flex-1 justify-center ">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
-          const showBadge = label === 'Request Management' && pendingCount > 0;
-
           const isShow = activeItem === href || hoveredItem === href;
 
           return (
@@ -132,12 +133,6 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
                 {label}
               </span>
 
-              {/* Badge */}
-              {showBadge && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
-                  {pendingCount}
-                </span>
-              )}
             </Link>
           );
         })}
@@ -150,24 +145,20 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
           className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-gray-50 transition-all duration-200"
         >
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
-            {mockUser.avatar ? (
-              <img src={mockUser.avatar} alt={mockUser.name} className="w-full h-full object-cover" />
-            ) : (
-              initials
-            )}
+            {initials}
           </div>
 
           <div className="hidden md:flex flex-col leading-tight text-left">
-            <span className="text-sm font-semibold text-primary">{mockUser.name}</span>
-            <span className="text-xs text-gray-400 capitalize">{mockUser.role}</span>
+            <span className="text-sm font-semibold text-primary">{displayName}</span>
+            <span className="text-xs text-gray-400 capitalize">{displayRole}</span>
           </div>
         </button>
 
         {open && (
           <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
             <div className="md:hidden px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-semibold text-primary">{mockUser.name}</p>
-              <p className="text-xs text-gray-400 capitalize">{mockUser.role}</p>
+              <p className="text-sm font-semibold text-primary">{displayName}</p>
+              <p className="text-xs text-gray-400 capitalize">{displayRole}</p>
             </div>
 
             <button
@@ -179,7 +170,7 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
             </button>
             <hr className="my-1 border-gray-100" />
             <button
-              onClick={() => {}}
+              onClick={() => { logout(); router.push('/login'); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
             >
               <RiLogoutBoxLine size={16} />
