@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line } from 'react-icons/ri';
 import CustomSelect from '@/components/ui/CustomSelect';
-import { advisorApi } from '@/lib/api';
+import { type ApiTemplateVariable } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -18,49 +18,19 @@ export interface DocTemplate {
   body: string; // stored as HTML
 }
 
-const VARIABLE_LABELS: Record<string, string> = {
-  '{{student_name}}':     'Student Name',
-  '{{student_id}}':       'Student ID',
-  '{{student_title}}':    'Title (Mr./Mrs./Miss)',
-  '{{thai_tel}}':         'Thai Tel. No.',
-  '{{email}}':            'Email',
-  '{{education_level}}':  'Education Level',
-  '{{funding_type}}':     'Funding Type',
-  '{{scholarship_name}}': 'Scholarship Name',
-  '{{program}}':          'Program',
-  '{{destination}}':      'Destination City & Country',
-  '{{purpose}}':          'Purpose of Leave',
-  '{{duration_days}}':    'Duration (days/months)',
-  '{{leave_start}}':      'Leave Start Date',
-  '{{leave_end}}':        'Leave End Date',
-  '{{visa_expiry}}':      'Visa Expiry',
-  '{{advisor_name}}':     'Advisor Name',
-  '{{date}}':             'Current Date',
-  '{{visa_expiry_date}}': 'Visa Expiry Date',
-  '{{days_remaining}}':   'Days Remaining',
-  '{{request_type}}':     'Request Type',
-  '{{status}}':           'Status',
-  '{{dean_name}}':        'Dean Name',
-  '{{sig_student}}':      '✍ Student Signature',
-  '{{sig_advisor}}':      '✍ Advisor Signature',
-  '{{sig_ir_staff}}':     '✍ IR Staff Signature',
-  '{{sig_dean}}':         '✍ Dean Signature',
-};
-
-export const ALL_VARIABLES = Object.keys(VARIABLE_LABELS).filter(v => !v.startsWith('{{sig_'));
 export const SIGNATURE_VARIABLES = ['{{sig_student}}', '{{sig_advisor}}', '{{sig_ir_staff}}', '{{sig_dean}}'];
 
-function varLabel(v: string) {
-  return VARIABLE_LABELS[v] ?? v.replace(/[{}]/g, '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+function fallbackVarLabel(v: string) {
+  return v.replace(/[{}]/g, '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 /* ─── Variable chip HTML ─────────────────────────────────────── */
-function makeVarChip(v: string) {
-  const label = varLabel(v);
+function makeVarChip(v: string, label?: string) {
+  const displayLabel = label ?? fallbackVarLabel(v);
   if (v.startsWith('{{sig_')) {
-    return `<span contenteditable="false" data-var="${v}" style="display:inline-flex;align-items:center;gap:4px;width:100%;margin:4px 0;border:1.5px dashed rgba(7,118,188,0.35);border-radius:4px;padding:4px 10px;font-size:12px;color:rgba(7,118,188,0.6);font-family:inherit;">✍ ${label} .................................................</span>`;
+    return `<span contenteditable="false" data-var="${v}" style="display:inline-flex;align-items:center;gap:4px;width:100%;margin:4px 0;border:1.5px dashed rgba(7,118,188,0.35);border-radius:4px;padding:4px 10px;font-size:12px;color:rgba(7,118,188,0.6);font-family:inherit;">✍ ${displayLabel} .................................................</span>`;
   }
-  return `<span contenteditable="false" data-var="${v}" style="display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap;">${label}</span>`;
+  return `<span contenteditable="false" data-var="${v}" style="display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap;">${displayLabel}</span>`;
 }
 
 /* ─── Extract used variables from HTML body ──────────────────── */
@@ -101,12 +71,16 @@ type DocSubTab = 'Edit' | 'Preview';
 interface DocTemplateModalProps {
   template: DocTemplate | null;
   isCreate: boolean;
-  allVariables: string[];
+  allVariables: ApiTemplateVariable[];
   onSave: (data: Partial<DocTemplate> & { id?: number }) => void;
   onClose: () => void;
 }
 
 export default function DocTemplateModal({ template, isCreate, allVariables, onSave, onClose }: DocTemplateModalProps) {
+  const labelMap = Object.fromEntries(allVariables.map(v => [`{{${v.key}}}`, v.label]));
+  const varLabel = (v: string) => labelMap[v] ?? fallbackVarLabel(v);
+  const allVarTokens = allVariables.map(v => `{{${v.key}}}`);
+
   const currentUser = useAuthStore(s => s.user);
   const [subTab, setSubTab] = useState<DocSubTab>('Edit');
   const [name, setName] = useState(template?.name ?? '');
@@ -118,7 +92,6 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const [signatories, setSignatories] = useState<string[]>(
     template?.variables?.filter(v => v.startsWith('{{sig_')) ?? SIGNATURE_VARIABLES
   );
-  const [deanName, setDeanName] = useState<string>('');
   const [fontSize, setFontSize] = useState(14);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
   const editorRef = useRef<HTMLDivElement>(null);
@@ -130,17 +103,6 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
-
-  // Fetch dean name on mount
-  useEffect(() => {
-    advisorApi.getDean().then(res => {
-      const d = res.data.data;
-      if (d) {
-        const parts = [d.titleEn, d.firstNameEn, d.lastNameEn].filter(Boolean);
-        setDeanName(parts.join(' '));
-      }
-    }).catch(() => {});
-  }, []);
 
   // Track active formats, save selection range, and read font size at cursor
   useEffect(() => {
@@ -301,14 +263,14 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     if (!range || !editorRef.current?.contains(range.commonAncestorContainer)) {
       // Fallback: append at end
       const tmp = document.createElement('div');
-      tmp.innerHTML = makeVarChip(v) + '\u200B';
+      tmp.innerHTML = makeVarChip(v, varLabel(v)) + '\u200B';
       while (tmp.firstChild) editorRef.current?.appendChild(tmp.firstChild);
       handleInput();
       return;
     }
     range.deleteContents();
     const tmp = document.createElement('div');
-    tmp.innerHTML = makeVarChip(v);
+    tmp.innerHTML = makeVarChip(v, varLabel(v));
     const chipNode = tmp.firstChild as Node;
     range.insertNode(chipNode);
     // Place cursor after chip
@@ -347,7 +309,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   }, []);
 
   const isLeaveRequest = template?.id === 1;
-  const filteredVars = allVariables.filter(v =>
+  const filteredVars = allVarTokens.filter(v =>
     varLabel(v).toLowerCase().includes(varSearch.toLowerCase()) || v.toLowerCase().includes(varSearch.toLowerCase())
   );
 
@@ -571,7 +533,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                       { v: '{{sig_student}}',  label: 'Student',  displayName: null,                        autoLabel: 'Auto at request time' },
                       { v: '{{sig_advisor}}',  label: 'Advisor',  displayName: null,                        autoLabel: 'Auto at request time' },
                       { v: '{{sig_ir_staff}}', label: 'IR Staff', displayName: currentUser?.name ?? null,   autoLabel: null },
-                      { v: '{{sig_dean}}',     label: 'Dean',     displayName: deanName || null,            autoLabel: null },
+                      { v: '{{sig_dean}}',     label: 'Dean',     displayName: null,                        autoLabel: 'Auto at request time' },
                     ].map(sig => {
                       const en = signatories.includes(sig.v);
                       return (
@@ -616,7 +578,6 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                         {signatories.map(sv => {
                           const resolvedName =
                             sv === '{{sig_ir_staff}}' ? (currentUser?.name ?? '') :
-                            sv === '{{sig_dean}}' ? deanName :
                             '';
                           return (
                             <div key={sv} className="flex flex-col items-center gap-1">

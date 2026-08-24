@@ -2,10 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RiEditLine, RiAddLine } from 'react-icons/ri';
+import { RiEditLine, RiAddLine, RiUploadLine } from 'react-icons/ri';
 import AddAdvisorModal, { NewAdvisorData } from '@/components/AddAdvisorModal';
+import ImportModal from '@/components/ImportModal';
 import { advisorApi, type ApiAdvisor } from '@/lib/api';
 import toast from 'react-hot-toast';
+
+const ADVISOR_COLUMNS = [
+  { key: 'email',       label: 'Email',         required: true,  example: 'john@kku.ac.th' },
+  { key: 'titleEn',     label: 'Title',         required: false, example: 'Asst. Prof.' },
+  { key: 'firstNameEn', label: 'First Name',    required: true,  example: 'John' },
+  { key: 'lastNameEn',  label: 'Last Name',     required: true,  example: 'Smith' },
+  { key: 'nationality', label: 'Nationality',   required: false, example: 'American' },
+  { key: 'phone',       label: 'Phone',         required: false, example: '0812345678' },
+];
 
 const avatarColors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400'];
 
@@ -14,6 +24,9 @@ export default function StaffAdvisorsPage() {
   const [advisors, setAdvisors] = useState<(ApiAdvisor & { _count?: { students: number } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  const refreshAdvisors = () => advisorApi.getAll().then(res => setAdvisors(res.data.data)).catch(() => {});
 
   useEffect(() => {
     advisorApi.getAll()
@@ -21,6 +34,11 @@ export default function StaffAdvisorsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleAddAdvisorSuccess = () => {
+    setShowAddModal(false);
+    refreshAdvisors();
+  };
 
   const getInitials = (advisor: ApiAdvisor) => {
     const name = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ');
@@ -38,8 +56,7 @@ export default function StaffAdvisorsPage() {
         nationality: data.nationality || undefined,
       });
       toast.success('Advisor account created successfully.');
-      setShowAddModal(false);
-      advisorApi.getAll().then(res => setAdvisors(res.data.data)).catch(() => {});
+      handleAddAdvisorSuccess();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Failed to create advisor');
@@ -53,13 +70,22 @@ export default function StaffAdvisorsPage() {
       <div className="flex items-center justify-between">
         <p className="text-2xl font-semibold text-primary">Advisor Management</p>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
-        >
-          <RiAddLine className="text-lg" />
-          Advisor
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
+          >
+            <RiUploadLine size={16} />
+            Import Excel
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
+          >
+            <RiAddLine className="text-lg" />
+            Advisor
+          </button>
+        </div>
       </div>
 
       {/* Grid */}
@@ -95,7 +121,7 @@ export default function StaffAdvisorsPage() {
                 {/* Name + Faculty */}
                 <div>
                   <p className="font-semibold text-primary leading-snug">{fullName}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{advisor.faculty ?? advisor.position ?? '—'}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{advisor.position ?? '—'}</p>
                   {advisor.email && <p className="text-xs text-gray-400">{advisor.email}</p>}
                 </div>
 
@@ -160,6 +186,17 @@ export default function StaffAdvisorsPage() {
 
       {showAddModal && (
         <AddAdvisorModal onSave={handleAddAdvisor} onClose={() => setShowAddModal(false)} />
+      )}
+
+      {showImportModal && (
+        <ImportModal
+          title="Import Advisors from Excel"
+          columns={ADVISOR_COLUMNS}
+          importEndpoint="/advisors/import"
+          templateFileName="advisor_template.xlsx"
+          onClose={() => setShowImportModal(false)}
+          onDone={refreshAdvisors}
+        />
       )}
     </div>
   );

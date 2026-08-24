@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { getAuditLogs, getAuditLogById } from '../controllers/auditLog.controller';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requirePermission } from '../middleware/auth.middleware';
+import { asyncHandler } from '../middleware/errorHandler.middleware';
 
 const router = Router();
 
-router.get('/', authenticate, requireRole('STAFF'), getAuditLogs);
-router.get('/:id', authenticate, requireRole('STAFF'), getAuditLogById);
+router.get('/',    authenticate, requirePermission('AUDIT_LOG.view'), asyncHandler(getAuditLogs));
+router.get('/:id', authenticate, requirePermission('AUDIT_LOG.view'), asyncHandler(getAuditLogById));
 
 export default router;

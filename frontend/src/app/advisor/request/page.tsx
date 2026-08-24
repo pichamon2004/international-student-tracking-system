@@ -12,21 +12,23 @@ const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected'] as const;
 type FilterType = typeof STATUS_FILTERS[number];
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  PENDING:              { label: 'Pending',  className: 'bg-yellow-100 text-yellow-700' },
-  FORWARDED_TO_ADVISOR: { label: 'Pending',  className: 'bg-yellow-100 text-yellow-700' },
-  ADVISOR_APPROVED:     { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  ADVISOR_REJECTED:     { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  STAFF_APPROVED:       { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  FORWARDED_TO_DEAN:    { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  DEAN_APPROVED:        { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  STAFF_REJECTED:       { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  DEAN_REJECTED:        { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  CANCELLED:            { label: 'Rejected', className: 'bg-red-100 text-red-600' },
+  PENDING:              { label: 'Pending',           className: 'bg-yellow-100 text-yellow-700' },
+  FORWARDED_TO_ADVISOR: { label: 'Pending',           className: 'bg-yellow-100 text-yellow-700' },
+  ADVISOR_APPROVED:     { label: 'Approved',          className: 'bg-green-100 text-green-700' },
+  ADVISOR_REJECTED:     { label: 'Rejected',          className: 'bg-red-100 text-red-600' },
+  STAFF_APPROVED:       { label: 'Approved',          className: 'bg-green-100 text-green-700' },
+  FORWARDED_TO_DEAN:    { label: 'Pending (Dean)',    className: 'bg-purple-100 text-purple-700' },
+  DEAN_APPROVED:        { label: 'Approved',          className: 'bg-green-100 text-green-700' },
+  STAFF_REJECTED:       { label: 'Rejected',          className: 'bg-red-100 text-red-600' },
+  DEAN_REJECTED:        { label: 'Rejected',          className: 'bg-red-100 text-red-600' },
+  CANCELLED:            { label: 'Cancelled',         className: 'bg-gray-100 text-gray-500' },
 };
 
 function displayFilter(status: string): FilterType {
+  if (status === 'FORWARDED_TO_DEAN') return 'Pending';
   const label = statusConfig[status]?.label ?? 'Pending';
-  return label as FilterType;
+  if (['Approved', 'Rejected'].includes(label)) return label as FilterType;
+  return 'Pending';
 }
 
 export default function AdvisorRequestPage() {
@@ -35,12 +37,11 @@ export default function AdvisorRequestPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('All');
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await requestApi.getAll();
-      setRequests(res.data.data);
+      const reqRes = await requestApi.getAll();
+      setRequests(reqRes.data.data);
     } catch {
       // silently fail
     } finally {
@@ -130,7 +131,7 @@ export default function AdvisorRequestPage() {
             ) : filtered.map(req => {
               const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
               const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
-              const isPending = req.status === 'FORWARDED_TO_ADVISOR';
+              const isPendingAdvisor = req.status === 'FORWARDED_TO_ADVISOR';
               return (
                 <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
                   <td className="py-3 px-4 text-primary">{studentName}</td>
@@ -144,7 +145,7 @@ export default function AdvisorRequestPage() {
                   <td className="py-3 px-4 w-px whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2">
                       <Button variant="info" onClick={() => router.push(`/advisor/request/${req.id}`)} />
-                      {isPending && (
+                      {isPendingAdvisor && (
                         <>
                           <Button variant="success" label="Approve" onClick={() => updateStatus(req.id, 'ADVISOR_APPROVED')} />
                           <Button variant="danger"  label="Reject"  onClick={() => updateStatus(req.id, 'ADVISOR_REJECTED')} />

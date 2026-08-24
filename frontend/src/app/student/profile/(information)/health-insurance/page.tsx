@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
-import { studentMeApi, healthInsuranceApi, type ApiHealthInsurance } from '@/lib/api';
+import { studentMeApi, healthInsuranceApi, changeRequestApi, type ApiHealthInsurance, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 
@@ -32,12 +33,14 @@ export default function HealthInsurancePage() {
   const [insurances, setInsurances] = useState<ApiHealthInsurance[]>([]);
   const [studentId, setStudentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
     studentMeApi.get()
       .then(res => {
         const s = res.data.data;
         setStudentId(s.id);
+        changeRequestApi.getPendingForEntity('HEALTH_INSURANCE', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
         return healthInsuranceApi.getAll(s.id);
       })
       .then(res => setInsurances(res.data.data))
@@ -76,6 +79,14 @@ export default function HealthInsurancePage() {
             {insurances.length > 0 ? 'Edit' : 'Add'}
           </button>
         </div>
+
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            fieldLabels={{ provider: 'Provider', policyNumber: 'Policy Number', coverageType: 'Coverage Type', startDate: 'Start Date', expiryDate: 'Expiry Date' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
 
         {loading ? (
           <div className="animate-pulse space-y-3">

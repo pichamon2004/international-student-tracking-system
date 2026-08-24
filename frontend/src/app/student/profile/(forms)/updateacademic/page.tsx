@@ -91,19 +91,27 @@ function AcademicForm() {
       }
 
       if (isEdit && id) {
-        await academicDocumentApi.update(studentNumId, Number(id), {
+        const res = await academicDocumentApi.update(studentNumId, Number(id), {
           docType:     form.docType,
           institution: form.institution,
           issueDate:   form.issueDate,
           ...(fileUrl !== undefined && { fileUrl }),
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       } else {
-        await academicDocumentApi.create(studentNumId, {
+        const res = await academicDocumentApi.create(studentNumId, {
           docType:     form.docType,
           institution: form.institution,
           issueDate:   form.issueDate,
           ...(fileUrl !== undefined && { fileUrl }),
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       }
       setProgressField('academicDocumentCompleted', true);
       toast.success(isEdit ? 'Academic document updated' : 'Academic document added');

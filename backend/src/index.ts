@@ -27,7 +27,11 @@ import emailTemplateRoutes from './routes/emailTemplate.routes';
 import academicDocumentRoutes from './routes/academicDocument.routes';
 import interserviceRoutes, { mockKkuEndpoint } from './routes/interservice.routes';
 import studentEmailRoutes from './routes/studentEmail.routes';
+import roleRoutes from './routes/role.routes';
+import templateVariableRoutes from './routes/templateVariable.routes';
 import devRoutes from './routes/dev.routes';
+import deanDelegationRoutes from './routes/deanDelegation.routes';
+import changeRequestRoutes from './routes/changeRequest.routes';
 import { errorHandler } from './middleware/errorHandler.middleware';
 import { startScheduler } from './services/scheduler.service';
 
@@ -67,6 +71,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // ── Routes ────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/advisors', advisorRoutes);
 app.use('/api/students', studentRoutes);
@@ -78,6 +83,7 @@ app.use('/api/students', dependentRoutes);
 app.use('/api/students', academicDocumentRoutes);
 app.use('/api/students', studentVisaRenewalRouter);
 app.use('/api/templates', templateRoutes);
+app.use('/api/template-variables', templateVariableRoutes);
 app.use('/api/request-types', requestTypeRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/requests', requestDocRouter);
@@ -88,6 +94,8 @@ app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/email-templates', emailTemplateRoutes);
 app.use('/api/students', interserviceRoutes);
 app.use('/api/students', studentEmailRoutes);
+app.use('/api/dean', deanDelegationRoutes);
+app.use('/api/change-requests', changeRequestRoutes);
 
 // Mock KKU endpoint — dev only
 if (process.env.NODE_ENV !== 'production') {

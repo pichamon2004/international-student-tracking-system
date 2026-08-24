@@ -2,13 +2,13 @@ import RoleNavbar from './RoleNavbar';
 import Container from '@/components/ui/Container';
 
 interface RoleLayoutProps {
-  role: 'student' | 'advisor' | 'staff';
+  role?: 'student' | 'advisor' | 'staff' | 'dean';
   children: React.ReactNode;
 }
 
 export default function RoleLayout({ role, children }: RoleLayoutProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-secondary flex flex-col">
+    <div className="relative h-screen overflow-hidden bg-secondary flex flex-col">
       <div className='absolute w-full h-[180px] 2xl:h-[190px] bg-primary rounded-bl-[100px]'></div>
 
       {/* Navbar */}
@@ -19,8 +19,8 @@ export default function RoleLayout({ role, children }: RoleLayoutProps) {
       </div>
 
       {/* Content */}
-      <main className="relative flex-1 p-6 overflow-auto mt-7 flex flex-col">
-        <Container className="flex-1 flex flex-col">{children}</Container>
+      <main className="relative flex-1 min-h-0 p-6 overflow-auto mt-7 flex flex-col">
+        <Container className="flex-1 min-h-0 flex flex-col">{children}</Container>
       </main>
 
       {/* Footer */}

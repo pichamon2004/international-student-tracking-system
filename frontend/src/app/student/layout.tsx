@@ -6,7 +6,7 @@ import RoleLayout from '@/components/layout/RoleLayout';
 import { studentMeApi } from '@/lib/api';
 
 // Pages that don't need the registration check
-const EXEMPT_PATHS = ['/student/register', '/student/pending'];
+const EXEMPT_PATHS = ['/student/pending'];
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -27,12 +27,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         const status = s.registrationStatus;
         const step = s.registrationStep;
 
-        if (status === 'PENDING_APPROVAL' && step === 0) {
-          // Staff created account, student hasn't started Phase 1
-          router.replace('/student/register');
-        } else if (status === 'PENDING_APPROVAL' && (step === 1 || step === 2)) {
-          // Waiting for staff approval
+        if (status === 'PENDING_APPROVAL') {
+          // Student submitted checklist — waiting for staff
           router.replace('/student/pending');
+        } else if (status === 'ACTIVE' && step === 1 && !pathname.startsWith('/student/profile')) {
+          // New student — redirect to to-do checklist
+          router.replace('/student/profile');
         } else {
           setChecked(true);
         }

@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine, RiAttachmentLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
-import { requestApi, type ApiRequest } from '@/lib/api';
+import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
@@ -29,6 +29,12 @@ export default function StaffRequestDetailPage() {
   const [showModal, setShowModal] = useState(false);
   const [req, setReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [deanName, setDeanName] = useState('');
+
+  useEffect(() => {
+    deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -41,8 +47,9 @@ export default function StaffRequestDetailPage() {
   async function updateStatus(status: string) {
     if (!req) return;
     try {
-      await requestApi.updateStatus(req.id, status);
-      setReq(prev => prev ? { ...prev, status } : prev);
+      const res = await requestApi.updateStatus(req.id, status, undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
+      setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
+      setAttachedFiles([]);
       toast.success('Status updated');
     } catch {
       toast.error('Failed to update status');
@@ -131,24 +138,52 @@ export default function StaffRequestDetailPage() {
             View Document
           </button>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col gap-2">
-            {req.status === 'PENDING' && (
-              <>
-                <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
-                <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
-              </>
-            )}
-            {req.status === 'ADVISOR_APPROVED' && (
-              <>
-                <Button variant="success" label="Approve"         onClick={() => updateStatus('STAFF_APPROVED')} />
-                <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
-              </>
-            )}
-            {req.status === 'STAFF_APPROVED' && (
-              <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus('FORWARDED_TO_DEAN')} />
-            )}
-          </div>
+          {/* Attach Files + Action Buttons */}
+          {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED') && (
+            <div className="flex flex-col gap-2">
+              {/* File attachment */}
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 w-full cursor-pointer px-3 py-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors">
+                  <RiAttachmentLine size={15} />
+                  Attach files
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={e => {
+                      setAttachedFiles(prev => [...prev, ...Array.from(e.target.files ?? [])]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {attachedFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {attachedFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-secondary rounded-lg px-3 py-1.5 text-xs text-primary">
+                        <span className="max-w-[130px] truncate">{file.name}</span>
+                        <button onClick={() => setAttachedFiles(prev => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500 transition-colors">
+                          <RiCloseLine size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {req.status === 'PENDING' && (
+                <>
+                  <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
+                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
+                </>
+              )}
+              {req.status === 'ADVISOR_APPROVED' && (
+                <>
+                  <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus('FORWARDED_TO_DEAN')} />
+                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* RIGHT: Request Details */}
@@ -276,7 +311,7 @@ export default function StaffRequestDetailPage() {
           const tplVars: string[] = (() => { try { return JSON.parse(t.variables ?? '[]'); } catch { return []; } })();
           const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
           const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
-          const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': 'Miss Kasama Orthong', '{{sig_dean}}': 'Assoc. Prof. Dr. Kanda Runapongsa Saikaew' };
+          const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
           const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
           const sigHtml = sigVars.length > 0
             ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
@@ -339,8 +374,8 @@ export default function StaffRequestDetailPage() {
                     const SIG_NAMES: Record<string, string> = {
                       '{{sig_student}}':  studentFullName,
                       '{{sig_advisor}}':  '',
-                      '{{sig_ir_staff}}': 'Miss Kasama Orthong',
-                      '{{sig_dean}}':     'Assoc. Prof. Dr. Kanda Runapongsa Saikaew',
+                      '{{sig_ir_staff}}': '',
+                      '{{sig_dean}}':     deanName,
                     };
                     const SIG_ROLES: Record<string, string> = {
                       '{{sig_student}}':  'Student',

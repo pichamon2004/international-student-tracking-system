@@ -3,10 +3,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
 import { useRouter } from 'next/navigation';
-import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine } from 'react-icons/ri';
+import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine, RiUploadLine } from 'react-icons/ri';
 import Button from '@/components/ui/Button';
 import { studentApi, type ApiStudent } from '@/lib/api';
 import CustomSelect from '@/components/ui/CustomSelect';
+import ImportModal from '@/components/ImportModal';
+
+const STUDENT_COLUMNS = [
+  { key: 'titleEn',      label: 'Prefix',      required: false, example: 'Mr.' },
+  { key: 'firstNameEn',  label: 'First Name',  required: true,  example: 'Jane' },
+  { key: 'middleNameEn', label: 'Middle Name', required: false, example: '' },
+  { key: 'lastNameEn',   label: 'Last Name',   required: true,  example: 'Doe' },
+  { key: 'email',        label: 'Gmail',       required: true,  example: 'student@gmail.com' },
+  { key: 'studentId',    label: 'Student ID',  required: false, example: '6630400012' },
+  { key: 'nationality',  label: 'Country',     required: false, example: 'Thai' },
+  { key: 'program',      label: 'Program',     required: false, example: 'Computer Science' },
+  { key: 'level',        label: 'Degree',      required: false, example: 'MASTER' },
+  { key: 'dateOfBirth',  label: 'Birth Date',  required: false, example: '2000-01-31' },
+];
 
 const LEVEL_LABELS: Record<string, string> = { BACHELOR: "Bachelor's", MASTER: "Master's", PHD: 'Ph.D.' };
 
@@ -14,14 +28,11 @@ const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Inactive'] as const;
 type StatusFilter = typeof STATUS_FILTERS[number];
 
 function registrationLabel(status: string, step: number): { label: string; cls: string } {
-  if (status === 'ACTIVE') return { label: 'Active', cls: 'bg-green-100 text-green-700' };
-  if (status === 'PENDING_APPROVAL') {
-    if (step === 0) return { label: 'Awaiting Phase 1', cls: 'bg-gray-100 text-gray-600' };
-    if (step === 1) return { label: 'Phase 1 Review',   cls: 'bg-yellow-100 text-yellow-700' };
-    if (step === 2) return { label: 'Phase 2 Review',   cls: 'bg-blue-100 text-blue-700' };
-  }
-  if (status === 'REJECTED')  return { label: 'Rejected',  cls: 'bg-red-100 text-red-500' };
-  if (status === 'SUSPENDED') return { label: 'Suspended', cls: 'bg-orange-100 text-orange-600' };
+  if (status === 'ACTIVE' && step === 1) return { label: 'Pending Setup',  cls: 'bg-sky-50 text-sky-600' };
+  if (status === 'ACTIVE')               return { label: 'Active',         cls: 'bg-green-100 text-green-700' };
+  if (status === 'PENDING_APPROVAL')     return { label: 'Pending Review', cls: 'bg-blue-100 text-blue-700' };
+  if (status === 'REJECTED')             return { label: 'Rejected',       cls: 'bg-red-100 text-red-500' };
+  if (status === 'SUSPENDED')            return { label: 'Suspended',      cls: 'bg-orange-100 text-orange-600' };
   return { label: status, cls: 'bg-gray-100 text-gray-500' };
 }
 
@@ -40,6 +51,10 @@ interface AddStudentFormData {
   firstNameEn: string;
   middleNameEn: string;
   lastNameEn: string;
+  nationality: string;
+  program: string;
+  level: string;
+  dateOfBirth: string;
 }
 
 const inputCls = (err?: string) =>
@@ -47,9 +62,16 @@ const inputCls = (err?: string) =>
     err ? 'border-red-400' : 'border-gray-200');
 const labelCls = 'text-xs font-semibold text-primary/60 uppercase tracking-wide';
 
+const DEGREE_OPTIONS = [
+  { value: 'BACHELOR', label: "Bachelor's" },
+  { value: 'MASTER',   label: "Master's" },
+  { value: 'PHD',      label: 'Ph.D.' },
+];
+
 function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data: AddStudentFormData) => void }) {
   const [form, setForm] = useState<AddStudentFormData>({
     titleEn: '', email: '', studentId: '', firstNameEn: '', middleNameEn: '', lastNameEn: '',
+    nationality: '', program: '', level: '', dateOfBirth: '',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof AddStudentFormData, string>>>({});
 
@@ -78,7 +100,7 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -93,7 +115,7 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
         </div>
 
         {/* Body */}
-        <div className="p-6 flex flex-col gap-4">
+        <div className="p-6 flex flex-col gap-4 overflow-y-auto">
           <p className="text-sm text-gray-500">
             Pre-register a student account. They will log in and complete their profile in Phase 1 &amp; 2.
           </p>
@@ -121,6 +143,26 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
 
           {/* Student ID */}
           {field('studentId', 'Student ID', 'e.g. 673040001-2')}
+
+          {/* Country + Birth Date */}
+          <div className="grid grid-cols-2 gap-3">
+            {field('nationality', 'Country', 'e.g. Thai', 'text', false)}
+            {field('dateOfBirth', 'Birth Date', '', 'date', false)}
+          </div>
+
+          {/* Program */}
+          {field('program', 'Program', 'e.g. Computer Science', 'text', false)}
+
+          {/* Degree */}
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Degree</label>
+            <CustomSelect
+              value={form.level}
+              onChange={(val) => setForm(f => ({ ...f, level: val }))}
+              options={DEGREE_OPTIONS}
+              placeholder="— Select degree —"
+            />
+          </div>
         </div>
 
         {/* Footer */}
@@ -140,6 +182,7 @@ export default function StaffStudentPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('All');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
 
   const loadStudents = useCallback(async () => {
@@ -184,6 +227,10 @@ export default function StaffStudentPage() {
         firstNameEn: data.firstNameEn,
         middleNameEn: data.middleNameEn || undefined,
         lastNameEn: data.lastNameEn,
+        nationality: data.nationality || undefined,
+        program: data.program || undefined,
+        level: data.level || undefined,
+        dateOfBirth: data.dateOfBirth || undefined,
       });
       setShowAddModal(false);
       loadStudents();
@@ -198,13 +245,22 @@ export default function StaffStudentPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <p className="text-2xl font-semibold text-primary">Student Management</p>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
-        >
-          <RiAddLine size={16} />
-          Student
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
+          >
+            <RiUploadLine size={16} />
+            Import Excel
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
+          >
+            <RiAddLine size={16} />
+            Student
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -288,6 +344,17 @@ export default function StaffStudentPage() {
       {/* Add Student Modal */}
       {showAddModal && (
         <AddStudentModal onClose={() => setShowAddModal(false)} onAdd={handleAdd} />
+      )}
+
+      {showImportModal && (
+        <ImportModal
+          title="Import Students from Excel"
+          columns={STUDENT_COLUMNS}
+          importEndpoint="/students/import"
+          templateFileName="student_template.xlsx"
+          onClose={() => setShowImportModal(false)}
+          onDone={loadStudents}
+        />
       )}
     </div>
   );

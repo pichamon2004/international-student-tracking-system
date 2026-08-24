@@ -5,20 +5,20 @@ import { useParams, useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { requestApi, type ApiRequest } from '@/lib/api';
+import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  PENDING:              { label: 'Pending',  className: 'bg-yellow-100 text-yellow-700' },
-  FORWARDED_TO_ADVISOR: { label: 'Pending',  className: 'bg-yellow-100 text-yellow-700' },
-  ADVISOR_APPROVED:     { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  ADVISOR_REJECTED:     { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  STAFF_APPROVED:       { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  STAFF_REJECTED:       { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  FORWARDED_TO_DEAN:    { label: 'Approved', className: 'bg-green-100 text-green-700' },
-  DEAN_APPROVED:        { label: 'Completed', className: 'bg-green-100 text-green-700' },
-  DEAN_REJECTED:        { label: 'Rejected', className: 'bg-red-100 text-red-600' },
-  CANCELLED:            { label: 'Cancelled', className: 'bg-gray-100 text-gray-500' },
+  PENDING:              { label: 'Pending',        className: 'bg-yellow-100 text-yellow-700' },
+  FORWARDED_TO_ADVISOR: { label: 'Pending',        className: 'bg-yellow-100 text-yellow-700' },
+  ADVISOR_APPROVED:     { label: 'Approved',       className: 'bg-green-100 text-green-700' },
+  ADVISOR_REJECTED:     { label: 'Rejected',       className: 'bg-red-100 text-red-600' },
+  STAFF_APPROVED:       { label: 'Approved',       className: 'bg-green-100 text-green-700' },
+  STAFF_REJECTED:       { label: 'Rejected',       className: 'bg-red-100 text-red-600' },
+  FORWARDED_TO_DEAN:    { label: 'Pending (Dean)', className: 'bg-purple-100 text-purple-700' },
+  DEAN_APPROVED:        { label: 'Completed',      className: 'bg-green-100 text-green-700' },
+  DEAN_REJECTED:        { label: 'Rejected',       className: 'bg-red-100 text-red-600' },
+  CANCELLED:            { label: 'Cancelled',      className: 'bg-gray-100 text-gray-500' },
 };
 
 export default function RequestDetailPage() {
@@ -26,6 +26,7 @@ export default function RequestDetailPage() {
   const router = useRouter();
   const [req, setReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deanName, setDeanName] = useState('');
 
   const [comment, setComment] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -34,9 +35,15 @@ export default function RequestDetailPage() {
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
+    deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!params?.id) return;
     requestApi.getById(Number(params.id))
-      .then(res => setReq(res.data.data))
+      .then(reqRes => {
+        setReq(reqRes.data.data);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [params?.id]);
@@ -105,6 +112,7 @@ export default function RequestDetailPage() {
 
   const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
   const isPending = req.status === 'FORWARDED_TO_ADVISOR';
+  const isActionable = isPending;
   const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
 
   return (
@@ -124,9 +132,9 @@ export default function RequestDetailPage() {
 
       {/* Success Banner */}
       {actionDone && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${req.status === 'ADVISOR_APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${['ADVISOR_APPROVED','DEAN_APPROVED'].includes(req.status) ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
           <RiCheckLine size={16} />
-          {req.status === 'ADVISOR_APPROVED' ? 'คำร้องได้รับการอนุมัติเรียบร้อยแล้ว' : 'คำร้องถูกปฏิเสธเรียบร้อยแล้ว'}
+          {['ADVISOR_APPROVED','DEAN_APPROVED'].includes(req.status) ? 'คำร้องได้รับการอนุมัติเรียบร้อยแล้ว' : 'คำร้องถูกปฏิเสธเรียบร้อยแล้ว'}
         </div>
       )}
 
@@ -199,8 +207,10 @@ export default function RequestDetailPage() {
           {/* Advisor Response */}
           <div className="border border-gray-100 rounded-2xl p-5 flex flex-col gap-4 mt-auto">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-primary/50 uppercase tracking-wide">Advisor Response</p>
-              {!isPending && (
+              <p className="text-sm font-semibold text-primary/50 uppercase tracking-wide">
+                Advisor Response
+              </p>
+              {!isActionable && (
                 <span className="text-xs text-gray-400 italic">This request has already been processed.</span>
               )}
             </div>
@@ -209,7 +219,7 @@ export default function RequestDetailPage() {
               <textarea
                 value={comment}
                 onChange={e => { setComment(e.target.value); setShowRejectError(false); }}
-                disabled={!isPending}
+                disabled={!isActionable}
                 placeholder="Enter your comment here..."
                 rows={3}
                 className={`w-full border rounded-xl px-4 py-3 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors resize-none disabled:opacity-40 disabled:cursor-not-allowed ${showRejectError ? 'border-red-400' : 'border-gray-200'}`}
@@ -241,11 +251,15 @@ export default function RequestDetailPage() {
                   )}
                 </div>
               )}
-              {!isPending && <div />}
+              {!isActionable && <div />}
 
               <div className="flex items-center gap-3 shrink-0">
-                <Button variant="danger"  label="Reject"  disabled={!isPending} onClick={handleReject} />
-                <Button variant="success" label="Approve" disabled={!isPending} onClick={handleApprove} />
+                {isPending && (
+                  <>
+                    <Button variant="danger"  label="Reject"  onClick={handleReject} />
+                    <Button variant="success" label="Approve" onClick={handleApprove} />
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -305,7 +319,7 @@ export default function RequestDetailPage() {
           const tplVars: string[] = (() => { try { return JSON.parse(t.variables ?? '[]'); } catch { return []; } })();
           const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
           const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
-          const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': '' };
+          const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
           const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
           const sigHtml = sigVars.length > 0
             ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
@@ -333,7 +347,7 @@ export default function RequestDetailPage() {
                   const tplVars: string[] = (() => { try { return JSON.parse(tpl.variables ?? '[]'); } catch { return []; } })();
                   const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
                   const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
-                  const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': '' };
+                  const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
                   const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
                   return (
                     <div key={tpl.id} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>

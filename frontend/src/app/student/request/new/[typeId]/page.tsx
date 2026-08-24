@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import {
@@ -13,7 +13,8 @@ import {
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi, studentMeApi, advisorApi, userApi } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi } from '@/lib/api';
+import toast from 'react-hot-toast';
 import DateSelect from '@/components/ui/DateSelect';
 
 /* ─── Variable labels ────────────────────────────────────────── */
@@ -801,19 +802,16 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const [requiredDocs, setRequiredDocs] = useState<DocTemplate[]>([]);
   const [profile, setProfile] = useState<StudentProfile>(EMPTY_PROFILE);
   const [studentDbId, setStudentDbId] = useState<number>(0);
-  const [deanName, setDeanName] = useState<string>('');
   const [irStaffName, setIrStaffName] = useState<string>('');
+  const [deanName, setDeanName] = useState<string>('');
 
   useEffect(() => {
-    Promise.all([
-      advisorApi.getDean(),
-      userApi.getIRStaff(),
-    ]).then(([deanRes, staffRes]) => {
-      const d = deanRes.data.data;
-      if (d) setDeanName([d.titleEn, d.firstNameEn, d.lastNameEn].filter(Boolean).join(' '));
-      const s = staffRes.data.data;
-      if (s) setIrStaffName(s.name);
-    }).catch(() => {});
+    userApi.getIRStaff()
+      .then(res => { const s = res.data.data; if (s) setIrStaffName(s.name); })
+      .catch(() => {});
+    deanApi.getSignatory()
+      .then(res => setDeanName(res.data.data.name))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -885,11 +883,12 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
         description: '',
         formData: {},
       });
+      setDone(true);
     } catch (e) {
       console.error('Failed to submit request:', e);
+      toast.error('Failed to submit request. Please try again.');
     } finally {
       setSubmitting(false);
-      setDone(true);
     }
   };
 
@@ -935,7 +934,8 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
         )}
       </div>
 
-      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} deanName={deanName} irStaffName={irStaffName} />
+
+      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} irStaffName={irStaffName} deanName={deanName} />
 
       {submitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">

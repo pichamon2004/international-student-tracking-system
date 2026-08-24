@@ -9,6 +9,13 @@ import {
   RiUser3Line,
   RiNotification3Line,
   RiSettings3Line,
+  RiShieldKeyholeLine,
+  RiFileListLine,
+  RiTeamLine,
+  RiGraduationCapLine,
+  RiBriefcaseLine,
+  RiCheckLine,
+  RiArrowLeftRightLine,
 } from 'react-icons/ri';
 import { IconType } from 'react-icons';
 import { clsx } from 'clsx';
@@ -34,25 +41,79 @@ const navConfig: Record<string, NavItem[]> = {
     { href: '/advisor/request', label: 'Request Management', icon: TbClipboardList },
     { href: '/advisor/students', label: 'Student Management', icon: BsPeopleFill },
   ],
+  dean: [
+    { href: '/dean/dashboard', label: 'Dashboard',          icon: AiFillPieChart },
+    { href: '/dean/request',   label: 'Request Management', icon: TbClipboardList },
+  ],
   staff: [
-    { href: '/staff/dashboard',    label: 'Dashboard',          icon: AiFillPieChart },
-    { href: '/staff/advisors',     label: 'Teacher Management', icon: RiUserStarLine },
-    { href: '/staff/request',      label: 'Request Management', icon: TbClipboardList },
-    { href: '/staff/students',     label: 'Student Management', icon: BsPeopleFill },
-    { href: '/staff/notification', label: 'Notification',       icon: RiNotification3Line },
-    { href: '/staff/settings',     label: 'Settings',           icon: RiSettings3Line },
+    { href: '/staff/dashboard',        label: 'Dashboard',          icon: AiFillPieChart },
+    { href: '/staff/advisors',         label: 'Teacher Management', icon: RiUserStarLine },
+    { href: '/staff/request',          label: 'Request Management', icon: TbClipboardList },
+    { href: '/staff/students',         label: 'Student Management', icon: BsPeopleFill },
+    { href: '/staff/change-requests',  label: 'Change Requests',    icon: RiCheckLine },
+    { href: '/staff/notification',     label: 'Notification',       icon: RiNotification3Line },
+    { href: '/staff/settings',         label: 'Settings',           icon: RiSettings3Line },
   ],
 };
 
 interface RoleNavbarProps {
-  role: 'student' | 'advisor' | 'staff';
+  role?: 'student' | 'advisor' | 'staff' | 'dean';
 }
 
 export default function RoleNavbar({ role }: RoleNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, user, token, fetchMe } = useAuthStore();
-  const items = navConfig[role];
+  const { logout, user, token, fetchMe, activeRole, hasPermission, roles, selectRole, fetchRoles } = useAuthStore();
+
+  const ROLE_ICONS: Record<string, IconType> = {
+    STUDENT: RiGraduationCapLine,
+    ADVISOR: RiUserStarLine,
+    STAFF:   RiBriefcaseLine,
+    ADMIN:   RiShieldKeyholeLine,
+    DEAN:    RiShieldKeyholeLine,
+  };
+
+  const ROLE_DASHBOARD: Record<string, string> = {
+    STUDENT: '/student/dashboard',
+    ADVISOR: '/advisor/dashboard',
+    STAFF:   '/staff/dashboard',
+    ADMIN:   '/staff/dashboard',
+    DEAN:    '/dean/dashboard',
+  };
+
+  const switchRole = async (roleId: number, roleCode: string) => {
+    if (roleCode === activeRole) return;
+    try {
+      await selectRole(roleId);
+      setOpen(false);
+      router.replace(ROLE_DASHBOARD[roleCode] ?? '/staff/dashboard');
+    } catch { /* ignore */ }
+  };
+
+  const resolvedRole: 'student' | 'advisor' | 'staff' | 'dean' =
+    role ?? (activeRole === 'STUDENT' ? 'student' : activeRole === 'ADVISOR' ? 'advisor' : activeRole === 'DEAN' ? 'dean' : 'staff');
+
+  const baseItems = navConfig[resolvedRole];
+  const adminItems = [
+    { href: '/manage/roles',   label: 'Roles & Permissions', icon: RiShieldKeyholeLine },
+    { href: '/manage/modules', label: 'Modules',             icon: RiSettings3Line },
+    ...(hasPermission('USER_MANAGEMENT.view')
+      ? [{ href: '/manage/users',      label: 'Users',      icon: RiTeamLine }]
+      : []),
+    ...(hasPermission('AUDIT_LOG.view')
+      ? [{ href: '/manage/audit-logs', label: 'Audit Log',  icon: RiFileListLine }]
+      : []),
+  ];
+  const staffItems = [
+    ...baseItems,
+    ...(hasPermission('USER_MANAGEMENT.view')
+      ? [{ href: '/manage/users',      label: 'Users',      icon: RiTeamLine }]
+      : []),
+    ...(hasPermission('AUDIT_LOG.view')
+      ? [{ href: '/manage/audit-logs', label: 'Audit Log',  icon: RiFileListLine }]
+      : []),
+  ];
+  const items = activeRole === 'ADMIN' ? adminItems : staffItems;
 
   useEffect(() => {
     if (token && !user) {
@@ -61,7 +122,7 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   }, [token, user, fetchMe]);
 
   const displayName = user?.name ?? '';
-  const displayRole = user?.role ? user.role.charAt(0) + user.role.slice(1).toLowerCase() : role;
+  const displayRole = activeRole ? activeRole.charAt(0) + activeRole.slice(1).toLowerCase() : resolvedRole;
   const initials = displayName
     .split(' ')
     .map((w) => w[0])
@@ -80,6 +141,11 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
 
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Refresh roles list every time dropdown opens so newly assigned roles appear immediately
+  useEffect(() => {
+    if (open && token) fetchRoles();
+  }, [open]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -168,6 +234,38 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
               <RiUser3Line size={16} />
               Profile
             </button>
+
+            {/* Switch role — show only when user has more than 1 role */}
+            {roles.length > 1 && (
+              <>
+                <hr className="my-1 border-gray-100" />
+                <div className="px-4 pt-1.5 pb-1 flex items-center gap-1.5">
+                  <RiArrowLeftRightLine size={12} className="text-gray-400" />
+                  <p className="text-xs font-medium text-gray-400">เปลี่ยนบทบาท</p>
+                </div>
+                {roles.map(r => {
+                  const Icon      = ROLE_ICONS[r.code] ?? RiUser3Line;
+                  const isCurrent = r.code === activeRole;
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => switchRole(r.id, r.code)}
+                      disabled={isCurrent}
+                      className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm transition-colors ${
+                        isCurrent
+                          ? 'text-primary bg-primary/5 cursor-default'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon size={15} />
+                      <span className="flex-1 text-left">{r.name}</span>
+                      {isCurrent && <RiCheckLine size={14} className="text-primary" />}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
             <hr className="my-1 border-gray-100" />
             <button
               onClick={() => { logout(); router.push('/login'); }}

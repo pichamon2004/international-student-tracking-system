@@ -259,7 +259,7 @@ export default function PersonalPage() {
               }
 
               const genderMap: Record<string, string> = { Male: 'MALE', Female: 'FEMALE', Other: 'OTHER' };
-              await studentApi.update(studentId, {
+              const res = await studentApi.update(studentId, {
                 titleEn:          form.prefix || undefined,
                 firstNameEn:      form.firstName || undefined,
                 middleNameEn:     form.middleName || undefined,
@@ -280,8 +280,12 @@ export default function PersonalPage() {
                 emergencyPhone:   ecForm.ecPhone || undefined,
                 emergencyRelation: ecForm.ecRelationship || undefined,
               });
-              setProgressField('personalInfoCompleted', true);
-              toast.success('Personal information saved');
+              if (res.status === 202) {
+                toast.success('Change submitted — awaiting staff approval');
+              } else {
+                setProgressField('personalInfoCompleted', true);
+                toast.success('Personal information saved');
+              }
               router.back();
             } catch (err: unknown) {
               const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;

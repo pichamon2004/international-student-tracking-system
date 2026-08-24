@@ -38,9 +38,6 @@ function getPublicUrl(): string {
   return (process.env.R2_PUBLIC_URL ?? '').replace(/\/$/, '');
 }
 
-/**
- * Upload a file buffer to R2.
- */
 export async function uploadToR2(
   buffer: Buffer,
   originalName: string,
@@ -63,25 +60,16 @@ export async function uploadToR2(
   return { url, key };
 }
 
-/**
- * Delete a file from R2 by its key.
- */
 export async function deleteFromR2(key: string): Promise<void> {
   await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: key }));
 }
 
-/**
- * Extract the R2 object key from a stored URL.
- */
 export function keyFromUrl(url: string): string {
   const publicUrl = getPublicUrl();
   if (!publicUrl || !url.startsWith(publicUrl)) return url;
   return url.slice(publicUrl.length + 1);
 }
 
-/**
- * Generate a short-lived signed URL for a private object.
- */
 export async function getPresignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {
   return getSignedUrl(
     getS3(),

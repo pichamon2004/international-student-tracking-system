@@ -9,36 +9,63 @@ import { FaIdCard, FaPassport } from 'react-icons/fa6';
 import { RiHealthBookFill } from 'react-icons/ri';
 import { studentMeApi, requestApi, type ApiRequest } from '@/lib/api';
 
-const STEPS = ['Submitted', 'In Review', 'Approved', 'Processing', 'Completed'];
+const STEPS = ['Submitted', 'At Advisor', 'Advisor OK', 'At Dean', 'Completed'];
 
 function daysRemaining(expiryDate: string): number {
   return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000);
 }
 
-function statusToStep(status: string): number {
-  switch (status) {
-    case 'PENDING':               return 0;
-    case 'FORWARDED_TO_ADVISOR':  return 1;
-    case 'ADVISOR_APPROVED':      return 2;
-    case 'STAFF_APPROVED':        return 3;
-    case 'COMPLETED':             return 4;
-    default:                      return 0;
+type DotState = 'done' | 'active' | 'rejected' | 'idle';
+
+function statusToDots(status: string): DotState[] {
+  // rejected states — mark the step that was rejected
+  const REJECTED: Record<string, number> = {
+    ADVISOR_REJECTED: 1,
+    STAFF_REJECTED:   2,
+    DEAN_REJECTED:    3,
+    CANCELLED:        0,
+  };
+  if (status in REJECTED) {
+    const rejectAt = REJECTED[status];
+    return STEPS.map((_, i) =>
+      i < rejectAt ? 'done' : i === rejectAt ? 'rejected' : 'idle'
+    );
   }
+
+  const STEP_INDEX: Record<string, number> = {
+    PENDING:               0,
+    FORWARDED_TO_ADVISOR:  1,
+    ADVISOR_APPROVED:      2,
+    STAFF_APPROVED:        2,
+    FORWARDED_TO_DEAN:     3,
+    DEAN_APPROVED:         4,
+  };
+  const idx = STEP_INDEX[status] ?? 0;
+  const isComplete = status === 'DEAN_APPROVED' || status === 'STAFF_APPROVED';
+
+  return STEPS.map((_, i) => {
+    if (isComplete) return 'done';
+    if (i < idx)    return 'done';
+    if (i === idx)  return 'active';
+    return 'idle';
+  });
 }
 
-function StepDots({ step }: { step: number }) {
+function StepDots({ status }: { status: string }) {
+  const dots = statusToDots(status);
   return (
     <div className="flex items-center gap-1">
       {STEPS.map((label, i) => (
         <div key={label} className="flex items-center gap-1">
           <div className={clsx(
             'w-5 h-5 rounded-full border-2',
-            i < step  ? 'bg-green-400 border-green-400' :
-            i === step ? 'bg-yellow-400 border-yellow-400' :
-                         'bg-white border-gray-300'
+            dots[i] === 'done'     ? 'bg-green-400 border-green-400' :
+            dots[i] === 'active'   ? 'bg-yellow-400 border-yellow-400' :
+            dots[i] === 'rejected' ? 'bg-red-400 border-red-400' :
+                                     'bg-white border-gray-300'
           )} />
           {i < STEPS.length - 1 && (
-            <div className={clsx('w-4 h-0.5', i < step ? 'bg-green-400' : 'bg-gray-300')} />
+            <div className={clsx('w-4 h-0.5', dots[i] === 'done' ? 'bg-green-400' : 'bg-gray-300')} />
           )}
         </div>
       ))}
@@ -153,7 +180,6 @@ export default function StudentDashboardPage() {
             <p className="text-sm text-gray-400 text-center">There are no requests at this time.</p>
           )}
           {latestRequests.map((req) => {
-            const step = statusToStep(req.status);
             const startDate = new Date(req.createdAt).toLocaleDateString();
             const updateDate = new Date(req.updatedAt).toLocaleDateString();
             return (
@@ -162,7 +188,7 @@ export default function StudentDashboardPage() {
                   <div className="flex flex-col">
                     <p className="text-lg font-semibold text-primary">{req.title}</p>
                   </div>
-                  <StepDots step={step} />
+                  <StepDots status={req.status} />
                 </div>
                 <div className="flex justify-between">
                   <div>

@@ -1,3 +1,6 @@
+
+
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,12 +13,6 @@ datasource db {
 // ─────────────────────────────────────────────────────
 // ENUMS
 // ─────────────────────────────────────────────────────
-
-enum Role {
-  STUDENT
-  ADVISOR
-  STAFF
-}
 
 enum Gender {
   MALE
@@ -93,15 +90,19 @@ model User {
   name      String
   phone     String?
   image     String?
-  role      Role?
+  role      String?  // legacy field — ใช้ระหว่าง migration เท่านั้น จะ drop หลัง migrate เสร็จ
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student       Student?
-  advisor       Advisor?
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  student                  Student?
+  advisor                  Advisor?
+  auditLogs                AuditLog[]
+  notifications            Notification[]
+  userRoles                UserRole[]
+  deanDelegationAsDean     DeanDelegation?  @relation("DeanDelegation_dean")
+  deanDelegationAsDelegate DeanDelegation[] @relation("DeanDelegation_delegate")
+  changeRequestsReviewed   ChangeRequest[]  @relation("ChangeRequest_reviewer")
 
   @@map("users")
 }
@@ -171,6 +172,7 @@ model Student {
   interserviceChecks InterserviceCheck[]
   generatedDocuments GeneratedDocument[]
   academicDocuments  AcademicDocument[]
+  changeRequests     ChangeRequest[]
 
   @@map("students")
 }
@@ -187,14 +189,12 @@ model Advisor {
   lastNameEn  String?
   nationality String?
   phone       String?
-  faculty     String?
 
   workPermitNumber  String?
   workPermitIssue   DateTime?
   workPermitExpiry  DateTime?
   workPermitFileUrl String?
 
-  isDean    Boolean  @default(false)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -479,6 +479,21 @@ model EmailTemplate {
 }
 
 // ─────────────────────────────────────────────────────
+// TEMPLATE VARIABLES
+// ─────────────────────────────────────────────────────
+
+model TemplateVariable {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  label       String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("template_variables")
+}
+
+// ─────────────────────────────────────────────────────
 // VISA RENEWAL & KKU INTERSERVICE
 // ─────────────────────────────────────────────────────
 
@@ -532,6 +547,24 @@ model Notification {
 }
 
 // ─────────────────────────────────────────────────────
+// DEAN DELEGATION
+// ─────────────────────────────────────────────────────
+
+model DeanDelegation {
+  id         Int      @id @default(autoincrement())
+  deanId     Int      @unique
+  delegateId Int
+  isActive   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  dean     User @relation("DeanDelegation_dean",     fields: [deanId],     references: [id])
+  delegate User @relation("DeanDelegation_delegate", fields: [delegateId], references: [id])
+
+  @@map("dean_delegations")
+}
+
+// ─────────────────────────────────────────────────────
 // AUDIT LOG
 // ─────────────────────────────────────────────────────
 
@@ -550,4 +583,94 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────
+// ROLE_MANAGEMENT
+// ─────────────────────────────────────────────────────
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  code        String           @unique   // "STUDENT", "ADVISOR", "STAFF", "SUB_STAFF"
+  name        String                     // ชื่อแสดงผล เช่น "เจ้าหน้าที่"
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  userRoles   UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Module {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique   // "STUDENT_MANAGEMENT"
+  name        String                 // "จัดการนักศึกษา"
+  parentId    Int?                   // สำหรับ sub-module (level 2)
+  level       Int          @default(1)
+  sortOrder   Int?
+  permissions Permission[]
+
+  @@map("modules")
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  moduleId    Int
+  method      String           // "view" | "create" | "edit" | "delete"
+  code        String           @unique   // "STUDENT_MANAGEMENT.view"
+  description String?
+  module      Module           @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  roles       RolePermission[]
+
+  @@unique([moduleId, method])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           Int        @id @default(autoincrement())
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────────────
+// CHANGE REQUEST (student data edits pending staff approval)
+// ─────────────────────────────────────────────────────
+
+model ChangeRequest {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  entityType  String    // STUDENT_PROFILE | DEPENDENT | PASSPORT | VISA | HEALTH_INSURANCE | ACADEMIC_DOCUMENT
+  entityId    Int?      // null for CREATE actions
+  action      String    // CREATE | UPDATE | DELETE
+  payload     Json
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  reviewedBy  Int?
+  reviewNote  String?   @db.Text
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  reviewer  User?   @relation("ChangeRequest_reviewer", fields: [reviewedBy], references: [id])
+
+  @@map("change_requests")
 }

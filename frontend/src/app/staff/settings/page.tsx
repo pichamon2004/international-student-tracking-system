@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { IconType } from 'react-icons';
-import { templateApi, requestTypeApi, emailTemplateApi, type ApiRequestType } from '@/lib/api';
+import { templateApi, requestTypeApi, emailTemplateApi, templateVariableApi, type ApiRequestType, type ApiTemplateVariable } from '@/lib/api';
 import { clsx } from 'clsx';
-import DocTemplateModal, { DocTemplate, ALL_VARIABLES } from '@/components/DocTemplateModal';
+import DocTemplateModal, { DocTemplate } from '@/components/DocTemplateModal';
 import EmailTemplateModal, { EmailTemplate } from '@/components/EmailTemplateModal';
+import TemplateVariableModal from '@/components/TemplateVariableModal';
 import {
   RiEditLine, RiDeleteBinLine, RiFileTextLine, RiMailLine, RiAddLine, RiClipboardLine,
   RiCheckLine, RiCloseLine, RiGridLine,
@@ -18,8 +19,8 @@ import {
   RiHeartPulseLine, RiBookOpenLine, RiCalendarLine, RiExchangeLine,
 } from 'react-icons/ri';
 
-type Tab = 'Document Templates' | 'Email Templates' | 'Request Types';
-const TABS: Tab[] = ['Document Templates', 'Email Templates', 'Request Types'];
+type Tab = 'Document Templates' | 'Email Templates' | 'Request Types' | 'Variables';
+const TABS: Tab[] = ['Document Templates', 'Email Templates', 'Request Types', 'Variables'];
 
 const EMAIL_VARIABLES = [
   '{{student_name}}', '{{student_id}}', '{{email}}',
@@ -668,6 +669,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('Document Templates');
   const [docTemplates, setDocTemplates] = useState<DocTemplate[]>([]);
   const [requestTypes, setRequestTypes] = useState<RequestType[]>([]);
+  const [allVars, setAllVars] = useState<ApiTemplateVariable[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<null | 'create' | DocTemplate>(null);
   const [deleteTarget, setDeleteTarget] = useState<DocTemplate | null>(null);
@@ -675,12 +677,14 @@ export default function SettingsPage() {
   // Load all data from API
   const loadData = useCallback(async () => {
     try {
-      const [tmplRes, rtRes] = await Promise.all([
+      const [tmplRes, rtRes, varRes] = await Promise.all([
         templateApi.getAll(),
         requestTypeApi.getAll(),
+        templateVariableApi.getAll(),
       ]);
       setDocTemplates(tmplRes.data.data.map(apiToDocTemplate));
       setRequestTypes(rtRes.data.data.map(apiToRequestType));
+      setAllVars(varRes.data.data);
     } catch (e) {
       console.error('Failed to load settings data:', e);
       // Fallback to initial mock data if API unavailable
@@ -768,6 +772,7 @@ export default function SettingsPage() {
             {activeTab === 'Document Templates' && (
               <DocTemplatesTabControlled
                 templates={docTemplates}
+                allVariables={allVars}
                 modal={modal}
                 deleteTarget={deleteTarget}
                 onOpenCreate={() => setModal('create')}
@@ -788,6 +793,9 @@ export default function SettingsPage() {
                 onRefresh={loadData}
               />
             )}
+            {activeTab === 'Variables' && (
+              <VariablesTab vars={allVars} onRefresh={loadData} />
+            )}
           </>
         )}
       </div>
@@ -795,9 +803,127 @@ export default function SettingsPage() {
   );
 }
 
+/* ─── Variables Tab ─────────────────────────────────────────── */
+function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefresh: () => void }) {
+  const [search, setSearch] = useState('');
+  const [modal, setModal] = useState<null | 'create' | ApiTemplateVariable>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiTemplateVariable | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const filtered = vars.filter(v =>
+    v.key.toLowerCase().includes(search.toLowerCase()) ||
+    v.label.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSave = async (data: { id?: number; key: string; label: string; description?: string }) => {
+    setSaving(true);
+    try {
+      if (!data.id) {
+        await templateVariableApi.create({ key: data.key, label: data.label, description: data.description });
+      } else {
+        await templateVariableApi.update(data.id, { label: data.label, description: data.description });
+      }
+      await onRefresh();
+    } catch (e) { console.error(e); }
+    setSaving(false);
+    setModal(null);
+  };
+
+  const handleDelete = async (v: ApiTemplateVariable) => {
+    try {
+      await templateVariableApi.delete(v.id);
+      await onRefresh();
+    } catch (e) { console.error(e); }
+    setDeleteTarget(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Guide */}
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-5 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-primary">ตัวแปร (Variables) คืออะไร?</p>
+        <p className="text-xs text-gray-600 leading-relaxed">
+          ตัวแปรคือ placeholder ใน template เอกสาร เช่น <code className="bg-white border border-gray-200 rounded px-1 text-primary font-mono">{'{{student_name}}'}</code> จะถูกแทนด้วยชื่อนักศึกษาโดยอัตโนมัติ
+          หรือ <code className="bg-white border border-gray-200 rounded px-1 text-amber-600 font-mono">{'{{scholarship_amount}}'}</code> ที่สร้างเอง จะให้ผู้ยื่นคำร้องกรอกค่าตอน submit
+        </p>
+        <div className="text-xs text-gray-500 flex flex-col gap-1">
+          <p className="font-semibold text-gray-600">วิธีสร้างตัวแปร:</p>
+          <ol className="list-decimal list-inside space-y-0.5 ml-1">
+            <li>คลิก <strong>+ New Variable</strong></li>
+            <li>กำหนด Key (lowercase เช่น <span className="font-mono">scholarship_amount</span>)</li>
+            <li>กำหนด Label (ชื่อแสดงผล เช่น Scholarship Amount)</li>
+            <li>นำ <span className="font-mono">{'{{'}<span className="italic">key</span>{'}}'}</span> ไปแทรกใน Template editor</li>
+          </ol>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search key or label…" value={search} onChange={e => setSearch(e.target.value)}
+            className="bg-transparent text-sm text-primary placeholder-gray-400 outline-none w-full" />
+        </div>
+        <button onClick={() => setModal('create')} disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition-all shadow-sm whitespace-nowrap">
+          <RiAddLine size={16} /> New Variable
+        </button>
+      </div>
+
+      {/* List */}
+      {filtered.length === 0 ? (
+        <div className="py-16 text-center text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-2xl">
+          {search ? 'No variables match your search.' : 'No variables yet. Click + New Variable to create one.'}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filtered.map(v => (
+            <div key={v.id} className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
+              <code className="shrink-0 px-2.5 py-1 rounded-lg bg-[#DEEBFF] text-primary text-xs font-mono font-semibold">
+                {`{{${v.key}}}`}
+              </code>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{v.label}</p>
+                {v.description && <p className="text-xs text-gray-400 truncate mt-0.5">{v.description}</p>}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => setModal(v)} title="Edit"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-primary/10 hover:text-primary transition">
+                  <RiEditLine size={15} />
+                </button>
+                <button onClick={() => setDeleteTarget(v)} title="Delete"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition">
+                  <RiDeleteBinLine size={15} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modal !== null && (
+        <TemplateVariableModal
+          variable={modal === 'create' ? null : modal}
+          onSave={handleSave}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteDialog
+          title="Delete Variable"
+          name={`{{${deleteTarget.key}}}`}
+          onConfirm={() => handleDelete(deleteTarget!)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 /* ─── Controlled Doc Templates Tab (lifted state) ───────────── */
 type DocTemplatesTabControlledProps = {
   templates: DocTemplate[];
+  allVariables: ApiTemplateVariable[];
   modal: null | 'create' | DocTemplate;
   deleteTarget: DocTemplate | null;
   onOpenCreate: () => void;
@@ -810,7 +936,7 @@ type DocTemplatesTabControlledProps = {
   onDeleteCancel: () => void;
 };
 
-function DocTemplatesTabControlled({ templates, modal, deleteTarget, onOpenCreate, onOpenEdit, onToggle, onSave, onCloseModal, onDeleteTarget, onDeleteConfirm, onDeleteCancel }: DocTemplatesTabControlledProps) {
+function DocTemplatesTabControlled({ templates, allVariables, modal, deleteTarget, onOpenCreate, onOpenEdit, onToggle, onSave, onCloseModal, onDeleteTarget, onDeleteConfirm, onDeleteCancel }: DocTemplatesTabControlledProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -854,7 +980,7 @@ function DocTemplatesTabControlled({ templates, modal, deleteTarget, onOpenCreat
       )}
       {modal !== null && (
         <DocTemplateModal template={modal === 'create' ? null : modal} isCreate={modal === 'create'}
-          allVariables={ALL_VARIABLES} onSave={onSave} onClose={onCloseModal}
+          allVariables={allVariables} onSave={onSave} onClose={onCloseModal}
         />
       )}
       {deleteTarget && (

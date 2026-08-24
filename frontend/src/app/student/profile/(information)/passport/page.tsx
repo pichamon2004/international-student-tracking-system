@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiX } from 'react-icons/fi';
 import Button from '@/components/ui/Button';
-import { studentMeApi, type ApiPassport } from '@/lib/api';
+import { studentMeApi, changeRequestApi, type ApiPassport, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 
 function daysRemaining(expiryDate: string): number {
   return Math.max(0, Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000));
@@ -63,12 +64,20 @@ function PassportModal({ passport, onClose }: { passport: ApiPassport; onClose: 
 export default function PassportPage() {
   const router = useRouter();
   const [passports, setPassports] = useState<ApiPassport[]>([]);
+  const [studentDbId, setStudentDbId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ApiPassport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
     studentMeApi.get()
-      .then(res => setPassports(res.data.data.passports))
+      .then(res => {
+        const s = res.data.data;
+        setPassports(s.passports);
+        setStudentDbId(s.id);
+        return s.id;
+      })
+      .then(sid => changeRequestApi.getPendingForEntity('PASSPORT', null, sid).then(r => setPendingChange(r.data.data)).catch(() => {}))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -92,6 +101,14 @@ export default function PassportPage() {
             Add
           </button>
         </div>
+
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            fieldLabels={{ passportNumber: 'Passport No.', issuingCountry: 'Issuing Country', issueDate: 'Date of Issue', expiryDate: 'Expiry Date', placeOfIssue: 'Place of Issue' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
 
         {loading ? (
           <div className="animate-pulse space-y-3">

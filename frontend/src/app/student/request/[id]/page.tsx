@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { requestApi } from '@/lib/api';
+import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
 import { clsx } from 'clsx';
 import {
   RiArrowLeftLine, RiCheckLine, RiTimeLine, RiCloseCircleLine,
@@ -133,12 +133,16 @@ function buildTimeline(status: RequestStatus): TimelineStep[] {
     ? order.indexOf(rejectedAfter as RequestStatus)
     : order.indexOf(status);
 
+  const isFinalDone = status === 'DEAN_APPROVED';
+
   return order.map((s, i) => {
     let state: StepState = 'idle';
     if (isRejected) {
       if (i < currentIndex) state = 'done';
       else if (i === currentIndex) state = 'rejected';
       else state = 'idle';
+    } else if (isFinalDone) {
+      state = 'done';
     } else {
       if (i < currentIndex) state = 'done';
       else if (i === currentIndex) state = 'active';
@@ -176,13 +180,20 @@ export default function StudentRequestDetailPage() {
   const router = useRouter();
   const [showPreview, setShowPreview] = useState(false);
   const [reqData, setReqData] = useState<RequestDetail | null>(null);
+  const [fullReq, setFullReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deanName, setDeanName] = useState('');
+
+  useEffect(() => {
+    deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!id) return;
     requestApi.getById(Number(id))
       .then(res => {
         const r = res.data.data;
+        setFullReq(r);
         setReqData({
           id: r.id,
           title: r.title,
@@ -204,7 +215,7 @@ export default function StudentRequestDetailPage() {
   const timeline = buildTimeline(req.status);
 
   const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
-  const isCompleted = req.status === 'DEAN_APPROVED';
+  const isCompleted = req.status === 'DEAN_APPROVED' || req.status === 'STAFF_APPROVED';
 
   if (loading) {
     return (
@@ -388,57 +399,153 @@ export default function StudentRequestDetailPage() {
       </div>
 
       {/* Document Preview Modal */}
-      {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <RiFileTextLine size={18} className="text-primary" />
+      {showPreview && fullReq && (() => {
+        const attachments: string[] = (() => { try { return JSON.parse(fullReq.attachments ?? '[]'); } catch { return []; } })();
+        const templates = fullReq.requestType?.documentTemplates ?? [];
+        const formDataObj: Record<string, string> = (() => { try { return JSON.parse(fullReq.formData ?? '{}'); } catch { return {}; } })();
+        const s = fullReq.student;
+        const levelMap: Record<string, string> = { PHD: 'Doctoral', MASTER: "Master's", BACHELOR: "Bachelor's" };
+        const baseVars: Record<string, string> = {
+          student_name: [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—',
+          student_id: s?.studentId ?? '—',
+          student_title: s?.titleEn ?? '—',
+          thai_tel: s?.phone ?? '—',
+          email: s?.email ?? '—',
+          education_level: levelMap[(s as { level?: string })?.level ?? ''] ?? '—',
+          program: s?.program ?? '—',
+          date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+          ...formDataObj,
+        };
+
+        function renderTemplate(body: string) {
+          if (body.includes('data-var=')) {
+            return body.replace(/<span[^>]*data-var="(\{\{[^"]+\}\})"[^>]*>[^<]*<\/span>/g, (_, token) => {
+              const key = token.slice(2, -2);
+              return baseVars[key] ?? token;
+            });
+          }
+          if (body.includes('{{')) {
+            return body.replace(/\{\{(\w+)\}\}/g, (_, key) => baseVars[key] ?? `{{${key}}}`);
+          }
+          return body;
+        }
+
+        const printHtml = attachments.length > 0
+          ? attachments.map((url, i) => `<p><a href="${url}">Document ${i + 1}</a></p>`).join('')
+          : templates.map(t => {
+              const tplVars: string[] = (() => { try { return JSON.parse(t.variables ?? '[]'); } catch { return []; } })();
+              const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
+              const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
+              const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
+              const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
+              const sigHtml = sigVars.length > 0
+                ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span></div>`).join('')}</div>`
+                : '';
+              return renderTemplate(t.body) + sigHtml;
+            }).join('<hr style="margin:32px 0"/>');
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <RiFileTextLine size={18} className="text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">{req.title}</p>
+                    <p className="text-xs text-gray-400">Approved document · Read-only</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-800">{req.title}</p>
-                  <p className="text-xs text-gray-400">Approved document · Read-only</p>
-                </div>
+                <button onClick={() => setShowPreview(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition">
+                  <RiCloseLine size={18} />
+                </button>
               </div>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition"
-              >
-                <RiCloseLine size={18} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-              <div id="request-doc-print" className="bg-white shadow-lg rounded-lg p-10 min-h-[400px] flex items-center justify-center">
-                <p className="text-gray-400 text-sm">Document content will appear here when connected to API.</p>
+
+              <div className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+                {attachments.length > 0 ? (
+                  attachments.map((url, i) => {
+                    const isPdf = /\.pdf$/i.test(url);
+                    const isImage = /\.(png|jpe?g|gif|webp)$/i.test(url);
+                    if (isPdf) return (
+                      <div key={i} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                        <iframe src={url} style={{ width: '100%', height: '297mm', border: 'none' }} title={`Document ${i + 1}`} />
+                      </div>
+                    );
+                    if (isImage) return (
+                      <div key={i} className="bg-white shadow-md mx-auto p-4" style={{ width: '210mm' }}>
+                        <img src={url} alt={`Document ${i + 1}`} className="max-w-full" />
+                      </div>
+                    );
+                    return (
+                      <div key={i} className="bg-white shadow-md mx-auto p-6" style={{ width: '210mm' }}>
+                        <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-primary underline">
+                          <RiFileTextLine size={14} /> Document {i + 1}
+                        </a>
+                      </div>
+                    );
+                  })
+                ) : templates.length > 0 ? (
+                  templates.map((tpl) => {
+                    const tplVars: string[] = (() => { try { return JSON.parse(tpl.variables ?? '[]'); } catch { return []; } })();
+                    const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
+                    const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
+                    const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
+                    const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
+                    return (
+                      <div key={tpl.id} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
+                        <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
+                        {sigVars.length > 0 && (
+                          <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
+                              {sigVars.map((sv: string) => (
+                                <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                  <div style={{ width: '100%', height: '40px', borderBottom: '2px solid #1f2937', marginTop: '16px' }} />
+                                  {SIG_NAMES[sv] && <span style={{ fontSize: '11px', fontWeight: 600 }}>{SIG_NAMES[sv]}</span>}
+                                  <span style={{ fontSize: '11px', color: '#6b7280' }}>{SIG_ROLES[sv] ?? sv}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="bg-white shadow-md mx-auto p-10 flex items-center justify-center" style={{ width: '210mm', minHeight: '200px' }}>
+                    <p className="text-gray-400 text-sm">No document available.</p>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
-              <button
-                onClick={() => {
-                  const el = document.getElementById('request-doc-print');
-                  if (!el) return;
-                  const pw = window.open('', '_blank');
-                  if (!pw) return;
-                  pw.document.write(`<!DOCTYPE html><html><head><title>${req.title}</title><style>body{margin:25mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;line-height:2;}@media print{@page{margin:0;}body{margin:25mm 20mm;}}</style></head><body>${el.innerHTML}</body></html>`);
-                  pw.document.close();
-                  pw.focus();
-                  pw.print();
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition"
-              >
-                <RiPrinterLine size={14} /> Print
-              </button>
-              <button
-                onClick={() => setShowPreview(false)}
-                className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition"
-              >
-                Close
-              </button>
+
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
+                <button
+                  onClick={() => {
+                    if (attachments.length > 0) {
+                      attachments.forEach(url => window.open(url, '_blank'));
+                    } else {
+                      const origin = window.location.origin;
+                      const html = printHtml.replace(/src="\/kkulogo2\.png"/g, `src="${origin}/kkulogo2.png"`);
+                      const pw = window.open('', '_blank');
+                      if (!pw) return;
+                      pw.document.write(`<!DOCTYPE html><html><head><title>${req.title}</title><style>body{margin:25mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;line-height:2;}@media print{@page{margin:0;}body{margin:25mm 20mm;}}hr{margin:32px 0;border:none;border-top:1px solid #e5e7eb}</style></head><body>${html}</body></html>`);
+                      pw.document.close();
+                      pw.focus();
+                      pw.print();
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition"
+                >
+                  <RiPrinterLine size={14} /> Print
+                </button>
+                <button onClick={() => setShowPreview(false)} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

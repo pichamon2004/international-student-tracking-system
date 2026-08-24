@@ -1,73 +1,35 @@
 import { Response } from 'express';
-import prisma from '../utils/prisma';
 import { AuthRequest } from '../types';
+import * as notificationService from '../services/domain/notification.service';
 
 // GET /api/notifications
 export const getNotifications = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const userId = req.user!.userId;
-    const isRead = req.query.isRead;
+  const userId = req.user!.userId;
+  const { isRead } = req.query;
 
-    const where: Record<string, unknown> = { userId };
-    if (isRead === 'false') where.isRead = false;
-    if (isRead === 'true') where.isRead = true;
+  const isReadFilter =
+    isRead === 'false' ? false :
+    isRead === 'true'  ? true  :
+    undefined;
 
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
-
-    res.json({ success: true, data: notifications });
-  } catch {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
+  const notifications = await notificationService.getNotifications(userId, isReadFilter);
+  res.json({ success: true, data: notifications });
 };
 
 // GET /api/notifications/unread-count
 export const getUnreadCount = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const count = await prisma.notification.count({
-      where: { userId: req.user!.userId, isRead: false },
-    });
-    res.json({ success: true, data: { count } });
-  } catch {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
+  const count = await notificationService.getUnreadCount(req.user!.userId);
+  res.json({ success: true, data: { count } });
 };
 
 // PUT /api/notifications/:id/read
 export const markAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const notification = await prisma.notification.findUnique({
-      where: { id: parseInt(req.params.id) },
-    });
-
-    if (!notification || notification.userId !== req.user!.userId) {
-      res.status(404).json({ success: false, message: 'Notification not found' });
-      return;
-    }
-
-    await prisma.notification.update({
-      where: { id: notification.id },
-      data: { isRead: true },
-    });
-
-    res.json({ success: true, message: 'Marked as read' });
-  } catch {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
+  await notificationService.markAsRead(parseInt(req.params.id), req.user!.userId);
+  res.json({ success: true, message: 'Marked as read' });
 };
 
 // PUT /api/notifications/read-all
 export const markAllAsRead = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    await prisma.notification.updateMany({
-      where: { userId: req.user!.userId, isRead: false },
-      data: { isRead: true },
-    });
-    res.json({ success: true, message: 'All notifications marked as read' });
-  } catch {
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
+  await notificationService.markAllAsRead(req.user!.userId);
+  res.json({ success: true, message: 'All notifications marked as read' });
 };

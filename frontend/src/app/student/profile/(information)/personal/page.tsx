@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
-import { studentMeApi } from '@/lib/api';
+import { studentMeApi, changeRequestApi, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 
 const labelCls = 'text-xs font-medium text-primary/70';
 const valueCls = 'text-sm font-medium text-gray-800';
@@ -21,9 +22,18 @@ export default function PersonalPage() {
   const router = useRouter();
   const [student, setStudent] = useState<Awaited<ReturnType<typeof studentMeApi.get>>['data']['data'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
-    studentMeApi.get().then(res => setStudent(res.data.data)).catch(() => {}).finally(() => setLoading(false));
+    studentMeApi.get()
+      .then(res => {
+        const s = res.data.data;
+        setStudent(s);
+        return s.id;
+      })
+      .then(sid => changeRequestApi.getPendingForEntity('STUDENT_PROFILE', sid, sid).then(r => setPendingChange(r.data.data)).catch(() => {}))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -70,6 +80,15 @@ export default function PersonalPage() {
             Edit
           </button>
         </div>
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            currentData={student ? Object.fromEntries(Object.entries(student).map(([k, v]) => [k, v as unknown])) : {}}
+            fieldLabels={{ titleEn: 'Title', firstNameEn: 'First Name', middleNameEn: 'Middle Name', lastNameEn: 'Last Name', dateOfBirth: 'Date of Birth', gender: 'Gender', nationality: 'Nationality', religion: 'Religion', homeCountry: 'Home Country', phone: 'Phone', addressInThailand: 'Address in Thailand', homeAddress: 'Home Address', emergencyContact: 'Emergency Contact', emergencyEmail: 'Emergency Email', emergencyPhone: 'Emergency Phone', emergencyRelation: 'Emergency Relation' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
+
         {/* Profile top */}
         <div className="flex items-start gap-5">
           <div className="w-24 h-24 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-400 overflow-hidden">

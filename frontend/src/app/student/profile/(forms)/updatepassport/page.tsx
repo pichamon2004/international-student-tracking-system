@@ -204,7 +204,7 @@ function PassportForm() {
         }
       }
 
-      await passportApi.upsert(studentNumId, {
+      const res = await passportApi.upsert(studentNumId, {
         passportNumber: form.passportNo,
         issuingCountry: form.country,
         issueDate:      form.dateOfIssue,
@@ -213,8 +213,12 @@ function PassportForm() {
         isCurrent:      true,
         imageUrl,
       });
-      setProgressField('passportCompleted', true);
-      toast.success(isEdit ? 'Passport updated' : 'Passport saved');
+      if (res.status === 202) {
+        toast.success('Change submitted — awaiting staff approval');
+      } else {
+        setProgressField('passportCompleted', true);
+        toast.success(isEdit ? 'Passport updated' : 'Passport saved');
+      }
       router.back();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;

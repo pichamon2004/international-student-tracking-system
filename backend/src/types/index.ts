@@ -1,9 +1,11 @@
 import { Request } from 'express';
 
+// เก็บข้อมูลใน JWT token จาก DB
 export interface AuthPayload {
   userId: number;
   email: string;
-  role: string;
+  activeRole: string;
+  permissions: string[];
 }
 
 export interface AuthRequest extends Request {

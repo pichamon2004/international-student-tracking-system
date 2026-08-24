@@ -1,21 +1,20 @@
 import { Router } from 'express';
-import {
-  getRequests,
-  getRequestById,
-  createRequest,
-  updateRequestStatus,
-} from '../controllers/request.controller';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { getRequests, getRequestById, createRequest, updateRequestStatus } from '../controllers/request.controller';
+import { authenticate, requirePermission } from '../middleware/auth.middleware';
 import { updateRequestStatusSchema } from '../middleware/validate.middleware';
 import { auditLog } from '../middleware/auditLog.middleware';
 import { upload } from '../middleware/upload.middleware';
+import { asyncHandler } from '../middleware/errorHandler.middleware';
 
 const router = Router();
 
-// STUDENT ก็ดู list requests ของตัวเองได้ผ่าน controller ที่กรอง role แล้ว
-router.get('/', authenticate, getRequests);
-router.get('/:id', authenticate, getRequestById);
-router.post('/', authenticate, auditLog({ entity: 'Request' }), createRequest);
-router.put('/:id/status', authenticate, requireRole('STAFF', 'ADVISOR'), upload.array('files', 10), auditLog({ entity: 'Request' }), ...updateRequestStatusSchema, updateRequestStatus);
+// STUDENT ดู/สร้าง request ของตัวเองได้ — controller กรอง role เอง
+router.get('/',    authenticate, asyncHandler(getRequests));
+router.get('/:id', authenticate, asyncHandler(getRequestById));
+router.post('/',   authenticate, auditLog({ entity: 'Request' }), asyncHandler(createRequest));
+
+// STAFF/ADVISOR เปลี่ยน status
+router.put('/:id/status', authenticate, requirePermission('REQUEST_MANAGEMENT.edit'),
+  upload.array('files', 10), auditLog({ entity: 'Request' }), ...updateRequestStatusSchema, asyncHandler(updateRequestStatus));
 
 export default router;

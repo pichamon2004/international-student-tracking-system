@@ -14,5 +14,5 @@ RUN npm run build
 
 EXPOSE 4000
 
-# migrate → seed → start
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"]
+# migrate → start (run seed manually once: docker compose exec backend npx prisma db seed)
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]

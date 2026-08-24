@@ -90,7 +90,7 @@ function HealthInsuranceForm() {
       }
 
       if (isEdit && id) {
-        await healthInsuranceApi.update(studentNumId, Number(id), {
+        const res = await healthInsuranceApi.update(studentNumId, Number(id), {
           provider:     form.provider,
           policyNumber: form.policyNo || undefined,
           coverageType: form.coverage || undefined,
@@ -98,8 +98,12 @@ function HealthInsuranceForm() {
           expiryDate:   form.validUntil,
           ...(fileUrl !== undefined && { fileUrl }),
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       } else {
-        await healthInsuranceApi.create(studentNumId, {
+        const res = await healthInsuranceApi.create(studentNumId, {
           provider:     form.provider,
           policyNumber: form.policyNo || undefined,
           coverageType: form.coverage || undefined,
@@ -107,6 +111,10 @@ function HealthInsuranceForm() {
           expiryDate:   form.validUntil,
           ...(fileUrl !== undefined && { fileUrl }),
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       }
       setProgressField('healthInsuranceCompleted', true);
       toast.success(isEdit ? 'Health insurance updated' : 'Health insurance added');

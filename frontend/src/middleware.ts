@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/dev', '/_next', '/api', '/logo.png', '/favicon.ico', '/kkulogo.png'];
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/select-role', '/dev', '/_next', '/api', '/logo.png', '/favicon.ico', '/kkulogo.png'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p));
@@ -9,10 +9,12 @@ function isPublicPath(pathname: string): boolean {
 
 // Role → allowed route prefixes
 const ROLE_ROUTES: Record<string, string[]> = {
-  STAFF:   ['/staff'],
-  ADMIN:   ['/staff'],
-  ADVISOR: ['/advisor'],
-  STUDENT: ['/student'],
+  STAFF:    ['/staff'],
+  ADMIN:    ['/staff'],
+  ADVISOR:  ['/advisor'],
+  STUDENT:  ['/student'],
+  SUB_STAFF:['/staff'],
+  DEAN:     ['/dean'],
 };
 
 export function middleware(request: NextRequest) {

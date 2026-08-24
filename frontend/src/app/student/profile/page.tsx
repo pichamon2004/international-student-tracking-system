@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Barcode from 'react-barcode';
 import QRCode from 'react-qr-code';
-import { getProgress, defaultProgress, UserProfileProgress } from '@/lib/progressStore';
+import { defaultProgress, UserProfileProgress } from '@/lib/progressStore';
 import { RiFileList3Line, RiHeartAdd2Line, RiGraduationCapLine, RiGroupLine } from 'react-icons/ri';
 import { BsExclamation } from 'react-icons/bs';
 import { LuUserRound } from 'react-icons/lu';
@@ -115,7 +115,7 @@ export default function StudentProfilePage() {
     const [progress, setProgress] = useState<UserProfileProgress>(defaultProgress);
     const [regStep, setRegStep] = useState<number>(2); // default 2 = full access
     const [regStatus, setRegStatus] = useState<string>('ACTIVE');
-    const [submittingPhase2, setSubmittingPhase2] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [studentData, setStudentData] = useState<{
         studentId: string;
         passportNumber: string;
@@ -151,9 +151,6 @@ export default function StudentProfilePage() {
     });
 
     useEffect(() => {
-        const local = getProgress();
-        setProgress(local);
-
         studentMeApi.get().then(res => {
             const s = res.data.data;
             const fullName = [s.titleEn, s.firstNameEn, s.middleNameEn, s.lastNameEn].filter(Boolean).join(' ');
@@ -184,7 +181,7 @@ export default function StudentProfilePage() {
             setRegStep(s.registrationStep ?? 2);
             setRegStatus(s.registrationStatus ?? 'ACTIVE');
 
-            // Derive ALL progress from real API data (not localStorage)
+            // Derive all progress from real API data only
             const visas      = s.visas             as ApiVisa[];
             const insurances = s.healthInsurances   as ApiHealthInsurance[];
             const passports  = s.passports          as ApiPassport[];
@@ -196,26 +193,26 @@ export default function StudentProfilePage() {
                 visaCompleted:            visas.length > 0,
                 healthInsuranceCompleted: insurances.length > 0,
                 academicDocumentCompleted: academics.length > 0,
-                dependentCompleted:        deps.length > 0 || local.dependentCompleted,
+                dependentCompleted:        deps.length > 0,
             });
         }).catch(console.error);
     }, []);
 
     const allDone = todoItems.every(({ progressKey }) => progress[progressKey]);
-    // Show to-do list when Phase 1 is approved (step 1, ACTIVE) — student must complete Phase 2
+    // Show to-do list when student account is new (step 1, ACTIVE) — must complete checklist first
     const showTodo = !allDone || (regStep === 1 && regStatus === 'ACTIVE');
 
-    async function handleSubmitPhase2() {
-        setSubmittingPhase2(true);
+    async function handleSubmitRegistration() {
+        setSubmitting(true);
         try {
             await studentApi.submitPhase2();
-            toast.success('Phase 2 submitted! Waiting for staff to complete your registration.');
+            toast.success('Registration submitted! Waiting for staff to complete your registration.');
             router.push('/student/pending');
         } catch (err: unknown) {
             const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-            toast.error(msg || 'Failed to submit Phase 2');
+            toast.error(msg || 'Failed to submit registration');
         } finally {
-            setSubmittingPhase2(false);
+            setSubmitting(false);
         }
     }
 
@@ -309,11 +306,11 @@ export default function StudentProfilePage() {
                             <h2 className="text-3xl font-semibold text-primary">To-do list</h2>
                             {allDone && regStep === 1 && regStatus === 'ACTIVE' && (
                                 <button
-                                    onClick={handleSubmitPhase2}
-                                    disabled={submittingPhase2}
+                                    onClick={handleSubmitRegistration}
+                                    disabled={submitting}
                                     className="bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
                                 >
-                                    {submittingPhase2 ? 'Submitting…' : 'Submit Phase 2'}
+                                    {submitting ? 'Submitting…' : 'Submit Registration'}
                                 </button>
                             )}
                         </div>

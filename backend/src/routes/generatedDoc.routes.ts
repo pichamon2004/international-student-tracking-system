@@ -1,23 +1,21 @@
 import { Router } from 'express';
 import {
-  generatePdf,
-  getGeneratedDocs,
-  getGeneratedDocById,
-  downloadGeneratedDoc,
-  uploadSignedDoc,
+  generatePdf, getGeneratedDocs, getGeneratedDocById,
+  downloadGeneratedDoc, uploadSignedDoc, uploadSignedDocHandler,
 } from '../controllers/generatedDoc.controller';
-import { authenticate, requireRole } from '../middleware/auth.middleware';
+import { authenticate, requirePermission } from '../middleware/auth.middleware';
+import { asyncHandler } from '../middleware/errorHandler.middleware';
 
 const router = Router();
 
 // Under /api/requests
 export const requestDocRouter = Router();
-requestDocRouter.post('/:id/generate-pdf', authenticate, requireRole('STAFF', 'ADVISOR'), generatePdf);
-requestDocRouter.get('/:id/generated-documents', authenticate, getGeneratedDocs);
+requestDocRouter.post('/:id/generate-pdf',       authenticate, requirePermission('GENERATED_DOC_MANAGEMENT.create'), asyncHandler(generatePdf));
+requestDocRouter.get('/:id/generated-documents', authenticate, asyncHandler(getGeneratedDocs));
 
 // Under /api/generated-documents
-router.get('/:docId', authenticate, getGeneratedDocById);
-router.get('/:docId/download', authenticate, downloadGeneratedDoc);
-router.post('/:docId/upload-signed', authenticate, requireRole('STAFF'), ...uploadSignedDoc);
+router.get('/:docId',              authenticate, asyncHandler(getGeneratedDocById));
+router.get('/:docId/download',     authenticate, asyncHandler(downloadGeneratedDoc));
+router.post('/:docId/upload-signed', authenticate, requirePermission('GENERATED_DOC_MANAGEMENT.edit'), uploadSignedDoc[0], asyncHandler(uploadSignedDocHandler));
 
 export default router;

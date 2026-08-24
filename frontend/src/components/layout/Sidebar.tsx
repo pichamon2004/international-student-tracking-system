@@ -20,7 +20,7 @@ const adminItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, activeRole } = useAuthStore();
 
   const handleLogout = () => {
     logout();
@@ -51,7 +51,7 @@ export default function Sidebar() {
           </Link>
         ))}
 
-        {user?.role === 'ADMIN' && (
+        {activeRole === 'ADMIN' && (
           <>
             <div className="pt-4 pb-1 px-3 text-xs text-primary-400 uppercase tracking-wider">ผู้ดูแลระบบ</div>
             {adminItems.map(({ href, label, icon: Icon }) => (
@@ -76,7 +76,7 @@ export default function Sidebar() {
       <div className="p-4 border-t border-primary-700">
         <div className="mb-3 px-3">
           <p className="text-sm font-medium text-white">{user?.name}</p>
-          <p className="text-xs text-primary-300">{user?.role === 'ADMIN' ? 'ผู้ดูแลระบบ' : 'เจ้าหน้าที่'}</p>
+          <p className="text-xs text-primary-300">{activeRole === 'ADMIN' ? 'ผู้ดูแลระบบ' : 'เจ้าหน้าที่'}</p>
         </div>
         <button
           onClick={handleLogout}

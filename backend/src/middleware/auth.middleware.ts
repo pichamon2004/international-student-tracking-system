@@ -19,11 +19,21 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 };
 
-/* requireRole — accepts one or more roles, e.g. requireRole('STAFF', 'ADVISOR') */
 export const requireRole = (...roles: string[]) =>
   (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.activeRole)) {
       res.status(403).json({ success: false, message: 'Forbidden' });
+      return;
+    }
+    next();
+  };
+
+export const requirePermission = (...permCodes: string[]) =>
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const perms = req.user?.permissions ?? [];
+    const hasAll = permCodes.every(code => perms.includes(code));
+    if (!hasAll) {
+      res.status(403).json({ success: false, message: 'Forbidden: insufficient permission' });
       return;
     }
     next();

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine, RiDeleteBinLine, RiAddLine } from 'react-icons/ri';
-import { studentMeApi, academicDocumentApi, type ApiAcademicDocument } from '@/lib/api';
+import { studentMeApi, academicDocumentApi, changeRequestApi, type ApiAcademicDocument, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 import toast from 'react-hot-toast';
 
 const labelCls = 'text-xs font-medium text-primary/70';
@@ -29,12 +30,14 @@ export default function AcademicPage() {
   const [studentNumId, setStudentNumId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
     studentMeApi.get().then(res => {
       const s = res.data.data;
       setStudentNumId(s.id);
       setDocs(s.academicDocuments ?? []);
+      changeRequestApi.getPendingForEntity('ACADEMIC_DOCUMENT', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -71,6 +74,14 @@ export default function AcademicPage() {
             <RiAddLine size={16} /> Add
           </button>
         </div>
+
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            fieldLabels={{ docType: 'Document Type', institution: 'Institution', issueDate: 'Issue Date' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
 
         {loading ? (
           <div className="flex flex-col gap-3">

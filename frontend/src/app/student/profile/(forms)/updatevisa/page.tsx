@@ -162,7 +162,7 @@ function VisaForm() {
       };
 
       if (isEdit && id) {
-        await visaApi.update(studentNumId, Number(id), {
+        const res = await visaApi.update(studentNumId, Number(id), {
           visaType:       form.visaType,
           issuingCountry: form.issuingCountry,
           issuingPlace:   form.placeOfIssue || undefined,
@@ -172,8 +172,12 @@ function VisaForm() {
           remarks:        form.remarks || undefined,
           ...imagePayload,
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       } else {
-        await visaApi.create(studentNumId, {
+        const res = await visaApi.create(studentNumId, {
           visaType:       form.visaType,
           issuingCountry: form.issuingCountry,
           issuingPlace:   form.placeOfIssue || undefined,
@@ -184,6 +188,10 @@ function VisaForm() {
           status:         'ACTIVE',
           ...imagePayload,
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       }
       setProgressField('visaCompleted', true);
       toast.success(isEdit ? 'Visa updated' : 'Visa added');

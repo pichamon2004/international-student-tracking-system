@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiX } from 'react-icons/fi';
 import Button from '@/components/ui/Button';
-import { studentMeApi, visaApi, type ApiVisa } from '@/lib/api';
+import { studentMeApi, visaApi, changeRequestApi, type ApiVisa, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 import toast from 'react-hot-toast';
 
 function daysRemaining(expiryDate: string): number {
@@ -88,12 +89,14 @@ export default function VisaPage() {
   const [studentId, setStudentId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ApiVisa | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
     studentMeApi.get()
       .then(res => {
         const s = res.data.data;
         setStudentId(s.id);
+        changeRequestApi.getPendingForEntity('VISA', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
         return visaApi.getAll(s.id);
       })
       .then(res => setVisas(res.data.data))
@@ -130,6 +133,14 @@ export default function VisaPage() {
             Add
           </button>
         </div>
+
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            fieldLabels={{ visaType: 'Visa Type', issuingCountry: 'Issuing Country', issueDate: 'Issue Date', expiryDate: 'Expiry Date', entries: 'Entries', remarks: 'Remarks' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
 
         {loading ? (
           <div className="animate-pulse space-y-3">

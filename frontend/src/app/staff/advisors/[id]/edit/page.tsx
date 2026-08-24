@@ -59,6 +59,7 @@ export default function AdvisorEditPage() {
         setLastName(a.lastNameEn ?? '');
         setTel(a.phone ?? '');
         setEmail(a.email ?? '');
+        setNationality(a.nationality ?? '');
         if (a.students) {
           setStudents(a.students.map(s => ({
             id: s.id,

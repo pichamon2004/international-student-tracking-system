@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import { FiX } from 'react-icons/fi';
 import Button from '@/components/ui/Button';
-import { studentMeApi, dependentApi, type ApiDependent } from '@/lib/api';
+import { studentMeApi, dependentApi, changeRequestApi, type ApiDependent, type ApiChangeRequest } from '@/lib/api';
+import PendingBanner from '@/components/PendingBanner';
 import { setProgressField } from '@/lib/progressStore';
 import toast from 'react-hot-toast';
 
@@ -97,12 +98,14 @@ export default function DependentPage() {
   const [studentId, setStudentId] = useState<number | null>(null);
   const [selected, setSelected] = useState<ApiDependent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
 
   useEffect(() => {
     studentMeApi.get()
       .then(res => {
         const s = res.data.data;
         setStudentId(s.id);
+        changeRequestApi.getPendingForEntity('DEPENDENT', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
         return dependentApi.getAll(s.id);
       })
       .then(res => setDependents(res.data.data))
@@ -139,6 +142,14 @@ export default function DependentPage() {
             Add
           </button>
         </div>
+
+        {pendingChange && (
+          <PendingBanner
+            pending={pendingChange}
+            fieldLabels={{ firstName: 'First Name', lastName: 'Last Name', relationship: 'Relationship', nationality: 'Nationality', dateOfBirth: 'Date of Birth', gender: 'Gender' }}
+            onCancel={() => setPendingChange(null)}
+          />
+        )}
 
         {loading ? (
           <div className="animate-pulse space-y-3">

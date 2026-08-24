@@ -189,7 +189,7 @@ export interface ApiStudentDetail extends ApiStudent {
   passports: ApiPassport[];
   visas: ApiVisa[];
   healthInsurances: ApiHealthInsurance[];
-  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null; faculty: string | null } | null;
+  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null } | null;
 }
 
 export interface ApiStudentWithExpiry extends ApiStudent {
@@ -212,15 +212,12 @@ export const studentApi = {
   delete: (id: number) =>
     api.delete<{ success: boolean }>(`/students/${id}`),
 
-  create: (data: { email: string; studentId?: string; titleEn?: string; firstNameEn: string; middleNameEn?: string; lastNameEn: string }) =>
+  create: (data: { email: string; studentId?: string; titleEn?: string; firstNameEn: string; middleNameEn?: string; lastNameEn: string; nationality?: string; program?: string; level?: string; dateOfBirth?: string }) =>
     api.post<{ success: boolean; data: ApiStudent }>('/students', data),
 
   approve: (id: number) => api.put<{ success: boolean; data: ApiStudent }>(`/students/${id}/approve`),
 
   reject: (id: number, reason: string) => api.put<{ success: boolean }>(`/students/${id}/reject`, { rejectionReason: reason }),
-
-  registerPhase1: (data: Partial<ApiStudent>) =>
-    api.post<{ success: boolean; data: ApiStudent }>('/students/register', data),
 
   submitPhase2: () =>
     api.put<{ success: boolean; data: ApiStudent }>('/students/me/submit-phase2'),
@@ -328,6 +325,31 @@ export const emailTemplateApi = {
     api.delete<{ success: boolean }>(`/email-templates/${id}`),
 };
 
+// ── Template Variables ─────────────────────────────────────────
+
+export interface ApiTemplateVariable {
+  id: number;
+  key: string;
+  label: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const templateVariableApi = {
+  getAll: () =>
+    api.get<{ success: boolean; data: ApiTemplateVariable[] }>('/template-variables'),
+
+  create: (data: { key: string; label: string; description?: string }) =>
+    api.post<{ success: boolean; data: ApiTemplateVariable }>('/template-variables', data),
+
+  update: (id: number, data: { label?: string; description?: string }) =>
+    api.put<{ success: boolean; data: ApiTemplateVariable }>(`/template-variables/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete<{ success: boolean }>(`/template-variables/${id}`),
+};
+
 // ── Student "me" API ───────────────────────────────────────────
 
 export interface ApiPassport {
@@ -412,13 +434,11 @@ export interface ApiAdvisor {
   titleEn: string | null;
   firstNameEn: string | null;
   lastNameEn: string | null;
-  faculty: string | null;
   position: string | null;
   email: string | null;
   phone: string | null;
   photoUrl: string | null;
   nationality: string | null;
-  isDean: boolean;
   isActive: boolean;
   workPermitNumber: string | null;
   workPermitIssue: string | null;
@@ -444,7 +464,7 @@ export interface ApiStudentMe extends ApiStudent {
   visas: ApiVisa[];
   healthInsurances: ApiHealthInsurance[];
   academicDocuments: ApiAcademicDocument[];
-  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null; faculty: string | null; phone: string | null; email: string | null } | null;
+  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null; phone: string | null; email: string | null } | null;
   staffContact: { name: string; phone: string | null; email: string } | null;
 }
 
@@ -511,8 +531,10 @@ export const dependentApi = {
 
 // ── Advisor API ────────────────────────────────────────────────
 
+export interface ApiDeanUser { id: number; name: string; }
+
 export const advisorApi = {
-  create: (data: { email: string; titleEn?: string; firstNameEn: string; lastNameEn: string; middleNameEn?: string; phone?: string; nationality?: string; faculty?: string }) =>
+  create: (data: { email: string; titleEn?: string; firstNameEn: string; lastNameEn: string; phone?: string; nationality?: string }) =>
     api.post<{ success: boolean; data: ApiAdvisor }>('/advisors', data),
   getMe: () =>
     api.get<{ success: boolean; data: ApiAdvisor }>('/advisors/me'),
@@ -522,10 +544,10 @@ export const advisorApi = {
     api.get<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`),
   update: (data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'> & { nationality?: string }>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>('/advisors/me', data),
-  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'faculty' | 'position' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'>>) =>
+  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'position' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'>>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`, data),
-  getDean: () =>
-    api.get<{ success: boolean; data: { id: number; titleEn: string | null; firstNameEn: string; lastNameEn: string } | null }>('/advisors/dean'),
+  getDeans: () =>
+    api.get<{ success: boolean; data: ApiDeanUser[] }>('/advisors/deans'),
   uploadPhoto: (file: File) => {
     const form = new FormData();
     form.append('image', file);
@@ -538,6 +560,63 @@ export const advisorApi = {
 export const userApi = {
   getIRStaff: () =>
     api.get<{ success: boolean; data: { id: number; name: string } | null }>('/users/ir-staff'),
+};
+
+// ── Dean Delegation API ────────────────────────────────────────
+
+export interface ApiDeanSignatory {
+  id: number;
+  name: string;
+  isDelegated: boolean;
+}
+
+export interface ApiDeanDelegation {
+  id: number;
+  deanId: number;
+  delegateId: number;
+  isActive: boolean;
+  delegate: { id: number; name: string };
+}
+
+export const deanApi = {
+  getSignatory:     () => api.get<{ success: boolean; data: ApiDeanSignatory }>('/dean/signatory'),
+  getDelegation:    () => api.get<{ success: boolean; data: ApiDeanDelegation | null }>('/dean/delegation'),
+  setDelegate:      (delegateId: number) => api.put<{ success: boolean; data: ApiDeanDelegation }>('/dean/delegation', { delegateId }),
+  toggleDelegation: (isActive: boolean) => api.patch<{ success: boolean; data: ApiDeanDelegation }>('/dean/delegation', { isActive }),
+  removeDelegation: () => api.delete<{ success: boolean }>('/dean/delegation'),
+  getDelegateUsers: () => api.get<{ success: boolean; data: { id: number; name: string }[] }>('/dean/delegates'),
+};
+
+// ── Change Requests ───────────────────────────────────────────────────────────
+
+export interface ApiChangeRequest {
+  id: number;
+  studentId: number;
+  entityType: string;
+  entityId: number | null;
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  payload: Record<string, unknown>;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  reviewNote?: string;
+  createdAt: string;
+  student?: { id: number; firstNameEn: string | null; lastNameEn: string | null; studentId: string | null };
+}
+
+export const changeRequestApi = {
+  listPending: () =>
+    api.get<{ success: boolean; data: ApiChangeRequest[] }>('/change-requests'),
+  getOne: (id: number) =>
+    api.get<{ success: boolean; data: ApiChangeRequest }>(`/change-requests/${id}`),
+  approve: (id: number, reviewNote?: string) =>
+    api.post(`/change-requests/${id}/approve`, { reviewNote }),
+  reject: (id: number, reviewNote: string) =>
+    api.post(`/change-requests/${id}/reject`, { reviewNote }),
+  cancel: (id: number) =>
+    api.delete(`/change-requests/${id}`),
+  getPendingForEntity: (entityType: string, entityId: number | null, studentId: number) =>
+    api.get<{ success: boolean; data: ApiChangeRequest | null }>(
+      `/change-requests/entity?entityType=${entityType}&entityId=${entityId ?? ''}&studentId=${studentId}`,
+    ),
 };
 
 export default api;

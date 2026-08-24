@@ -27,6 +27,13 @@ function CallbackContent() {
       return;
     }
 
+    // Google login กรณีมีหลาย role → redirect ไปเลือก role
+    const tempToken = searchParams.get('tempToken');
+    if (tempToken) {
+      router.replace(`/auth/select-role?tempToken=${tempToken}`);
+      return;
+    }
+
     if (!token || !role) {
       router.replace('/login');
       return;
@@ -36,6 +43,7 @@ function CallbackContent() {
       .then(() => {
         if (role === 'STUDENT')      router.replace('/student/dashboard');
         else if (role === 'ADVISOR') router.replace('/advisor/dashboard');
+        else if (role === 'DEAN')    router.replace('/dean/dashboard');
         else                         router.replace('/staff/dashboard');
       })
       .catch(() => router.replace('/login?error=Login+failed'));

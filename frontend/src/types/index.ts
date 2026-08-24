@@ -1,4 +1,3 @@
-export type Role = 'ADMIN' | 'STAFF' | 'STUDENT' | 'ADVISOR';
 export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export type VisaStatus = 'ACTIVE' | 'EXPIRED' | 'PENDING' | 'CANCELLED';
 
@@ -6,9 +5,36 @@ export interface User {
   id: number;
   email: string;
   name: string;
-  role: Role;
+  activeRole?: string;
   isActive?: boolean;
   createdAt?: string;
+}
+
+export interface RoleInfo {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface RoleDetail extends RoleInfo {
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface PermissionItem {
+  id: number;
+  method: string;
+  code: string;
+  description?: string;
+}
+
+export interface ModuleWithPermissions {
+  id: number;
+  code: string;
+  name: string;
+  sortOrder?: number;
+  permissions: PermissionItem[];
 }
 
 export interface Student {

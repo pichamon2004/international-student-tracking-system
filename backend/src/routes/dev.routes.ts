@@ -13,7 +13,7 @@ function requireDevKey(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-const STAFF_SELECT = { id: true, email: true, name: true, phone: true, role: true, isActive: true, createdAt: true } as const;
+const STAFF_SELECT = { id: true, email: true, name: true, role: true, isActive: true, createdAt: true } as const;
 
 // GET /api/dev/staff — list all STAFF users
 router.get('/staff', requireDevKey, async (_req, res) => {
@@ -32,13 +32,13 @@ router.get('/staff', requireDevKey, async (_req, res) => {
 // POST /api/dev/staff — create a new STAFF user (Google OAuth — no password needed)
 router.post('/staff', requireDevKey, async (req, res) => {
   try {
-    const { email, name, phone } = req.body;
+    const { email, name } = req.body;
     if (!email || !name) {
       res.status(400).json({ success: false, message: 'email and name are required' });
       return;
     }
     const user = await prisma.user.create({
-      data: { email, name, phone: phone || null, role: 'STAFF', isActive: true },
+      data: { email, name, role: 'STAFF', isActive: true },
       select: STAFF_SELECT,
     });
     res.status(201).json({ success: true, data: user });
@@ -51,14 +51,13 @@ router.post('/staff', requireDevKey, async (req, res) => {
   }
 });
 
-// PUT /api/dev/staff/:id — update isActive, name and/or phone
+// PUT /api/dev/staff/:id — update isActive and/or name
 router.put('/staff/:id', requireDevKey, async (req, res) => {
   try {
-    const { isActive, name, phone } = req.body;
-    const data: { isActive?: boolean; name?: string; phone?: string | null } = {};
+    const { isActive, name } = req.body;
+    const data: { isActive?: boolean; name?: string } = {};
     if (isActive !== undefined) data.isActive = isActive;
     if (name !== undefined) data.name = name;
-    if (phone !== undefined) data.phone = phone || null;
     const user = await prisma.user.update({
       where: { id: parseInt(req.params.id) },
       data,

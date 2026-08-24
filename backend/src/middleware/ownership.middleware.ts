@@ -20,12 +20,12 @@ export const requireStudentOwnership = async (
     return;
   }
 
-  if (req.user.role === 'STAFF' || req.user.role === 'ADVISOR') {
+  if (req.user.activeRole === 'STAFF' || req.user.activeRole === 'ADVISOR') {
     next();
     return;
   }
 
-  if (req.user.role === 'STUDENT') {
+  if (req.user.activeRole === 'STUDENT') {
     const targetId = parseInt(req.params.id);
     if (isNaN(targetId)) {
       res.status(400).json({ success: false, message: 'Invalid student ID' });
@@ -64,7 +64,7 @@ export const requireStudentSelf = async (
     return;
   }
 
-  if (req.user.role !== 'STUDENT') {
+  if (req.user.activeRole !== 'STUDENT') {
     res.status(403).json({ success: false, message: 'Only students can modify this resource' });
     return;
   }
@@ -104,12 +104,12 @@ export const requireAdvisorOwnership = async (
     return;
   }
 
-  if (req.user.role === 'STAFF') {
+  if (req.user.activeRole === 'STAFF') {
     next();
     return;
   }
 
-  if (req.user.role === 'ADVISOR') {
+  if (req.user.activeRole === 'ADVISOR') {
     const targetStudentId = parseInt(req.params.id);
     if (isNaN(targetStudentId)) {
       res.status(400).json({ success: false, message: 'Invalid student ID' });

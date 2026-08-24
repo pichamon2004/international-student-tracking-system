@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import prisma from '../utils/prisma';
 import { createNotifications } from './notification.service';
-import { sendEmail } from './email.service';
+import { sendEmail } from './external/email.service';
 
 const ALERT_DAYS = [90, 60, 30, 15, 7];
 

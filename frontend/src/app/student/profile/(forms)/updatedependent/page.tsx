@@ -152,7 +152,7 @@ function DependentForm() {
       };
 
       if (isEdit && id) {
-        await dependentApi.update(studentNumId, Number(id), {
+        const res = await dependentApi.update(studentNumId, Number(id), {
           title:        form.prefix || undefined,
           firstName:    form.firstName,
           middleName:   form.middleName || undefined,
@@ -164,8 +164,12 @@ function DependentForm() {
           visaExpiry:   form.visaExpiry || undefined,
           ...imagePayload,
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       } else {
-        await dependentApi.create(studentNumId, {
+        const res = await dependentApi.create(studentNumId, {
           title:        form.prefix || undefined,
           firstName:    form.firstName,
           middleName:   form.middleName || undefined,
@@ -178,6 +182,10 @@ function DependentForm() {
           visaStatus:   'ACTIVE',
           ...imagePayload,
         });
+        if (res.status === 202) {
+          toast.success('Change submitted — awaiting staff approval');
+          router.back(); return;
+        }
       }
       setProgressField('dependentCompleted', true);
       toast.success(isEdit ? 'Dependent updated' : 'Dependent added');
