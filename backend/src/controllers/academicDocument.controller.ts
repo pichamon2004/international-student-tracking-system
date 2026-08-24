@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import { uploadToR2 } from '../services/external/r2.service';
 import * as academicDocumentService from '../services/domain/academicDocument.service';
 import * as changeRequestService from '../services/domain/changeRequest.service';
+import prisma from '../utils/prisma';
 
 /* GET /api/students/:id/academic-documents */
 export const getAcademicDocuments = async (req: Request, res: Response): Promise<void> => {
@@ -15,9 +16,12 @@ export const getAcademicDocuments = async (req: Request, res: Response): Promise
 export const createAcademicDocument = async (req: AuthRequest, res: Response): Promise<void> => {
   const studentId = parseInt(req.params.id);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', null, 'CREATE', req.body);
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', null, 'CREATE', req.body);
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   const { docType, institution, issueDate, fileUrl } = req.body;
   const doc = await academicDocumentService.createAcademicDocument(studentId, docType, institution, issueDate, fileUrl);
@@ -29,9 +33,12 @@ export const updateAcademicDocument = async (req: AuthRequest, res: Response): P
   const studentId = parseInt(req.params.id);
   const docId = parseInt(req.params.docId);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'UPDATE', req.body);
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'UPDATE', req.body);
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   const { docType, institution, issueDate, fileUrl } = req.body;
   const doc = await academicDocumentService.updateAcademicDocument(docId, studentId, {
@@ -58,9 +65,12 @@ export const deleteAcademicDocument = async (req: AuthRequest, res: Response): P
   const studentId = parseInt(req.params.id);
   const docId = parseInt(req.params.docId);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'DELETE', {});
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'DELETE', {});
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   await academicDocumentService.deleteAcademicDocument(docId, studentId);
   res.json({ success: true, message: 'Deleted' });

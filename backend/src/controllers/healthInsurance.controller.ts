@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import * as healthInsuranceService from '../services/domain/healthInsurance.service';
 import * as changeRequestService from '../services/domain/changeRequest.service';
 import { uploadToR2 } from '../services/external/r2.service';
+import prisma from '../utils/prisma';
 
 // GET /api/students/:id/health-insurance
 export const getHealthInsurances = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -14,9 +15,12 @@ export const getHealthInsurances = async (req: AuthRequest, res: Response): Prom
 export const createHealthInsurance = async (req: AuthRequest, res: Response): Promise<void> => {
   const studentId = parseInt(req.params.id);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', null, 'CREATE', req.body);
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', null, 'CREATE', req.body);
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   const insurance = await healthInsuranceService.createHealthInsurance(studentId, req.body);
   res.status(201).json({ success: true, data: insurance });
@@ -27,9 +31,12 @@ export const updateHealthInsurance = async (req: AuthRequest, res: Response): Pr
   const studentId = parseInt(req.params.id);
   const insuranceId = parseInt(req.params.insuranceId);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'UPDATE', req.body);
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'UPDATE', req.body);
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   const updated = await healthInsuranceService.updateHealthInsurance(insuranceId, studentId, req.body);
   res.json({ success: true, data: updated });
@@ -40,9 +47,12 @@ export const deleteHealthInsurance = async (req: AuthRequest, res: Response): Pr
   const studentId = parseInt(req.params.id);
   const insuranceId = parseInt(req.params.insuranceId);
   if (req.user?.activeRole === 'STUDENT') {
-    const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'DELETE', {});
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'DELETE', {});
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
   await healthInsuranceService.deleteHealthInsurance(insuranceId, studentId);
   res.json({ success: true, message: 'Health insurance deleted' });

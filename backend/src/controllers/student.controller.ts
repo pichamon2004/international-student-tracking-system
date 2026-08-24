@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import * as studentService from '../services/domain/student.service';
 import * as changeRequestService from '../services/domain/changeRequest.service';
 import { UpdateStudentDto } from '../repositories/student.repository';
+import prisma from '../utils/prisma';
 
 export const getStudents = async (req: AuthRequest, res: Response): Promise<void> => {
   const page = parseInt(req.query.page as string) || 1;
@@ -40,27 +41,30 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
   const studentDbId = parseInt(req.params.id);
 
   if (req.user?.activeRole === 'STUDENT') {
-    const studentFields = {
-      titleEn: req.body.titleEn,
-      firstNameEn: req.body.firstNameEn,
-      middleNameEn: req.body.middleNameEn,
-      lastNameEn: req.body.lastNameEn,
-      gender: req.body.gender,
-      nationality: req.body.nationality,
-      religion: req.body.religion,
-      homeCountry: req.body.homeCountry,
-      phone: req.body.phone,
-      addressInThailand: req.body.addressInThailand,
-      homeAddress: req.body.homeAddress,
-      emergencyContact: req.body.emergencyContact,
-      emergencyEmail: req.body.emergencyEmail,
-      emergencyPhone: req.body.emergencyPhone,
-      emergencyRelation: req.body.emergencyRelation,
-      dateOfBirth: req.body.dateOfBirth,
-    };
-    const cr = await changeRequestService.submitChange(studentDbId, 'STUDENT_PROFILE', studentDbId, 'UPDATE', studentFields);
-    res.status(202).json({ success: true, changeRequest: cr });
-    return;
+    const currentStudent = await prisma.student.findUnique({ where: { id: studentDbId } });
+    if (currentStudent?.registrationStatus === 'ACTIVE') {
+      const studentFields = {
+        titleEn: req.body.titleEn,
+        firstNameEn: req.body.firstNameEn,
+        middleNameEn: req.body.middleNameEn,
+        lastNameEn: req.body.lastNameEn,
+        gender: req.body.gender,
+        nationality: req.body.nationality,
+        religion: req.body.religion,
+        homeCountry: req.body.homeCountry,
+        phone: req.body.phone,
+        addressInThailand: req.body.addressInThailand,
+        homeAddress: req.body.homeAddress,
+        emergencyContact: req.body.emergencyContact,
+        emergencyEmail: req.body.emergencyEmail,
+        emergencyPhone: req.body.emergencyPhone,
+        emergencyRelation: req.body.emergencyRelation,
+        dateOfBirth: req.body.dateOfBirth,
+      };
+      const cr = await changeRequestService.submitChange(studentDbId, 'STUDENT_PROFILE', studentDbId, 'UPDATE', studentFields);
+      res.status(202).json({ success: true, changeRequest: cr });
+      return;
+    }
   }
 
   const {
