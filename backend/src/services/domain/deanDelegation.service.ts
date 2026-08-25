@@ -21,7 +21,7 @@ export const toggleDelegation = (deanUserId: number, isActive: boolean) =>
 export const removeDelegation = (deanUserId: number) =>
   repo.remove(deanUserId);
 
-export const getActiveSignatory = async (): Promise<{ id: number; name: string; isDelegated: boolean }> => {
+export const getActiveSignatory = async (): Promise<{ id: number; name: string; isDelegated: boolean; deanName: string }> => {
   const deans = await userRepo.findByRole('DEAN');
   const dean = deans[0];
   if (!dean) {
@@ -32,9 +32,9 @@ export const getActiveSignatory = async (): Promise<{ id: number; name: string; 
 
   const delegation = await repo.findByDeanId(dean.id);
   if (delegation?.isActive && delegation.delegate) {
-    return { id: delegation.delegate.id, name: delegation.delegate.name, isDelegated: true };
+    return { id: delegation.delegate.id, name: delegation.delegate.name, isDelegated: true, deanName: dean.name };
   }
-  return { id: dean.id, name: dean.name, isDelegated: false };
+  return { id: dean.id, name: dean.name, isDelegated: false, deanName: dean.name };
 };
 
 export const getDelegateUsers = () => userRepo.findNonStudentUsers();

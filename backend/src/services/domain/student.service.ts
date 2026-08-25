@@ -106,13 +106,16 @@ export const uploadPhoto = async (studentId: number, file: Express.Multer.File) 
 export const submitPhase2 = async (userId: number) => {
   const existing = await studentRepository.findByUserId(userId);
   if (!existing) throw Object.assign(new Error('Student not found'), { statusCode: 404 });
-  if (!(existing.registrationStep === 1 && existing.registrationStatus === 'ACTIVE')) {
+  const isFirstSubmission = existing.registrationStep === 1 && existing.registrationStatus === 'ACTIVE';
+  const isResubmission = existing.registrationStatus === 'REJECTED';
+  if (!isFirstSubmission && !isResubmission) {
     throw Object.assign(new Error('Please complete the to-do checklist before submitting'), { statusCode: 400 });
   }
 
   const student = await studentRepository.updateByUserId(userId, {
     registrationStep: 2,
     registrationStatus: 'PENDING_APPROVAL',
+    rejectionReason: null,
   });
 
   const staffUsers = await studentRepository.findStaffIds();

@@ -44,7 +44,11 @@ export const findById = (id: number) =>
   prisma.request.findUnique({
     where:   { id },
     include: {
-      student:     true,
+      student: {
+        include: {
+          passports: { where: { isCurrent: true }, take: 1, select: { passportNumber: true, expiryDate: true } },
+        },
+      },
       requestType: { select: REQUEST_TYPE_SELECT },
     },
   });

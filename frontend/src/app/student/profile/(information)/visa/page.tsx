@@ -10,7 +10,7 @@ import PendingBanner from '@/components/PendingBanner';
 import toast from 'react-hot-toast';
 
 function daysRemaining(expiryDate: string): number {
-  return Math.max(0, Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000));
+  return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000);
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -165,7 +165,7 @@ export default function VisaPage() {
                 <tbody>
                   {visas.map(v => {
                     const days = daysRemaining(v.expiryDate);
-                    const status = days < 14 ? 'critical' : days <= 45 ? 'warning' : 'normal';
+                    const status = days <= 0 ? 'expired' : days < 14 ? 'critical' : days <= 45 ? 'warning' : 'normal';
                     return (
                       <tr key={v.id} className="border-b border-gray-100 last:border-none">
                         <td className="py-2.5 px-3 text-gray-700">{v.visaType}</td>
@@ -174,8 +174,8 @@ export default function VisaPage() {
                         <td className="py-2.5 px-3 text-gray-500">{fmtDate(v.expiryDate)}</td>
                         <td className="py-2.5 px-3 text-gray-500">{v.entries || '—'}</td>
                         <td className="py-2.5 px-3 text-center">
-                          <span className={`text-xs font-medium px-3 py-1 rounded-full ${status === 'critical' ? 'bg-red-100 text-red-600' : status === 'warning' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-700'}`}>
-                            {days} days
+                          <span className={`text-xs font-medium px-3 py-1 rounded-full ${status === 'expired' ? 'bg-gray-100 text-gray-500' : status === 'critical' ? 'bg-red-100 text-red-600' : status === 'warning' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-700'}`}>
+                            {status === 'expired' ? 'Expired' : `${days} days`}
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-center">

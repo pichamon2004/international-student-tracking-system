@@ -22,10 +22,15 @@ import {
 type Tab = 'Document Templates' | 'Email Templates' | 'Request Types' | 'Variables';
 const TABS: Tab[] = ['Document Templates', 'Email Templates', 'Request Types', 'Variables'];
 
+// Keep this in sync with buildStudentVariables() in
+// backend/src/services/domain/studentEmail.service.ts — anything listed
+// here must actually be filled in when the email is sent, or it's a trap.
 const EMAIL_VARIABLES = [
-  '{{student_name}}', '{{student_id}}', '{{email}}',
-  '{{visa_expiry_date}}', '{{days_remaining}}', '{{request_type}}',
-  '{{status}}', '{{program}}', '{{date}}',
+  '{{student_name}}', '{{student_id}}', '{{email}}', '{{program}}', '{{faculty}}',
+  '{{visa_type}}', '{{visa_expiry_date}}', '{{visa_days_remaining}}',
+  '{{passport_number}}', '{{passport_expiry_date}}', '{{passport_days_remaining}}',
+  '{{health_insurance_provider}}', '{{health_insurance_policy_number}}',
+  '{{health_insurance_type}}', '{{health_insurance_expiry_date}}', '{{health_insurance_days_remaining}}',
 ];
 
 /* ─── Icon Picker (react-icons) ───────────────────────────── */

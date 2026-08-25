@@ -316,8 +316,8 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 rounded-t-2xl">
           <p className="font-semibold text-primary">Complete Registration</p>
           <button onClick={onClose}
             className="flex items-center justify-center w-8 h-8 rounded-xl bg-gray-100 text-gray-500 hover:bg-primary hover:text-white transition-all">
@@ -369,6 +369,71 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
           <button onClick={handleConfirm} disabled={saving}
             className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 transition-all disabled:opacity-50">
             {saving ? 'Saving…' : 'Approve & Activate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Registration Reject Modal ──────────────────────────── */
+
+function RegistrationRejectModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
+  const modalInputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition bg-white';
+  const modalLabelCls = 'text-xs font-semibold text-gray-600 mb-1 block';
+
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleConfirm = async () => {
+    if (!reason.trim()) { setError('Please explain the reason for rejection'); return; }
+    setSaving(true);
+    try {
+      await onConfirm(reason.trim());
+    } catch {
+      setError('Failed to reject. Please try again.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <p className="font-semibold text-primary">Reject Registration</p>
+          <button onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-xl bg-gray-100 text-gray-500 hover:bg-primary hover:text-white transition-all">
+            <RiCloseLine size={16} />
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-4">
+          <p className="text-sm text-gray-500">
+            The student will see this reason and can fix their information and resubmit.
+          </p>
+
+          <div className="flex flex-col gap-1">
+            <label className={modalLabelCls}>Reason for rejection <span className="text-red-400">*</span></label>
+            <textarea
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder="e.g. Passport image is unclear, please re-upload"
+              rows={4}
+              className={clsx(modalInputCls, 'resize-none', error && 'border-red-400')}
+            />
+            {error && <p className="text-xs text-red-500">{error}</p>}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all">
+            Cancel
+          </button>
+          <button onClick={handleConfirm} disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 transition-all disabled:opacity-50">
+            {saving ? 'Rejecting…' : 'Reject'}
           </button>
         </div>
       </div>
@@ -567,7 +632,7 @@ function RegistrationForm({ studentDbId }: { studentDbId: number }) {
 
 /* ─── Page ────────────────────────────────────────────────── */
 
-type ApprovalState = 'idle' | 'approved' | 'rejected' | 'approving';
+type ApprovalState = 'idle' | 'approved' | 'rejected' | 'approving' | 'rejecting';
 
 export default function StaffStudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -693,14 +758,10 @@ export default function StaffStudentDetailPage() {
     }
   }
 
-  async function handleReject() {
-    try {
-      await studentApi.reject(numId, 'Rejected by staff');
-      setApproval('rejected');
-      toast.error('Registration rejected. The student has been notified.');
-    } catch {
-      toast.error('Failed to reject. Please try again.');
-    }
+  async function handleReject(reason: string) {
+    await studentApi.reject(numId, reason);
+    setApproval('rejected');
+    toast.error('Registration rejected. The student has been notified.');
   }
 
   return (
@@ -720,7 +781,7 @@ export default function StaffStudentDetailPage() {
         {needsApproval && (
           <div className="flex items-center gap-2">
             <button
-              onClick={handleReject}
+              onClick={() => setApproval('rejecting')}
               className="px-4 py-2 rounded-xl text-sm font-medium border border-primary/30 text-primary hover:bg-primary/5 transition-all"
             >
               Reject
@@ -1142,6 +1203,13 @@ export default function StaffStudentDetailPage() {
           studentDbId={numId}
           onClose={() => setApproval('idle')}
           onConfirm={() => setApproval('approved')}
+        />
+      )}
+
+      {approval === 'rejecting' && (
+        <RegistrationRejectModal
+          onClose={() => setApproval('idle')}
+          onConfirm={handleReject}
         />
       )}
 

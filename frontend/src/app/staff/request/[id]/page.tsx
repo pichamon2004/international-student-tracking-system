@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine, RiAttachmentLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
@@ -9,6 +9,9 @@ import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
+
+// Statuses where the request has finished its workflow — no further staff/advisor/dean action pending.
+const TERMINAL_STATUSES: RequestStatus[] = ['DEAN_APPROVED', 'ADVISOR_REJECTED', 'STAFF_REJECTED', 'DEAN_REJECTED', 'CANCELLED'];
 
 const statusLabelConfig: Record<string, { label: string; className: string }> = {
   PENDING:              { label: 'Pending',               className: 'bg-yellow-100 text-yellow-700' },
@@ -30,6 +33,7 @@ export default function StaffRequestDetailPage() {
   const [req, setReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const attachInputRef = useRef<HTMLInputElement>(null);
   const [deanName, setDeanName] = useState('');
 
   useEffect(() => {
@@ -50,6 +54,7 @@ export default function StaffRequestDetailPage() {
       const res = await requestApi.updateStatus(req.id, status, undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
       setAttachedFiles([]);
+      if (attachInputRef.current) attachInputRef.current.value = '';
       toast.success('Status updated');
     } catch {
       toast.error('Failed to update status');
@@ -139,7 +144,7 @@ export default function StaffRequestDetailPage() {
           </button>
 
           {/* Attach Files + Action Buttons */}
-          {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED') && (
+          {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED' || req.status === 'STAFF_APPROVED') && (
             <div className="flex flex-col gap-2">
               {/* File attachment */}
               <div className="flex flex-col gap-2">
@@ -147,12 +152,14 @@ export default function StaffRequestDetailPage() {
                   <RiAttachmentLine size={15} />
                   Attach files
                   <input
+                    ref={attachInputRef}
                     type="file"
                     multiple
                     className="hidden"
                     onChange={e => {
-                      setAttachedFiles(prev => [...prev, ...Array.from(e.target.files ?? [])]);
-                      e.target.value = '';
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length === 0) return;
+                      setAttachedFiles(prev => [...prev, ...files]);
                     }}
                   />
                 </label>
@@ -171,6 +178,12 @@ export default function StaffRequestDetailPage() {
               </div>
 
               {req.status === 'PENDING' && (
+                <>
+                  <Button variant="primary" label="Approve"  onClick={() => updateStatus('STAFF_APPROVED')} />
+                  <Button variant="danger"  label="Reject"   onClick={() => updateStatus('STAFF_REJECTED')} />
+                </>
+              )}
+              {req.status === 'STAFF_APPROVED' && (
                 <>
                   <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
                   <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
@@ -237,9 +250,15 @@ export default function StaffRequestDetailPage() {
                   <td className="py-3 px-4 text-gray-400 text-xs">{new Date(req.updatedAt).toLocaleDateString('en-GB')}</td>
                   <td className="py-3 px-4 text-primary font-medium">Status: {statusCfg.label}</td>
                   <td className="py-3 px-4 text-center">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse" /> pending
-                    </span>
+                    {TERMINAL_STATUSES.includes(req.status as RequestStatus) ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-600">
+                        <RiCheckLine size={12} /> finished
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block animate-pulse" /> pending
+                      </span>
+                    )}
                   </td>
                 </tr>
               </tbody>
@@ -263,6 +282,7 @@ export default function StaffRequestDetailPage() {
           email: s?.email ?? '—',
           education_level: levelMap[(s as { level?: string })?.level ?? ''] ?? (s as { level?: string })?.level ?? '—',
           program: s?.program ?? '—',
+          passport_number: s?.passports?.[0]?.passportNumber ?? '—',
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
           ...formDataObj,
         };

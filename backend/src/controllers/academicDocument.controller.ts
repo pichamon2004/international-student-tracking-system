@@ -17,7 +17,7 @@ export const createAcademicDocument = async (req: AuthRequest, res: Response): P
   const studentId = parseInt(req.params.id);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', null, 'CREATE', req.body);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
@@ -34,7 +34,7 @@ export const updateAcademicDocument = async (req: AuthRequest, res: Response): P
   const docId = parseInt(req.params.docId);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'UPDATE', req.body);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
@@ -66,7 +66,7 @@ export const deleteAcademicDocument = async (req: AuthRequest, res: Response): P
   const docId = parseInt(req.params.docId);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'DELETE', {});
       res.status(202).json({ success: true, changeRequest: cr });
       return;

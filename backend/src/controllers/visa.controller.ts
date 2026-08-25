@@ -13,7 +13,7 @@ export const createVisa = async (req: AuthRequest, res: Response): Promise<void>
   const studentId = parseInt(req.params.id);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'VISA', null, 'CREATE', req.body);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
@@ -28,7 +28,7 @@ export const updateVisa = async (req: AuthRequest, res: Response): Promise<void>
   const visaId = parseInt(req.params.visaId);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'VISA', visaId, 'UPDATE', req.body);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
@@ -43,7 +43,7 @@ export const deleteVisa = async (req: AuthRequest, res: Response): Promise<void>
   const visaId = parseInt(req.params.visaId);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'VISA', visaId, 'DELETE', {});
       res.status(202).json({ success: true, changeRequest: cr });
       return;

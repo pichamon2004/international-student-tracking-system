@@ -3,6 +3,7 @@ import * as requestRepository from '../../repositories/request.repository';
 import * as advisorRepository from '../../repositories/advisor.repository';
 import * as studentRepository from '../../repositories/student.repository';
 import * as documentTemplateRepository from '../../repositories/documentTemplate.repository';
+import * as deanDelegationRepository from '../../repositories/deanDelegation.repository';
 import { createNotification } from '../notification.service';
 import { sendEmail } from '../external/email.service';
 import { uploadToR2 } from '../external/r2.service';
@@ -16,6 +17,13 @@ export const getRequests = async (
 
   if (userRole === 'DEAN') {
     advisorWhereClause = { status: 'FORWARDED_TO_DEAN' };
+  } else if (userRole === 'VICE_DEAN' && userId !== undefined) {
+    // A vice dean only ever sees dean-level requests while an active
+    // delegation names them — otherwise they get nothing, not everyone's.
+    const activeDelegation = await deanDelegationRepository.findActiveByDelegateId(userId);
+    advisorWhereClause = activeDelegation
+      ? { status: 'FORWARDED_TO_DEAN' }
+      : { id: -1 };
   } else if (userRole === 'ADVISOR' && userId !== undefined) {
     const advisor = await advisorRepository.findStudentIdsByUserId(userId);
     const myStudentIds = advisor?.students.map((s) => s.id) ?? [];
@@ -43,6 +51,13 @@ export const getRequestById = async (
   if (userRole === 'STUDENT' && userId !== undefined) {
     const student = await studentRepository.findByUserId(userId);
     if (!student || request.studentId !== student.id) {
+      throw Object.assign(new Error('Access denied'), { statusCode: 403 });
+    }
+  }
+
+  if (userRole === 'VICE_DEAN' && userId !== undefined) {
+    const activeDelegation = await deanDelegationRepository.findActiveByDelegateId(userId);
+    if (!activeDelegation) {
       throw Object.assign(new Error('Access denied'), { statusCode: 403 });
     }
   }

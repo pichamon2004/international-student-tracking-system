@@ -4,21 +4,47 @@ import { sendEmail, applyTemplateVariables } from '../external/email.service';
 
 type StudentForEmail = NonNullable<Awaited<ReturnType<typeof studentRepository.findByIdForEmail>>>;
 
+const daysUntil = (date: Date | undefined): string => {
+  if (!date) return '-';
+  const ms = date.getTime() - Date.now();
+  return String(Math.max(0, Math.ceil(ms / 86_400_000)));
+};
+
 const buildStudentVariables = (student: StudentForEmail): Record<string, string> => {
   const name = [student.firstNameEn, student.lastNameEn].filter(Boolean).join(' ') || '-';
-  const currentVisa    = student.visas[0];
-  const currentPassport = student.passports[0];
+  const currentVisa      = student.visas[0];
+  const currentPassport  = student.passports[0];
+  const currentInsurance = student.healthInsurances[0];
+  const email = student.email ?? student.user?.email ?? '-';
+  const visaExpiry        = currentVisa?.expiryDate.toDateString()       ?? '-';
+  const passportExpiry    = currentPassport?.expiryDate.toDateString()   ?? '-';
+  const insuranceExpiry   = currentInsurance?.expiryDate.toDateString()  ?? '-';
+  const visaDaysRemaining = daysUntil(currentVisa?.expiryDate);
 
   return {
     student_name:     name,
     student_id:       student.studentId    ?? '-',
-    student_email:    student.email        ?? '-',
+    student_email:    email,
+    email,                                            // alias — matches the picker in Settings
     program:          student.program      ?? '-',
     faculty:          student.faculty      ?? '-',
-    visa_type:        currentVisa?.visaType               ?? '-',
-    visa_expiry:      currentVisa?.expiryDate.toDateString()    ?? '-',
-    passport_number:  currentPassport?.passportNumber     ?? '-',
-    passport_expiry:  currentPassport?.expiryDate.toDateString() ?? '-',
+
+    visa_type:        currentVisa?.visaType ?? '-',
+    visa_expiry:      visaExpiry,
+    visa_expiry_date: visaExpiry,                      // alias — matches the picker in Settings
+    days_remaining:   visaDaysRemaining,                // legacy alias, kept for existing templates
+    visa_days_remaining: visaDaysRemaining,
+
+    passport_number:  currentPassport?.passportNumber ?? '-',
+    passport_expiry:  passportExpiry,
+    passport_expiry_date: passportExpiry,
+    passport_days_remaining: daysUntil(currentPassport?.expiryDate),
+
+    health_insurance_provider:       currentInsurance?.provider ?? '-',
+    health_insurance_policy_number:  currentInsurance?.policyNumber ?? '-',
+    health_insurance_type:           currentInsurance?.coverageType ?? '-',
+    health_insurance_expiry_date:    insuranceExpiry,
+    health_insurance_days_remaining: daysUntil(currentInsurance?.expiryDate),
   };
 };
 

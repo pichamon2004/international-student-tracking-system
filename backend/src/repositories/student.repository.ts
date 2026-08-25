@@ -125,6 +125,12 @@ export const findByIdForEmail = (id: number) =>
         take: 1,
         select: { passportNumber: true, expiryDate: true },
       },
+      healthInsurances: {
+        where: { isCurrent: true },
+        orderBy: { expiryDate: 'asc' },
+        take: 1,
+        select: { provider: true, policyNumber: true, coverageType: true, expiryDate: true },
+      },
     },
   });
 
@@ -141,16 +147,19 @@ export const findByIdEmailOnly = (id: number) =>
 export const findUserByEmail = (email: string) =>
   prisma.user.findUnique({ where: { email } });
 
+// NOTE: staff role is looked up via the userRoles relation, not the legacy
+// User.role column — accounts created through Manage Users only get a
+// UserRole row, so filtering on the legacy field misses them.
 export const findFirstStaff = () =>
   prisma.user.findFirst({
-    where: { role: 'STAFF', isActive: true },
+    where: { isActive: true, userRoles: { some: { role: { code: 'STAFF' } } } },
     select: { name: true, email: true },
     orderBy: { createdAt: 'asc' },
   });
 
 export const findStaffIds = () =>
   prisma.user.findMany({
-    where: { role: 'STAFF', isActive: true },
+    where: { isActive: true, userRoles: { some: { role: { code: 'STAFF' } } } },
     select: { id: true },
   });
 
@@ -240,6 +249,7 @@ export const updateByUserId = (userId: number, dto: UpdateStudentDto) =>
       emergencyRelation: dto.emergencyRelation,
       registrationStatus: dto.registrationStatus,
       registrationStep: dto.registrationStep,
+      rejectionReason: dto.rejectionReason,
       dateOfBirth: dto.dateOfBirth,
     },
   });

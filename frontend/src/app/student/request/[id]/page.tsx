@@ -104,25 +104,25 @@ interface TimelineStep {
 function buildTimeline(status: RequestStatus): TimelineStep[] {
   const order: RequestStatus[] = [
     'PENDING',
+    'STAFF_APPROVED',
     'FORWARDED_TO_ADVISOR',
     'ADVISOR_APPROVED',
-    'STAFF_APPROVED',
     'FORWARDED_TO_DEAN',
     'DEAN_APPROVED',
   ];
 
   const labels: Record<string, string> = {
     PENDING:              'Submitted',
+    STAFF_APPROVED:       'Staff Approved',
     FORWARDED_TO_ADVISOR: 'Forwarded to Advisor',
     ADVISOR_APPROVED:     'Advisor Reviewed',
-    STAFF_APPROVED:       'Staff Approved',
     FORWARDED_TO_DEAN:    'Forwarded to Dean',
     DEAN_APPROVED:        'Completed',
   };
 
   const rejectedAt: Partial<Record<RequestStatus, string>> = {
+    STAFF_REJECTED:   'PENDING',
     ADVISOR_REJECTED: 'FORWARDED_TO_ADVISOR',
-    STAFF_REJECTED:   'ADVISOR_APPROVED',
     DEAN_REJECTED:    'FORWARDED_TO_DEAN',
     CANCELLED:        'PENDING',
   };
@@ -215,7 +215,7 @@ export default function StudentRequestDetailPage() {
   const timeline = buildTimeline(req.status);
 
   const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
-  const isCompleted = req.status === 'DEAN_APPROVED' || req.status === 'STAFF_APPROVED';
+  const isCompleted = req.status === 'DEAN_APPROVED';
 
   if (loading) {
     return (
@@ -356,9 +356,9 @@ export default function StudentRequestDetailPage() {
                 <RiInformationLine size={14} className="text-primary shrink-0 mt-0.5" />
                 <p className="text-xs text-primary">
                   {req.status === 'PENDING' && 'Your request is waiting for staff review. You will be notified when the status changes.'}
+                  {req.status === 'STAFF_APPROVED' && 'Staff has approved. The request will be forwarded to your advisor.'}
                   {req.status === 'FORWARDED_TO_ADVISOR' && 'Your request has been forwarded to your advisor for review.'}
-                  {req.status === 'ADVISOR_APPROVED' && 'Your advisor has approved. The request is now with staff for final review.'}
-                  {req.status === 'STAFF_APPROVED' && 'Staff has approved. The request will be forwarded to the Dean.'}
+                  {req.status === 'ADVISOR_APPROVED' && 'Your advisor has approved. The request will be forwarded to the Dean.'}
                   {req.status === 'FORWARDED_TO_DEAN' && 'Your request is pending Dean approval.'}
                 </p>
               </div>
@@ -413,6 +413,7 @@ export default function StudentRequestDetailPage() {
           email: s?.email ?? '—',
           education_level: levelMap[(s as { level?: string })?.level ?? ''] ?? '—',
           program: s?.program ?? '—',
+          passport_number: s?.passports?.[0]?.passportNumber ?? '—',
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
           ...formDataObj,
         };

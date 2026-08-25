@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import Button from '@/components/ui/Button';
 
 function daysRemaining(expiryDate: string): number {
-  return Math.max(0, Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000));
+  return Math.ceil((new Date(expiryDate).getTime() - Date.now()) / 86_400_000);
 }
 
 function fmtDate(d: string | null | undefined): string {
@@ -108,10 +108,10 @@ export default function HealthInsurancePage() {
                   <span className={labelCls}>Remaining</span>
                   {(() => {
                     const days = daysRemaining(current.expiryDate);
-                    const status = days < 14 ? 'critical' : days <= 45 ? 'warning' : 'normal';
+                    const status = days <= 0 ? 'expired' : days < 14 ? 'critical' : days <= 45 ? 'warning' : 'normal';
                     return (
-                      <span className={`text-xs font-medium px-3 py-1 rounded-full w-fit ${status === 'critical' ? 'bg-red-100 text-red-600' : status === 'warning' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-700'}`}>
-                        {days} days
+                      <span className={`text-xs font-medium px-3 py-1 rounded-full w-fit ${status === 'expired' ? 'bg-gray-100 text-gray-500' : status === 'critical' ? 'bg-red-100 text-red-600' : status === 'warning' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-700'}`}>
+                        {status === 'expired' ? 'Expired' : `${days} days`}
                       </span>
                     );
                   })()}

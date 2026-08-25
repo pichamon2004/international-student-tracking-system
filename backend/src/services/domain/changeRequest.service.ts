@@ -54,9 +54,26 @@ export const getPendingForEntity = (
   entityId: number | null,
 ) => repo.findPending(studentId, entityType, entityId);
 
+// Change request payloads are stored as plain JSON, so date fields arrive as
+// "YYYY-MM-DD" strings rather than Date objects. Prisma's raw client requires
+// a full ISO-8601 DateTime for DateTime columns, so convert any date-looking
+// string before handing the payload to Prisma.
+function coerceDates(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}(T.*)?$/.test(val)) {
+      const d = new Date(val);
+      out[key] = isNaN(d.getTime()) ? val : d;
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
 async function applyChange(cr: Awaited<ReturnType<typeof repo.findById>>) {
   if (!cr) return;
-  const p = cr.payload as Record<string, unknown>;
+  const p = coerceDates(cr.payload as Record<string, unknown>);
 
   switch (cr.entityType) {
     case 'STUDENT_PROFILE':

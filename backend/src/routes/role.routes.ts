@@ -5,7 +5,7 @@ import {
   getModules, createModule, updateModule, deleteModule,
   getUserRoles, assignRoleToUser, removeRoleFromUser,
 } from '../controllers/role.controller';
-import { authenticate, requirePermission } from '../middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
 
 const router = Router();
@@ -19,7 +19,10 @@ router.put('/modules/:id',   requirePermission('ROLE_MANAGEMENT.edit'),   asyncH
 router.delete('/modules/:id',requirePermission('ROLE_MANAGEMENT.delete'), asyncHandler(deleteModule));
 
 // ── Roles CRUD ────────────────────────────────────────────────────
-router.get('/',    requirePermission('ROLE_MANAGEMENT.view'),   asyncHandler(getRoles));
+// GET is also used by User Management (to populate the role-assignment
+// dropdown), so staff with USER_MANAGEMENT.view but not ROLE_MANAGEMENT.view
+// can still read the plain role list.
+router.get('/',    requireAnyPermission('ROLE_MANAGEMENT.view', 'USER_MANAGEMENT.view'),   asyncHandler(getRoles));
 router.post('/',   requirePermission('ROLE_MANAGEMENT.create'), asyncHandler(createRole));
 router.put('/:id', requirePermission('ROLE_MANAGEMENT.edit'),   asyncHandler(updateRole));
 router.delete('/:id', requirePermission('ROLE_MANAGEMENT.delete'), asyncHandler(deleteRole));

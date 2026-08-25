@@ -39,5 +39,17 @@ export const requirePermission = (...permCodes: string[]) =>
     next();
   };
 
+/** Passes if the user has at least one of the given permissions (OR, not AND). */
+export const requireAnyPermission = (...permCodes: string[]) =>
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const perms = req.user?.permissions ?? [];
+    const hasAny = permCodes.some(code => perms.includes(code));
+    if (!hasAny) {
+      res.status(403).json({ success: false, message: 'Forbidden: insufficient permission' });
+      return;
+    }
+    next();
+  };
+
 /** @deprecated use requireRole('STAFF') */
 export const requireAdmin = requireRole('STAFF');

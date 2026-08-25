@@ -115,6 +115,7 @@ export default function StudentProfilePage() {
     const [progress, setProgress] = useState<UserProfileProgress>(defaultProgress);
     const [regStep, setRegStep] = useState<number>(2); // default 2 = full access
     const [regStatus, setRegStatus] = useState<string>('ACTIVE');
+    const [rejectionReason, setRejectionReason] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [studentData, setStudentData] = useState<{
         studentId: string;
@@ -180,6 +181,7 @@ export default function StudentProfilePage() {
 
             setRegStep(s.registrationStep ?? 2);
             setRegStatus(s.registrationStatus ?? 'ACTIVE');
+            setRejectionReason(s.rejectionReason ?? null);
 
             // Derive all progress from real API data only
             const visas      = s.visas             as ApiVisa[];
@@ -199,8 +201,11 @@ export default function StudentProfilePage() {
     }, []);
 
     const allDone = todoItems.every(({ progressKey }) => progress[progressKey]);
-    // Show to-do list when student account is new (step 1, ACTIVE) — must complete checklist first
-    const showTodo = !allDone || (regStep === 1 && regStatus === 'ACTIVE');
+    const wasRejected = regStatus === 'REJECTED';
+    // Show to-do list when student account is new (step 1, ACTIVE) — must complete checklist first.
+    // Also show it after a staff rejection so the student can fix info and resubmit.
+    const showTodo = !allDone || wasRejected || (regStep === 1 && regStatus === 'ACTIVE');
+    const canSubmit = allDone && (wasRejected || (regStep === 1 && regStatus === 'ACTIVE'));
 
     async function handleSubmitRegistration() {
         setSubmitting(true);
@@ -304,16 +309,25 @@ export default function StudentProfilePage() {
                     <>
                         <div className="flex items-center justify-between">
                             <h2 className="text-3xl font-semibold text-primary">To-do list</h2>
-                            {allDone && regStep === 1 && regStatus === 'ACTIVE' && (
+                            {canSubmit && (
                                 <button
                                     onClick={handleSubmitRegistration}
                                     disabled={submitting}
                                     className="bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
                                 >
-                                    {submitting ? 'Submitting…' : 'Submit Registration'}
+                                    {submitting ? 'Submitting…' : wasRejected ? 'Resubmit Registration' : 'Submit Registration'}
                                 </button>
                             )}
                         </div>
+                        {wasRejected && (
+                            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                                <BsExclamation className="text-red-500 text-xl flex-shrink-0" />
+                                <div className="flex flex-col gap-0.5">
+                                    <p className="text-sm font-semibold text-red-600">Your registration was rejected</p>
+                                    <p className="text-sm text-red-500">{rejectionReason || 'Please review your information and resubmit.'}</p>
+                                </div>
+                            </div>
+                        )}
                         <div className="flex flex-col flex-1">
                             {todoItems.map(({ label, href, progressKey }, i) => {
                                 const done = progress[progressKey];

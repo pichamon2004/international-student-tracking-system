@@ -281,6 +281,7 @@ export default function RequestDetailPage() {
           email: s?.email ?? '—',
           education_level: levelMap[(s as { level?: string })?.level ?? ''] ?? (s as { level?: string })?.level ?? '—',
           program: s?.program ?? '—',
+          passport_number: s?.passports?.[0]?.passportNumber ?? '—',
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
           ...formDataObj,
         };

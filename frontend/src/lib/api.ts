@@ -98,6 +98,7 @@ export interface ApiRequest {
     titleEn: string | null; email: string | null; phone: string | null;
     program: string | null; faculty: string | null; level: string | null;
     nationality: string | null; homeCountry: string | null;
+    passports?: { passportNumber: string; expiryDate: string }[];
   };
   requestType?: {
     id: number;
@@ -181,6 +182,7 @@ export interface ApiStudent {
   photoUrl: string | null;
   registrationStatus: string;
   registrationStep: number;
+  rejectionReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -217,7 +219,7 @@ export const studentApi = {
 
   approve: (id: number) => api.put<{ success: boolean; data: ApiStudent }>(`/students/${id}/approve`),
 
-  reject: (id: number, reason: string) => api.put<{ success: boolean }>(`/students/${id}/reject`, { rejectionReason: reason }),
+  reject: (id: number, reason: string) => api.put<{ success: boolean }>(`/students/${id}/reject`, { reason }),
 
   submitPhase2: () =>
     api.put<{ success: boolean; data: ApiStudent }>('/students/me/submit-phase2'),
@@ -568,6 +570,7 @@ export interface ApiDeanSignatory {
   id: number;
   name: string;
   isDelegated: boolean;
+  deanName: string;
 }
 
 export interface ApiDeanDelegation {

@@ -7,6 +7,7 @@ import { RiUser3Line, RiUserStarLine, RiShieldUserLine, RiArrowRightLine, RiFile
 import { requestApi, deanApi, type ApiRequest, type ApiDeanDelegation } from '@/lib/api';
 import CustomSelect from '@/components/ui/CustomSelect';
 import Button from '@/components/ui/Button';
+import { useAuthStore } from '@/lib/auth';
 import toast from 'react-hot-toast';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -17,6 +18,8 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 export default function DeanDashboardPage() {
   const router = useRouter();
+  const { activeRole, user, fetchMe } = useAuthStore();
+  const isViceDean = activeRole === 'VICE_DEAN';
   const [requests, setRequests] = useState<ApiRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,6 +29,12 @@ export default function DeanDashboardPage() {
   const [delegLoading, setDelegLoading] = useState(true);
   const [delegSaving, setDelegSaving] = useState(false);
   const [isChanging, setIsChanging] = useState(false);
+  const [deanName, setDeanName] = useState('');
+  const [isCurrentlyDelegated, setIsCurrentlyDelegated] = useState(false);
+
+  useEffect(() => {
+    if (isViceDean && !user) fetchMe();
+  }, [isViceDean, user, fetchMe]);
 
   useEffect(() => {
     requestApi.getAll()
@@ -35,6 +44,21 @@ export default function DeanDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // Vice deans don't manage delegation (DEAN-only endpoints) — just show
+    // who they're currently signing on behalf of. Wait for `user` so the
+    // "is this delegation actually mine" check below isn't a false negative.
+    if (isViceDean) {
+      if (!user) return;
+      deanApi.getSignatory()
+        .then(res => {
+          const sig = res.data.data;
+          setIsCurrentlyDelegated(sig.isDelegated && sig.id === user.id);
+          setDeanName(sig.deanName);
+        })
+        .catch(() => {})
+        .finally(() => setDelegLoading(false));
+      return;
+    }
     Promise.all([deanApi.getDelegation(), deanApi.getDelegateUsers()])
       .then(([delRes, usersRes]) => {
         setDelegation(delRes.data.data);
@@ -42,7 +66,7 @@ export default function DeanDashboardPage() {
       })
       .catch(() => {})
       .finally(() => setDelegLoading(false));
-  }, []);
+  }, [isViceDean, user]);
 
   const handleDelegate = async () => {
     if (!selectedDelegateId) return;
@@ -117,15 +141,49 @@ export default function DeanDashboardPage() {
             {!delegLoading && (
               <span className={clsx(
                 'text-xs font-semibold px-3 py-1 rounded-full',
-                delegation?.isActive
-                  ? 'bg-orange-100 text-orange-600'
+                isViceDean
+                  ? isCurrentlyDelegated ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'
+                  : delegation?.isActive ? 'bg-orange-100 text-orange-600'
                   : 'bg-green-100 text-green-700'
               )}>
-                {delegation?.isActive ? 'Delegated' : 'Dean (self)'}
+                {isViceDean
+                  ? isCurrentlyDelegated ? 'Acting Dean' : 'Not Delegated'
+                  : delegation?.isActive ? 'Delegated' : 'Dean (self)'}
               </span>
             )}
           </div>
 
+          {isViceDean ? (
+            /* ── Vice dean: read-only, no delegation controls ── */
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-6 text-center">
+              <div className={clsx(
+                'w-14 h-14 rounded-full flex items-center justify-center text-2xl',
+                isCurrentlyDelegated ? 'bg-orange-100 text-orange-500' : 'bg-gray-100 text-gray-400'
+              )}>
+                <RiUserStarLine />
+              </div>
+              {delegLoading ? (
+                <div className="h-5 w-48 bg-gray-100 rounded animate-pulse" />
+              ) : isCurrentlyDelegated ? (
+                <>
+                  <p className="text-base font-semibold text-gray-800">You are acting on behalf of {deanName || 'the Dean'}</p>
+                  <p className="text-xs text-gray-400 max-w-sm">
+                    Requests forwarded to the Dean will appear below while this assignment is active.
+                    Only the Dean can change who this delegation is assigned to.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-base font-semibold text-gray-800">No active delegation right now</p>
+                  <p className="text-xs text-gray-400 max-w-sm">
+                    {deanName || 'The Dean'} hasn&apos;t delegated approval authority to you at the moment —
+                    you&apos;ll see requests here once they do.
+                  </p>
+                </>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Card body — horizontal split */}
           <div className="flex flex-1 divide-x divide-gray-100">
 
@@ -264,6 +322,8 @@ export default function DeanDashboardPage() {
               )}
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
 

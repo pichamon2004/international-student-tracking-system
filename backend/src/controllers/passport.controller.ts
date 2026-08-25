@@ -13,7 +13,7 @@ export const upsertPassport = async (req: AuthRequest, res: Response): Promise<v
   const studentId = parseInt(req.params.id);
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const cr = await changeRequestService.submitChange(studentId, 'PASSPORT', null, 'UPDATE', req.body);
       res.status(202).json({ success: true, changeRequest: cr });
       return;

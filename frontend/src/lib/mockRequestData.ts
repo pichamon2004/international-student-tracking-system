@@ -15,6 +15,7 @@ export interface StudentProfile {
   fundingType: string;
   advisorName: string;
   visaExpiry: string;    // dd/mm/yyyy
+  passportNumber: string;
 }
 
 export const mockStudentProfile: StudentProfile = {
@@ -31,6 +32,7 @@ export const mockStudentProfile: StudentProfile = {
   fundingType: 'Scholarship',
   advisorName: 'Assoc. Prof. Dr. Somchai Jaidee',
   visaExpiry: '31/05/2026',
+  passportNumber: 'UA51234567',
 };
 
 /* ─── Doc Templates (mirrors staff settings) ─────────────── */

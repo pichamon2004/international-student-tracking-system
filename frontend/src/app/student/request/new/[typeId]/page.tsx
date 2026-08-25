@@ -78,6 +78,7 @@ function buildBaseVarMap(profile: StudentProfile): Record<string, string> {
     program: profile.program,
     advisor_name: profile.advisorName,
     visa_expiry: profile.visaExpiry,
+    passport_number: profile.passportNumber,
     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
   };
 }
@@ -790,6 +791,7 @@ const EMPTY_PROFILE: StudentProfile = {
   studentId: '', titleEn: '', firstNameEn: '', lastNameEn: '',
   email: '', phone: '', faculty: '', program: '',
   level: 'BACHELOR', scholarship: '', fundingType: '', advisorName: '', visaExpiry: '',
+  passportNumber: '',
 };
 
 export default function NewRequestFormPage({ params }: { params: { typeId: string } }) {
@@ -863,6 +865,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
           fundingType: '',
           advisorName,
           visaExpiry,
+          passportNumber: s.passports?.[0]?.passportNumber ?? '',
         });
       } catch (e) {
         console.error('Failed to load data:', e);

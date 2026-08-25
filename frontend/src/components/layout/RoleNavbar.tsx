@@ -28,6 +28,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: IconType;
+  /** If set, the item only shows when the user holds this permission code. */
+  permission?: string;
 }
 
 const navConfig: Record<string, NavItem[]> = {
@@ -47,9 +49,9 @@ const navConfig: Record<string, NavItem[]> = {
   ],
   staff: [
     { href: '/staff/dashboard',        label: 'Dashboard',          icon: AiFillPieChart },
-    { href: '/staff/advisors',         label: 'Teacher Management', icon: RiUserStarLine },
-    { href: '/staff/request',          label: 'Request Management', icon: TbClipboardList },
-    { href: '/staff/students',         label: 'Student Management', icon: BsPeopleFill },
+    { href: '/staff/advisors',         label: 'Teacher Management', icon: RiUserStarLine, permission: 'ADVISOR_MANAGEMENT.view' },
+    { href: '/staff/request',          label: 'Request Management', icon: TbClipboardList, permission: 'REQUEST_MANAGEMENT.view' },
+    { href: '/staff/students',         label: 'Student Management', icon: BsPeopleFill, permission: 'STUDENT_MANAGEMENT.view' },
     { href: '/staff/change-requests',  label: 'Change Requests',    icon: RiCheckLine },
     { href: '/staff/notification',     label: 'Notification',       icon: RiNotification3Line },
     { href: '/staff/settings',         label: 'Settings',           icon: RiSettings3Line },
@@ -66,19 +68,21 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   const { logout, user, token, fetchMe, activeRole, hasPermission, roles, selectRole, fetchRoles } = useAuthStore();
 
   const ROLE_ICONS: Record<string, IconType> = {
-    STUDENT: RiGraduationCapLine,
-    ADVISOR: RiUserStarLine,
-    STAFF:   RiBriefcaseLine,
-    ADMIN:   RiShieldKeyholeLine,
-    DEAN:    RiShieldKeyholeLine,
+    STUDENT:   RiGraduationCapLine,
+    ADVISOR:   RiUserStarLine,
+    STAFF:     RiBriefcaseLine,
+    ADMIN:     RiShieldKeyholeLine,
+    DEAN:      RiShieldKeyholeLine,
+    VICE_DEAN: RiShieldKeyholeLine,
   };
 
   const ROLE_DASHBOARD: Record<string, string> = {
-    STUDENT: '/student/dashboard',
-    ADVISOR: '/advisor/dashboard',
-    STAFF:   '/staff/dashboard',
-    ADMIN:   '/staff/dashboard',
-    DEAN:    '/dean/dashboard',
+    STUDENT:   '/student/dashboard',
+    ADVISOR:   '/advisor/dashboard',
+    STAFF:     '/staff/dashboard',
+    ADMIN:     '/staff/dashboard',
+    DEAN:      '/dean/dashboard',
+    VICE_DEAN: '/dean/dashboard',
   };
 
   const switchRole = async (roleId: number, roleCode: string) => {
@@ -93,7 +97,9 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   const resolvedRole: 'student' | 'advisor' | 'staff' | 'dean' =
     role ?? (activeRole === 'STUDENT' ? 'student' : activeRole === 'ADVISOR' ? 'advisor' : activeRole === 'DEAN' ? 'dean' : 'staff');
 
-  const baseItems = navConfig[resolvedRole];
+  const baseItems = navConfig[resolvedRole].filter(
+    item => !item.permission || hasPermission(item.permission)
+  );
   const adminItems = [
     { href: '/manage/roles',   label: 'Roles & Permissions', icon: RiShieldKeyholeLine },
     { href: '/manage/modules', label: 'Modules',             icon: RiSettings3Line },
@@ -121,8 +127,12 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
     }
   }, [token, user, fetchMe]);
 
+  const ROLE_LABELS: Record<string, string> = { VICE_DEAN: 'Vice Dean' };
+
   const displayName = user?.name ?? '';
-  const displayRole = activeRole ? activeRole.charAt(0) + activeRole.slice(1).toLowerCase() : resolvedRole;
+  const displayRole = activeRole
+    ? (ROLE_LABELS[activeRole] ?? activeRole.charAt(0) + activeRole.slice(1).toLowerCase())
+    : resolvedRole;
   const initials = displayName
     .split(' ')
     .map((w) => w[0])
@@ -227,14 +237,6 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
               <p className="text-xs text-gray-400 capitalize">{displayRole}</p>
             </div>
 
-            <button
-              onClick={() => { setOpen(false); router.push(`/${role}/profile`); }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <RiUser3Line size={16} />
-              Profile
-            </button>
-
             {/* Switch role — show only when user has more than 1 role */}
             {roles.length > 1 && (
               <>
@@ -266,7 +268,7 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
               </>
             )}
 
-            <hr className="my-1 border-gray-100" />
+            {roles.length > 1 && <hr className="my-1 border-gray-100" />}
             <button
               onClick={() => { logout(); router.push('/login'); }}
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"

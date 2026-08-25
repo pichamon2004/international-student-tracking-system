@@ -53,17 +53,20 @@ function DependentForm() {
   );
 
   const [form, setForm] = useState({
-    prefix:       '',
-    firstName:    '',
-    middleName:   '',
-    lastName:     '',
-    email:        '',
-    relationship: '',
-    phone:        '',
-    dateOfBirth:  '',
-    gender:       '',
-    nationality:  '',
-    visaExpiry:   '',
+    prefix:         '',
+    firstName:      '',
+    middleName:     '',
+    lastName:       '',
+    email:          '',
+    relationship:   '',
+    phone:          '',
+    dateOfBirth:    '',
+    gender:         '',
+    nationality:    '',
+    passportNo:     '',
+    passportExpiry: '',
+    visaType:       '',
+    visaExpiry:     '',
   });
 
   const [studentNumId, setStudentNumId] = useState<number | null>(null);
@@ -88,6 +91,9 @@ function DependentForm() {
               dateOfBirth:  dep.dateOfBirth ? dep.dateOfBirth.slice(0, 10) : '',
               gender:       dep.gender === 'MALE' ? 'Male' : dep.gender === 'FEMALE' ? 'Female' : dep.gender === 'OTHER' ? 'Other' : dep.gender ?? '',
               nationality:  dep.nationality ?? '',
+              passportNo:     dep.passportNumber ?? '',
+              passportExpiry: dep.passportExpiry ? dep.passportExpiry.slice(0, 10) : '',
+              visaType:       dep.visaType ?? '',
               visaExpiry:   dep.visaExpiry ? dep.visaExpiry.slice(0, 10) : '',
             });
             setImages({
@@ -161,6 +167,9 @@ function DependentForm() {
           dateOfBirth:  form.dateOfBirth,
           gender:       genderEnum,
           nationality:  form.nationality,
+          passportNumber: form.passportNo || undefined,
+          passportExpiry: form.passportExpiry || undefined,
+          visaType:       form.visaType || undefined,
           visaExpiry:   form.visaExpiry || undefined,
           ...imagePayload,
         });
@@ -178,6 +187,9 @@ function DependentForm() {
           dateOfBirth:  form.dateOfBirth,
           gender:       genderEnum,
           nationality:  form.nationality,
+          passportNumber: form.passportNo || undefined,
+          passportExpiry: form.passportExpiry || undefined,
+          visaType:       form.visaType || undefined,
           visaExpiry:   form.visaExpiry || undefined,
           visaStatus:   'ACTIVE',
           ...imagePayload,
@@ -250,6 +262,15 @@ function DependentForm() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <Field label="Passport No.">
+            <input value={form.passportNo} onChange={set('passportNo')} placeholder="e.g. UA51234567" className={inputCls} />
+          </Field>
+          <Field label="Passport Expiry Date">
+            <DateSelect value={form.passportExpiry} onChange={(v) => setForm(p => ({ ...p, passportExpiry: v }))} />
+          </Field>
+          <Field label="Visa Type">
+            <input value={form.visaType} onChange={set('visaType')} placeholder="e.g. Non-Immigrant O" className={inputCls} />
+          </Field>
           <Field label="Visa Expiry Date">
             <DateSelect value={form.visaExpiry} onChange={(v) => setForm(p => ({ ...p, visaExpiry: v }))} />
           </Field>

@@ -25,7 +25,7 @@ export default function TeacherProfilePage() {
       const studentIds = new Set((adv.students ?? []).map(s => s.id));
       const reqs = reqRes.data.data.filter(r => studentIds.has(r.studentId));
       setPendingCount(reqs.filter(r => r.status === 'PENDING' || r.status === 'FORWARDED_TO_ADVISOR').length);
-      setDoneCount(reqs.filter(r => r.status === 'DEAN_APPROVED' || r.status === 'STAFF_APPROVED').length);
+      setDoneCount(reqs.filter(r => r.status === 'DEAN_APPROVED').length);
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);

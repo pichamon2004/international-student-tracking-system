@@ -32,10 +32,13 @@ export const getMyProfile = async (userId: number) => {
   const visaMap     = Object.fromEntries(visas.map((v) => [v.studentId, v]));
   const passportMap = Object.fromEntries(passports.map((p) => [p.studentId, p]));
 
+  // Shaped as arrays (not singular activeVisa/currentPassport) to match
+  // ApiAdvisor's declared type and how every other student list in the app
+  // (staff dashboard, notifications, etc.) already reads visa/passport data.
   const students = advisor.students.map((s) => ({
     ...s,
-    activeVisa:      visaMap[s.id]     ?? null,
-    currentPassport: passportMap[s.id] ?? null,
+    visas:     visaMap[s.id]     ? [visaMap[s.id]]     : [],
+    passports: passportMap[s.id] ? [passportMap[s.id]] : [],
   }));
 
   const { user, ...rest } = advisor;

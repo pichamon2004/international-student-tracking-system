@@ -23,3 +23,8 @@ export const toggle = (deanId: number, isActive: boolean) =>
 
 export const remove = (deanId: number) =>
   prisma.deanDelegation.delete({ where: { deanId } });
+
+// Is this user currently the active delegate for any dean? Used to gate what
+// a VICE_DEAN can see — they only get dean-level access while delegated.
+export const findActiveByDelegateId = (delegateId: number) =>
+  prisma.deanDelegation.findFirst({ where: { delegateId, isActive: true } });

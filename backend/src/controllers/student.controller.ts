@@ -42,7 +42,7 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
 
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentDbId } });
-    if (currentStudent?.registrationStatus === 'ACTIVE') {
+    if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
       const studentFields = {
         titleEn: req.body.titleEn,
         firstNameEn: req.body.firstNameEn,

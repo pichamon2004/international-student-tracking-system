@@ -159,6 +159,13 @@ export default function StaffRequestPage() {
                     <div className="flex items-center justify-center gap-2">
                       {req.status === 'PENDING' && (
                         <>
+                          <Button variant="danger"  label="Reject"  onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
+                          <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
+                          <Button variant="success" label="Approve" onClick={() => updateStatus(req.id, 'STAFF_APPROVED')} />
+                        </>
+                      )}
+                      {req.status === 'STAFF_APPROVED' && (
+                        <>
                           <Button variant="danger"  label="Reject"          onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
                           <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
                           <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus(req.id, 'FORWARDED_TO_ADVISOR')} />
@@ -174,17 +181,11 @@ export default function StaffRequestPage() {
                         <>
                           <Button variant="danger"  label="Reject"  onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
                           <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
-                          <Button variant="success" label="Approve" onClick={() => updateStatus(req.id, 'STAFF_APPROVED')} />
+                          <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus(req.id, 'FORWARDED_TO_DEAN')} />
                         </>
                       )}
                       {req.status === 'ADVISOR_REJECTED' && (
                         <Button variant="info" onClick={() => router.push(`/staff/request/${req.id}`)} />
-                      )}
-                      {req.status === 'STAFF_APPROVED' && (
-                        <>
-                          <Button variant="info"    onClick={() => router.push(`/staff/request/${req.id}`)} />
-                          <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus(req.id, 'FORWARDED_TO_DEAN')} />
-                        </>
                       )}
                       {(req.status === 'FORWARDED_TO_DEAN' || isDone(req.status)) && (
                         <Button variant="info" onClick={() => router.push(`/staff/request/${req.id}`)} />

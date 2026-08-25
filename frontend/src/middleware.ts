@@ -15,6 +15,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   STUDENT:  ['/student'],
   SUB_STAFF:['/staff'],
   DEAN:     ['/dean'],
+  VICE_DEAN:['/dean'],
 };
 
 export function middleware(request: NextRequest) {

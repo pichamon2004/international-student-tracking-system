@@ -20,8 +20,8 @@ type DotState = 'done' | 'active' | 'rejected' | 'idle';
 function statusToDots(status: string): DotState[] {
   // rejected states — mark the step that was rejected
   const REJECTED: Record<string, number> = {
+    STAFF_REJECTED:   0,
     ADVISOR_REJECTED: 1,
-    STAFF_REJECTED:   2,
     DEAN_REJECTED:    3,
     CANCELLED:        0,
   };
@@ -32,16 +32,18 @@ function statusToDots(status: string): DotState[] {
     );
   }
 
+  // Staff approves first (before the advisor), so STAFF_APPROVED sits within
+  // the "Submitted" dot — the request hasn't reached the advisor step yet.
   const STEP_INDEX: Record<string, number> = {
     PENDING:               0,
+    STAFF_APPROVED:        0,
     FORWARDED_TO_ADVISOR:  1,
     ADVISOR_APPROVED:      2,
-    STAFF_APPROVED:        2,
     FORWARDED_TO_DEAN:     3,
     DEAN_APPROVED:         4,
   };
   const idx = STEP_INDEX[status] ?? 0;
-  const isComplete = status === 'DEAN_APPROVED' || status === 'STAFF_APPROVED';
+  const isComplete = status === 'DEAN_APPROVED';
 
   return STEPS.map((_, i) => {
     if (isComplete) return 'done';
