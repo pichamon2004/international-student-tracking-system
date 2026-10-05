@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
+import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
+import SignatureModal from '@/components/SignatureModal';
 import { clsx } from 'clsx';
 import {
   RiArrowLeftLine, RiCheckLine, RiTimeLine, RiCloseCircleLine,
   RiFileTextLine, RiCalendarLine, RiInformationLine, RiEyeLine,
-  RiCloseLine, RiPrinterLine,
+  RiCloseLine, RiPrinterLine, RiPenNibLine,
 } from 'react-icons/ri';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -179,10 +180,13 @@ export default function StudentRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [showPreview, setShowPreview] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
   const [reqData, setReqData] = useState<RequestDetail | null>(null);
   const [fullReq, setFullReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [deanName, setDeanName] = useState('');
+  const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
+  const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -207,6 +211,15 @@ export default function StudentRequestDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    generatedDocApi.getByRequest(Number(id))
+      .then(res => {
+        const doc = res.data.data[0] ?? null;
+        setGenDoc(doc);
+        if (doc) {
+          generatedDocApi.getSignatures(doc.id).then(r => setSignatures(r.data.data)).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, [id]);
 
   // fallback to mock while loading
@@ -381,22 +394,52 @@ export default function StudentRequestDetailPage() {
                 ? 'Your document is ready. You can preview or print it below.'
                 : 'Document preview is available once the request is completed.'}
             </p>
-            <button
-              onClick={() => setShowPreview(true)}
-              disabled={!isCompleted}
-              className={clsx(
-                'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition w-fit',
-                isCompleted
-                  ? 'bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowPreview(true)}
+                disabled={!isCompleted}
+                className={clsx(
+                  'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition',
+                  isCompleted
+                    ? 'bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                )}
+              >
+                <RiEyeLine size={15} /> View Document
+              </button>
+
+              {genDoc && !signatures.some(s => s.role === 'student') && (
+                <button
+                  onClick={() => setShowSignModal(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm transition"
+                >
+                  <RiPenNibLine size={15} /> Sign Document
+                </button>
               )}
-            >
-              <RiEyeLine size={15} /> View Document
-            </button>
+              {genDoc && signatures.some(s => s.role === 'student') && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
+                  <RiCheckLine size={14} /> You have signed
+                </div>
+              )}
+            </div>
           </div>
 
         </div>
       </div>
+
+      {showSignModal && genDoc && fullReq && (
+        <SignatureModal
+          docId={genDoc.id}
+          myRole="student"
+          signatures={signatures}
+          requiredRoles={(() => {
+            const vars: string[] = (() => { try { return JSON.parse(fullReq.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
+            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+          })()}
+          onSigned={setSignatures}
+          onClose={() => setShowSignModal(false)}
+        />
+      )}
 
       {/* Document Preview Modal */}
       {showPreview && fullReq && (() => {

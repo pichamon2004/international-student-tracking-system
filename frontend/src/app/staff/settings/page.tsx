@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { IconType } from 'react-icons';
-import { templateApi, requestTypeApi, emailTemplateApi, templateVariableApi, type ApiRequestType, type ApiTemplateVariable } from '@/lib/api';
+import { templateApi, requestTypeApi, emailTemplateApi, templateVariableApi, type ApiRequestType, type ApiTemplateVariable, type SelectOption } from '@/lib/api';
 import { clsx } from 'clsx';
 import DocTemplateModal, { DocTemplate } from '@/components/DocTemplateModal';
 import EmailTemplateModal, { EmailTemplate } from '@/components/EmailTemplateModal';
@@ -820,13 +820,13 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
     v.label.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleSave = async (data: { id?: number; key: string; label: string; description?: string }) => {
+  const handleSave = async (data: { id?: number; key: string; label: string; description?: string; inputType?: string; options?: SelectOption[] }) => {
     setSaving(true);
     try {
       if (!data.id) {
-        await templateVariableApi.create({ key: data.key, label: data.label, description: data.description });
+        await templateVariableApi.create({ key: data.key, label: data.label, description: data.description, inputType: data.inputType, options: data.options });
       } else {
-        await templateVariableApi.update(data.id, { label: data.label, description: data.description });
+        await templateVariableApi.update(data.id, { label: data.label, description: data.description, inputType: data.inputType, options: data.options });
       }
       await onRefresh();
     } catch (e) { console.error(e); }
@@ -888,7 +888,22 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
                 {`{{${v.key}}}`}
               </code>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-800 truncate">{v.label}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{v.label}</p>
+                  <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    v.inputType === 'auto'     ? 'bg-green-100 text-green-700' :
+                    v.inputType === 'date'     ? 'bg-blue-100 text-blue-700' :
+                    v.inputType === 'textarea' ? 'bg-amber-100 text-amber-700' :
+                    v.inputType === 'select'   ? 'bg-purple-100 text-purple-700' :
+                                                 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {v.inputType === 'auto'     ? 'Auto' :
+                     v.inputType === 'textarea' ? 'Long Text' :
+                     v.inputType === 'date'     ? 'Date' :
+                     v.inputType === 'select'   ? `Choices (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
+                     'Text'}
+                  </span>
+                </div>
                 {v.description && <p className="text-xs text-gray-400 truncate mt-0.5">{v.description}</p>}
               </div>
               <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

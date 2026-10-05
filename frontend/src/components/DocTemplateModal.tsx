@@ -194,20 +194,16 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     if (!activeRange || !editorRef.current) return;
 
     if (!activeRange.collapsed) {
-      // ── Has selection: wrap it ──
-      const frag = activeRange.extractContents();
-      const span = document.createElement('span');
-      span.style.fontSize = `${px}px`;
-      span.appendChild(frag);
-      activeRange.insertNode(span);
-      const sel = window.getSelection();
-      if (sel) {
-        sel.removeAllRanges();
-        const nr = document.createRange();
-        nr.selectNodeContents(span);
-        sel.addRange(nr);
-        savedRangeRef.current = nr.cloneRange();
-      }
+      // execCommand handles single-line and multi-line selections correctly.
+      // Wrapping extractContents() in a <span> breaks when selection crosses block boundaries.
+      document.execCommand('fontSize', false, '7'); // sentinel → browser creates <font size="7">
+      const fonts = Array.from(editorRef.current.querySelectorAll('font[size="7"]'));
+      fonts.forEach(font => {
+        const span = document.createElement('span');
+        span.style.fontSize = `${px}px`;
+        while (font.firstChild) span.appendChild(font.firstChild);
+        font.parentNode?.replaceChild(span, font);
+      });
     } else {
       // ── Cursor only: insert a span carrier so next typed chars use this size ──
       const span = document.createElement('span');
@@ -407,13 +403,16 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
               {/* Formatting toolbar (vertical left) */}
               <div className="w-11 shrink-0 bg-[#DEEBFF]/30 border-r border-[#0776BC]/10 flex flex-col items-center py-3 gap-1">
                 {/* Font size selector */}
-                <div className="relative w-8 mb-1" title="Font size">
-                  <CustomSelect
-                    value={String(fontSize)}
-                    onChange={(val) => applyFontSize(Number(val))}
-                    options={FONT_SIZES.map(s => ({ label: String(s), value: String(s) }))}
-                  />
-                </div>
+                <select
+                  title="Font size"
+                  value={fontSize}
+                  onChange={e => applyFontSize(Number(e.target.value))}
+                  className="w-8 mb-1 rounded-lg border border-[#0776BC]/20 bg-white text-primary text-xs font-semibold text-center py-1 cursor-pointer hover:border-primary/40 focus:outline-none focus:border-primary transition-colors appearance-none"
+                >
+                  {FONT_SIZES.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
 
                 <div className="w-5 h-px bg-[#0776BC]/20 my-0.5" />
 

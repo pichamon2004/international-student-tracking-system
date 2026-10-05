@@ -13,7 +13,7 @@ import {
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, type ApiTemplateVariable, type SelectOption } from '@/lib/api';
 import toast from 'react-hot-toast';
 import DateSelect from '@/components/ui/DateSelect';
 
@@ -599,6 +599,85 @@ function LeaveRequestForm({ requiredDocs, onSubmit, profile }: { requiredDocs: D
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   SIDE PANEL ACTIONS (sticky right column)
+═══════════════════════════════════════════════════════════════ */
+function SidePanelActions({
+  docs,
+  varMap,
+  onOpenPreview,
+  onSubmit,
+  submitDisabled,
+}: {
+  docs: DocTemplate[];
+  varMap: Record<string, string>;
+  onOpenPreview: () => void;
+  onSubmit: () => void;
+  submitDisabled: boolean;
+}) {
+  const allTokens = docs.flatMap(d => extractVarTokens(d.body).filter(v => !v.startsWith('{{sig_')));
+  const filledCount = allTokens.filter(v => { const k = v.slice(2, -2); return varMap[k] && varMap[k] !== '—'; }).length;
+  const totalVars = allTokens.length;
+  const fillPct = totalVars ? Math.round((filledCount / totalVars) * 100) : 100;
+  const isReady = fillPct === 100;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="h-1.5 bg-gray-100">
+        <div className={clsx('h-1.5 transition-all duration-500', isReady ? 'bg-green-500' : 'bg-primary')} style={{ width: `${fillPct}%` }} />
+      </div>
+      <div className="p-5 flex flex-col gap-4">
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-gray-500">Form Progress</span>
+            <span className={clsx('text-xs font-bold', isReady ? 'text-green-600' : 'text-primary')}>{fillPct}%</span>
+          </div>
+          <span className={clsx('inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full', isReady ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-primary')}>
+            {isReady ? <><RiCheckLine size={11} /> All fields filled</> : `${filledCount}/${totalVars} fields filled`}
+          </span>
+        </div>
+
+        {docs.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-2">Documents to Generate</p>
+            <div className="flex flex-col gap-1.5">
+              {docs.map(d => (
+                <div key={d.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50/60 border border-blue-100">
+                  <RiFileTextLine size={13} className="text-primary shrink-0" />
+                  <span className="text-xs text-gray-700 font-medium">{d.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2.5 pt-1 border-t border-gray-100">
+          {docs.length > 0 && (
+            <button
+              type="button"
+              onClick={onOpenPreview}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-primary text-primary text-sm font-semibold hover:bg-primary hover:text-white transition"
+            >
+              <RiEyeLine size={15} /> Preview Document
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={submitDisabled}
+            onClick={onSubmit}
+            className={clsx(
+              'w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition shadow-sm',
+              !submitDisabled ? 'bg-primary text-white hover:bg-primary/90 active:scale-[0.99]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            )}
+          >
+            <RiSendPlaneLine size={15} /> Submit Request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    DYNAMIC REQUEST FORM
 ═══════════════════════════════════════════════════════════════ */
 const PROFILE_AUTO_FILL_KEYS = new Set([
@@ -607,29 +686,29 @@ const PROFILE_AUTO_FILL_KEYS = new Set([
   'advisor_name', 'visa_expiry', 'date',
 ]);
 
-const USER_INPUT_FIELD_DEFS: Record<string, { label: string; type: 'text' | 'date' | 'email' | 'textarea'; placeholder?: string }> = {
-  destination:   { label: 'Destination (City and Country)', type: 'text',    placeholder: 'e.g. Tokyo, Japan' },
-  purpose:       { label: 'Purpose of Travel',              type: 'textarea', placeholder: 'Describe the purpose of your trip...' },
-  duration_days: { label: 'Duration (days/months)',         type: 'text',    placeholder: 'e.g. 14 days' },
-  leave_start:   { label: 'Start Date',                     type: 'date' },
-  leave_end:     { label: 'Return Date',                    type: 'date' },
-  // Profile fields that may be empty — show as input if not filled
-  student_title:    { label: 'Title (Mr./Mrs./Miss)',  type: 'text',  placeholder: 'e.g. Mr.' },
-  thai_tel:         { label: 'Thai Tel. No.',          type: 'text',  placeholder: '0XX-XXX-XXXX' },
-  education_level:  { label: 'Education Level',        type: 'text',  placeholder: 'e.g. Master\'s' },
-  funding_type:     { label: 'Funding Type',           type: 'text',  placeholder: 'e.g. Scholarship' },
-  scholarship_name: { label: 'Scholarship Name',       type: 'text',  placeholder: 'Scholarship name' },
-  advisor_name:     { label: 'Advisor Name',           type: 'text',  placeholder: 'Advisor full name' },
+// Fallback for built-in profile variables that may be empty
+const PROFILE_INPUT_FALLBACKS: Record<string, { label: string; type: 'text' | 'date'; placeholder?: string }> = {
+  student_title:    { label: 'Title (Mr./Mrs./Miss)',  type: 'text', placeholder: 'e.g. Mr.' },
+  thai_tel:         { label: 'Thai Tel. No.',          type: 'text', placeholder: '0XX-XXX-XXXX' },
+  education_level:  { label: 'Education Level',        type: 'text', placeholder: 'e.g. Master\'s' },
+  funding_type:     { label: 'Funding Type',           type: 'text', placeholder: 'e.g. Scholarship' },
+  scholarship_name: { label: 'Scholarship Name',       type: 'text', placeholder: 'Scholarship name' },
+  advisor_name:     { label: 'Advisor Name',           type: 'text', placeholder: 'Advisor full name' },
   visa_expiry:      { label: 'Visa Expiry Date',       type: 'date' },
 };
 
-function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: () => void; profile: StudentProfile; deanName?: string; irStaffName?: string }) {
+function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: () => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[] }) {
   const p = profile;
   const baseVarMap = useMemo(() => buildBaseVarMap(p), [p]);
 
   const allVarTokens = useMemo(() => Array.from(new Set(
     requiredDocs.flatMap(d => extractVarTokens(d.body).filter(v => !v.startsWith('{{sig_')))
   )), [requiredDocs]);
+
+  // Build a lookup map from DB variable definitions
+  const varDefMap = useMemo(() =>
+    Object.fromEntries(varDefs.map(v => [v.key, v])),
+  [varDefs]);
 
   // All profile fields with their values
   const ALL_PROFILE_FIELDS: Record<string, { label: string; value: string }> = {
@@ -646,7 +725,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
     visa_expiry:      { label: 'Visa Expiry',      value: p.visaExpiry },
   };
 
-  // Classify template variables: auto-filled (has value) vs needs input (empty or non-profile)
+  // Classify template variables using DB inputType
   const { autoFilledFields, missingProfileKeys, userInputKeys } = useMemo(() => {
     const auto: { label: string; value: string; key: string }[] = [];
     const missingProfile: string[] = [];
@@ -654,20 +733,26 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
 
     allVarTokens.forEach(token => {
       const key = token.slice(2, -2);
-      if (PROFILE_AUTO_FILL_KEYS.has(key)) {
+      const dbDef = varDefMap[key];
+      const dbInputType = dbDef?.inputType ?? 'auto';
+
+      if (PROFILE_AUTO_FILL_KEYS.has(key) && dbInputType === 'auto') {
+        // Built-in profile variable — auto-fill if has value, else show input
         const profileField = ALL_PROFILE_FIELDS[key];
         if (profileField && profileField.value && profileField.value !== '—') {
           auto.push({ label: profileField.label, value: profileField.value, key });
-        } else if (USER_INPUT_FIELD_DEFS[key]) {
-          missingProfile.push(key); // has profile key but value is empty
+        } else if (PROFILE_INPUT_FALLBACKS[key]) {
+          missingProfile.push(key);
         }
-      } else if (USER_INPUT_FIELD_DEFS[key]) {
+      } else if (dbInputType !== 'auto') {
+        // DB says student must fill this in
         userInput.push(key);
       }
+      // dbInputType === 'auto' and not in PROFILE_AUTO_FILL_KEYS → skip (no profile value)
     });
     return { autoFilledFields: auto, missingProfileKeys: missingProfile, userInputKeys: userInput };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allVarTokens, p]);
+  }, [allVarTokens, p, varDefMap]);
 
   const allInputKeys = [...missingProfileKeys, ...userInputKeys];
   const [formData, setFormData] = useState<Record<string, string>>(() =>
@@ -676,68 +761,151 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
   const [note, setNote] = useState('');
   const [showPreview, setShowPreview] = useState(false);
 
-  const varMap: Record<string, string> = useMemo(() => ({
-    ...baseVarMap,
-    ...Object.fromEntries(allInputKeys.map(k => [k, formData[k] || '—'])),
-  }), [baseVarMap, allInputKeys, formData]);
+  const varMap: Record<string, string> = useMemo(() => {
+    const entries = allInputKeys.map(k => {
+      const dbDef = varDefMap[k];
+      if (dbDef?.inputType === 'select') {
+        const val = formData[k] || '';
+        try {
+          const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
+          const selectedOpt = opts.find(o => o.label === val);
+          if (selectedOpt?.allowInput) {
+            return [k, formData[`${k}__others`] || '—'];
+          }
+        } catch { /* ignore */ }
+      }
+      return [k, formData[k] || '—'];
+    });
+    return { ...baseVarMap, ...Object.fromEntries(entries) };
+  }, [baseVarMap, allInputKeys, formData, varDefMap]);
 
   const hasInputFields = allInputKeys.length > 0;
-  const allInputsFilled = allInputKeys.every(k => formData[k]?.trim());
+  const allInputsFilled = allInputKeys.every(k => {
+    const val = formData[k]?.trim();
+    if (!val) return false;
+    const dbDef = varDefMap[k];
+    if (dbDef?.inputType === 'select') {
+      try {
+        const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
+        const selectedOpt = opts.find(o => o.label === val);
+        if (selectedOpt?.allowInput) {
+          return !!formData[`${k}__others`]?.trim();
+        }
+      } catch { /* ignore */ }
+    }
+    return true;
+  });
   const submitDisabled = hasInputFields && !allInputsFilled;
 
   return (
     <>
-      <div className="flex flex-col gap-5">
-        {autoFilledFields.length > 0 && (
-          <SectionCard icon={<RiCheckboxCircleLine size={14} />} title="Auto-filled from Your Profile"
-            subtitle="These fields are pre-filled — no action needed" color="green">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {autoFilledFields.map(({ label, value }) => (
-                <div key={label} className="flex flex-col gap-0.5 px-3.5 py-2.5 rounded-xl bg-green-50/60 border border-green-100">
-                  <span className="text-[10px] font-semibold text-green-600 uppercase tracking-wide">{label}</span>
-                  <span className="text-sm font-medium text-gray-700 truncate">{value}</span>
-                </div>
-              ))}
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
+        {/* Left column: form sections */}
+        <div className="flex flex-col gap-5">
+          {autoFilledFields.length > 0 && (
+            <SectionCard icon={<RiCheckboxCircleLine size={14} />} title="Auto-filled from Your Profile"
+              subtitle="These fields are pre-filled — no action needed" color="green">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {autoFilledFields.map(({ label, value }) => (
+                  <div key={label} className="flex flex-col gap-0.5 px-3.5 py-2.5 rounded-xl bg-green-50/60 border border-green-100">
+                    <span className="text-[10px] font-semibold text-green-600 uppercase tracking-wide">{label}</span>
+                    <span className="text-sm font-medium text-gray-700 truncate">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {hasInputFields && (
+            <SectionCard icon={<RiEditLine size={14} />} title="Additional Information Required"
+              subtitle="Please fill in the following fields" color="amber">
+              <div className="flex flex-col gap-4">
+                {allInputKeys.map(key => {
+                  const dbDef = varDefMap[key];
+                  const fallback = PROFILE_INPUT_FALLBACKS[key];
+                  const label = dbDef?.label ?? fallback?.label ?? key.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+                  const inputType = (dbDef?.inputType ?? fallback?.type ?? 'text') as 'text' | 'date' | 'textarea' | 'select';
+                  const placeholder = dbDef?.description ?? undefined;
+                  const selectOptions: SelectOption[] = (() => {
+                    try {
+                      const parsed = JSON.parse(dbDef?.options ?? '[]');
+                      if (!Array.isArray(parsed)) return [];
+                      // support legacy string[] format
+                      if (parsed.length > 0 && typeof parsed[0] === 'string') {
+                        return (parsed as string[]).map(s => ({ label: s, allowInput: false }));
+                      }
+                      return parsed as SelectOption[];
+                    } catch { return []; }
+                  })();
+                  const selectedVal = formData[key] ?? '';
+                  const othersKey = `${key}__others`;
+
+                  return (
+                    <Field key={key} label={label} required>
+                      {inputType === 'select' ? (
+                        selectOptions.length === 0 ? (
+                          <input type="text" value={selectedVal}
+                            onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                            placeholder={placeholder ?? 'Please specify...'}
+                            className={inputCls} />
+                        ) : (
+                        <div className="flex flex-col gap-2">
+                          {selectOptions.map(opt => (
+                            <div key={opt.label}>
+                              <RadioOption
+                                name={key}
+                                value={opt.label}
+                                checked={selectedVal === opt.label}
+                                onChange={() => {
+                                  setFormData(prev => ({ ...prev, [key]: opt.label, [othersKey]: '' }));
+                                }}
+                                label={opt.label}
+                              />
+                              {opt.allowInput && selectedVal === opt.label && (
+                                <input
+                                  type="text"
+                                  value={formData[othersKey] ?? ''}
+                                  onChange={e => setFormData(prev => ({ ...prev, [othersKey]: e.target.value }))}
+                                  placeholder="Please specify..."
+                                  className={`${inputCls} mt-2 ml-6`}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        )
+                      ) : inputType === 'textarea' ? (
+                        <textarea value={selectedVal} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                          rows={3} placeholder={placeholder} className={`${inputCls} resize-none`} />
+                      ) : inputType === 'date' ? (
+                        <DateSelect value={selectedVal} onChange={v => setFormData(prev => ({ ...prev, [key]: v }))} />
+                      ) : (
+                        <input type="text" value={selectedVal} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                          placeholder={placeholder} className={inputCls} />
+                      )}
+                    </Field>
+                  );
+                })}
+              </div>
+            </SectionCard>
+          )}
+
+          <SectionCard icon={<RiInformationLine size={14} />} title="Additional Notes" subtitle="Optional — any extra details for this request">
+            <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
+              placeholder={`Any additional details for your ${typeName} request...`} className={`${inputCls} resize-none`} />
           </SectionCard>
-        )}
+        </div>
 
-        {hasInputFields && (
-          <SectionCard icon={<RiEditLine size={14} />} title="Additional Information Required"
-            subtitle="Please fill in the following fields" color="amber">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {allInputKeys.map(key => {
-                const def = USER_INPUT_FIELD_DEFS[key];
-                if (!def) return null;
-                return (
-                  <Field key={key} label={def.label} required>
-                    {def.type === 'textarea' ? (
-                      <textarea value={formData[key] ?? ''} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                        rows={3} placeholder={def.placeholder} className={`${inputCls} resize-none`} />
-                    ) : (
-                      <input type={def.type} value={formData[key] ?? ''} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                        placeholder={def.placeholder} className={inputCls} />
-                    )}
-                  </Field>
-                );
-              })}
-            </div>
-          </SectionCard>
-        )}
-
-        <SectionCard icon={<RiInformationLine size={14} />} title="Additional Notes" subtitle="Optional — any extra details for this request">
-          <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
-            placeholder={`Any additional details for your ${typeName} request...`} className={`${inputCls} resize-none`} />
-        </SectionCard>
-
-        <PreviewBar
-          docs={requiredDocs}
-          varMap={varMap}
-          canSubmit={!submitDisabled}
-          onOpenPreview={() => setShowPreview(true)}
-          onSubmit={onSubmit}
-          submitDisabled={submitDisabled}
-        />
+        {/* Right column: sticky action panel */}
+        <div className="sticky top-6">
+          <SidePanelActions
+            docs={requiredDocs}
+            varMap={varMap}
+            onOpenPreview={() => setShowPreview(true)}
+            onSubmit={onSubmit}
+            submitDisabled={submitDisabled}
+          />
+        </div>
       </div>
 
       {showPreview && requiredDocs.length > 0 && (
@@ -806,6 +974,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const [studentDbId, setStudentDbId] = useState<number>(0);
   const [irStaffName, setIrStaffName] = useState<string>('');
   const [deanName, setDeanName] = useState<string>('');
+  const [varDefs, setVarDefs] = useState<ApiTemplateVariable[]>([]);
 
   useEffect(() => {
     userApi.getIRStaff()
@@ -814,6 +983,12 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
     deanApi.getSignatory()
       .then(res => setDeanName(res.data.data.name))
       .catch(() => {});
+    templateVariableApi.getAll()
+      .then(res => {
+        console.log('[varDefs]', res.data.data.map(v => ({ key: v.key, inputType: v.inputType, options: v.options })));
+        setVarDefs(res.data.data);
+      })
+      .catch(err => console.error('[varDefs] failed:', err));
   }, []);
 
   useEffect(() => {
@@ -938,7 +1113,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
       </div>
 
 
-      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} irStaffName={irStaffName} deanName={deanName} />
+      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} irStaffName={irStaffName} deanName={deanName} varDefs={varDefs} />
 
       {submitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">

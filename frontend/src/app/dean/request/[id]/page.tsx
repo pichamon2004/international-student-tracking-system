@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine } from 'react-icons/ri';
+import SignatureModal from '@/components/SignatureModal';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine, RiPenNibLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
+import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -26,6 +27,9 @@ export default function DeanRequestDetailPage() {
   const [showRejectError, setShowRejectError] = useState(false);
   const [actionDone, setActionDone] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
+  const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
+  const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -39,6 +43,15 @@ export default function DeanRequestDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    generatedDocApi.getByRequest(Number(params.id))
+      .then(res => {
+        const doc = res.data.data[0] ?? null;
+        setGenDoc(doc);
+        if (doc) {
+          generatedDocApi.getSignatures(doc.id).then(r => setSignatures(r.data.data)).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, [params?.id]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,6 +172,21 @@ export default function DeanRequestDetailPage() {
             <RiEyeLine size={16} />
             View Document
           </button>
+
+          {genDoc && !signatures.some(s => s.role === 'dean') && (
+            <button
+              onClick={() => setShowSignModal(true)}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
+            >
+              <RiPenNibLine size={16} />
+              Sign Document
+            </button>
+          )}
+          {genDoc && signatures.some(s => s.role === 'dean') && (
+            <div className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
+              <RiCheckLine size={14} /> Signed (Dean)
+            </div>
+          )}
         </div>
 
         {/* RIGHT: Activity History + Dean Response */}
@@ -258,6 +286,20 @@ export default function DeanRequestDetailPage() {
           </div>
         </div>
       </div>
+
+      {showSignModal && genDoc && (
+        <SignatureModal
+          docId={genDoc.id}
+          myRole="dean"
+          signatures={signatures}
+          requiredRoles={(() => {
+            const vars: string[] = (() => { try { return JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
+            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+          })()}
+          onSigned={setSignatures}
+          onClose={() => setShowSignModal(false)}
+        />
+      )}
 
       {/* Document Preview Modal */}
       {showModal && (() => {

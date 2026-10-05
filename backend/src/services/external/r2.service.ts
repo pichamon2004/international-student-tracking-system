@@ -77,3 +77,14 @@ export async function getPresignedUrl(key: string, expiresInSeconds = 3600): Pro
     { expiresIn: expiresInSeconds }
   );
 }
+
+export async function downloadFromR2(key: string): Promise<Buffer> {
+  const resp = await getS3().send(new GetObjectCommand({ Bucket: getBucket(), Key: key }));
+  const stream = resp.Body as import('stream').Readable;
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (c: Buffer) => chunks.push(c));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}

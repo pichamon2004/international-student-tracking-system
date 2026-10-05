@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine, RiAttachmentLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine, RiAttachmentLine, RiPenNibLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
-import { requestApi, deanApi, type ApiRequest } from '@/lib/api';
+import SignatureModal from '@/components/SignatureModal';
+import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
@@ -30,11 +31,14 @@ export default function StaffRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
+  const [showSignModal, setShowSignModal] = useState(false);
   const [req, setReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const [deanName, setDeanName] = useState('');
+  const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
+  const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -46,6 +50,15 @@ export default function StaffRequestDetailPage() {
       .then(res => setReq(res.data.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    generatedDocApi.getByRequest(Number(id))
+      .then(res => {
+        const doc = res.data.data[0] ?? null;
+        setGenDoc(doc);
+        if (doc) {
+          generatedDocApi.getSignatures(doc.id).then(r => setSignatures(r.data.data)).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, [id]);
 
   async function updateStatus(status: string) {
@@ -142,6 +155,22 @@ export default function StaffRequestDetailPage() {
             <RiEyeLine size={16} />
             View Document
           </button>
+
+          {/* Sign Document Button */}
+          {genDoc && !signatures.some(s => s.role === 'ir_staff') && (
+            <button
+              onClick={() => setShowSignModal(true)}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
+            >
+              <RiPenNibLine size={16} />
+              Sign Document
+            </button>
+          )}
+          {genDoc && signatures.some(s => s.role === 'ir_staff') && (
+            <div className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
+              <RiCheckLine size={14} /> Signed (IR Staff)
+            </div>
+          )}
 
           {/* Attach Files + Action Buttons */}
           {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED' || req.status === 'STAFF_APPROVED') && (
@@ -266,6 +295,21 @@ export default function StaffRequestDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Signature Modal */}
+      {showSignModal && genDoc && (
+        <SignatureModal
+          docId={genDoc.id}
+          myRole="ir_staff"
+          signatures={signatures}
+          requiredRoles={(() => {
+            const vars: string[] = (() => { try { return JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
+            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+          })()}
+          onSigned={setSignatures}
+          onClose={() => setShowSignModal(false)}
+        />
+      )}
 
       {/* Document Preview Modal */}
       {showModal && (() => {

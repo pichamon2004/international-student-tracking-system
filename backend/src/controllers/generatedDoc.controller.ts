@@ -55,3 +55,31 @@ export const uploadSignedDocHandler = async (req: AuthRequest, res: Response): P
 };
 
 export const uploadSignedDoc = [upload.single('file'), uploadSignedDocHandler];
+
+// GET /api/generated-documents/:docId/signatures
+export const getSignaturesHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  const sigs = await generatedDocService.getSignatures(parseInt(req.params.docId));
+  res.json({ success: true, data: sigs });
+};
+
+// POST /api/generated-documents/:docId/signatures
+export const addSignatureHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  const { role, imageDataUrl } = req.body;
+  if (!role || !imageDataUrl) {
+    res.status(400).json({ success: false, message: 'role and imageDataUrl are required' });
+    return;
+  }
+  const result = await generatedDocService.addDigitalSignature(
+    parseInt(req.params.docId),
+    role,
+    imageDataUrl,
+    req.user!.userId
+  );
+  res.status(201).json({ success: true, data: result });
+};
+
+// POST /api/generated-documents/:docId/finalize
+export const finalizeHandler = async (req: AuthRequest, res: Response): Promise<void> => {
+  const updated = await generatedDocService.embedAndFinalize(parseInt(req.params.docId));
+  res.json({ success: true, data: updated });
+};

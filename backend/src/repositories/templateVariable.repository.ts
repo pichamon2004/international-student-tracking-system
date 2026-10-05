@@ -4,11 +4,15 @@ export interface CreateTemplateVariableDto {
   key:          string;
   label:        string;
   description?: string;
+  inputType?:   string;
+  options?:     string;
 }
 
 export interface UpdateTemplateVariableDto {
   label?:       string;
   description?: string;
+  inputType?:   string;
+  options?:     string;
 }
 
 export const findAll = () =>

@@ -10,7 +10,7 @@ import {
 
 const router = Router();
 
-router.get('/',       authenticate, requirePermission('TEMPLATE_MANAGEMENT.view'),   asyncHandler(getVariables));
+router.get('/',       authenticate,                                                   asyncHandler(getVariables));
 router.post('/',      authenticate, requirePermission('TEMPLATE_MANAGEMENT.create'), asyncHandler(createVariable));
 router.put('/:id',    authenticate, requirePermission('TEMPLATE_MANAGEMENT.edit'),   asyncHandler(updateVariable));
 router.delete('/:id', authenticate, requirePermission('TEMPLATE_MANAGEMENT.delete'), asyncHandler(deleteVariable));

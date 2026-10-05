@@ -445,19 +445,37 @@ model GeneratedDocument {
   templateId  Int
   studentId   Int
   generatedBy Int
+  requestId   Int?
 
   fileUrl       String?
   signedFileUrl String?
   signedBy      String?
   signedAt      DateTime?
+  signingMode   String?
+  sigCoords     String?   @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  template DocumentTemplate @relation(fields: [templateId], references: [id])
-  student  Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  template   DocumentTemplate @relation(fields: [templateId], references: [id])
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  signatures DocSignature[]
 
   @@map("generated_documents")
+}
+
+model DocSignature {
+  id           Int      @id @default(autoincrement())
+  docId        Int
+  role         String
+  signerUserId Int
+  imageUrl     String
+  signedAt     DateTime @default(now())
+
+  doc GeneratedDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@unique([docId, role])
+  @@map("doc_signatures")
 }
 
 // ─────────────────────────────────────────────────────
@@ -487,6 +505,8 @@ model TemplateVariable {
   key         String   @unique
   label       String
   description String?  @db.Text
+  inputType   String   @default("auto")  // auto | text | date | textarea | select
+  options     String?  @db.Text          // JSON string[] — used when inputType = 'select'
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

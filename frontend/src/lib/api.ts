@@ -329,11 +329,18 @@ export const emailTemplateApi = {
 
 // ── Template Variables ─────────────────────────────────────────
 
+export interface SelectOption {
+  label: string;
+  allowInput: boolean;
+}
+
 export interface ApiTemplateVariable {
   id: number;
   key: string;
   label: string;
   description: string | null;
+  inputType: 'auto' | 'text' | 'date' | 'textarea' | 'select';
+  options: string | null; // JSON SelectOption[] stored as string
   createdAt: string;
   updatedAt: string;
 }
@@ -342,10 +349,10 @@ export const templateVariableApi = {
   getAll: () =>
     api.get<{ success: boolean; data: ApiTemplateVariable[] }>('/template-variables'),
 
-  create: (data: { key: string; label: string; description?: string }) =>
+  create: (data: { key: string; label: string; description?: string; inputType?: string; options?: SelectOption[] }) =>
     api.post<{ success: boolean; data: ApiTemplateVariable }>('/template-variables', data),
 
-  update: (id: number, data: { label?: string; description?: string }) =>
+  update: (id: number, data: { label?: string; description?: string; inputType?: string; options?: SelectOption[] }) =>
     api.put<{ success: boolean; data: ApiTemplateVariable }>(`/template-variables/${id}`, data),
 
   delete: (id: number) =>
@@ -620,6 +627,61 @@ export const changeRequestApi = {
     api.get<{ success: boolean; data: ApiChangeRequest | null }>(
       `/change-requests/entity?entityType=${entityType}&entityId=${entityId ?? ''}&studentId=${studentId}`,
     ),
+};
+
+// ── Generated Document / Signing API ──────────────────────────────────────────
+
+export interface ApiDocSignature {
+  id:           number;
+  docId:        number;
+  role:         string;
+  signerUserId: number;
+  imageUrl:     string;
+  signedAt:     string;
+}
+
+export interface ApiGeneratedDoc {
+  id:            number;
+  templateId:    number;
+  studentId:     number;
+  generatedBy:   number;
+  requestId:     number | null;
+  fileUrl:       string | null;
+  signedFileUrl: string | null;
+  signedBy:      string | null;
+  signedAt:      string | null;
+  signingMode:   string | null;
+  createdAt:     string;
+}
+
+export const generatedDocApi = {
+  getByRequest: (requestId: number) =>
+    api.get<{ success: boolean; data: ApiGeneratedDoc[] }>(`/requests/${requestId}/generated-documents`),
+
+  getById: (docId: number) =>
+    api.get<{ success: boolean; data: ApiGeneratedDoc }>(`/generated-documents/${docId}`),
+
+  getSignatures: (docId: number) =>
+    api.get<{ success: boolean; data: ApiDocSignature[] }>(`/generated-documents/${docId}/signatures`),
+
+  addDigitalSignature: (docId: number, role: string, imageDataUrl: string) =>
+    api.post<{ success: boolean; data: { imageUrl: string; allSigned: boolean } }>(
+      `/generated-documents/${docId}/signatures`,
+      { role, imageDataUrl }
+    ),
+
+  uploadSignedPdf: (docId: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ success: boolean; data: ApiGeneratedDoc }>(
+      `/generated-documents/${docId}/upload-signed`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+
+  finalize: (docId: number) =>
+    api.post<{ success: boolean; data: ApiGeneratedDoc }>(`/generated-documents/${docId}/finalize`),
 };
 
 export default api;
