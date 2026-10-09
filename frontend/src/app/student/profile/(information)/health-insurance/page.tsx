@@ -59,7 +59,7 @@ export default function HealthInsurancePage() {
     }
   }
 
-  const current = insurances[0]; // show first (sorted by expiryDate asc from backend)
+  const current = insurances.find(i => i.isCurrent) ?? insurances[0];
 
   return (
     <div className="flex flex-col gap-4 flex-1">
@@ -73,7 +73,11 @@ export default function HealthInsurancePage() {
           </button>
           <h1 className="text-2xl font-semibold text-primary flex-1">My Health Insurance</h1>
           <button
-            onClick={() => router.push('/student/profile/updatehealth-insurance')}
+            onClick={() => router.push(
+              current
+                ? `/student/profile/updatehealth-insurance?id=${current.id}`
+                : '/student/profile/updatehealth-insurance'
+            )}
             className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition"
           >
             {insurances.length > 0 ? 'Edit' : 'Add'}

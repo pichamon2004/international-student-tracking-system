@@ -28,16 +28,26 @@ async function checkVisaExpiry() {
     const days = Math.ceil((visa.expiryDate.getTime() - today.getTime()) / 86_400_000);
     if (!ALERT_DAYS.includes(days)) continue;
 
-    const userIds = [visa.student.userId];
-    if (visa.student.advisor?.userId) userIds.push(visa.student.advisor.userId);
-
     const name = `${visa.student.firstNameEn ?? ''} ${visa.student.lastNameEn ?? ''}`.trim();
-    await createNotifications(userIds, {
+
+    // Student and advisor use different route prefixes, so each gets a link
+    // that is actually reachable for their own role rather than one shared
+    // staff-only URL neither of them may have access to.
+    await createNotifications([visa.student.userId], {
       type: 'VISA_ALERT',
       title: `Visa Expiring in ${days} Day(s)`,
-      message: `Student ${name}'s ${visa.visaType} visa expires on ${visa.expiryDate.toDateString()}.`,
-      link: `/staff/students/${visa.student.id}`,
+      message: `Your ${visa.visaType} visa expires on ${visa.expiryDate.toDateString()}.`,
+      link: `/student/profile`,
     });
+
+    if (visa.student.advisor?.userId) {
+      await createNotifications([visa.student.advisor.userId], {
+        type: 'VISA_ALERT',
+        title: `Visa Expiring in ${days} Day(s)`,
+        message: `Student ${name}'s ${visa.visaType} visa expires on ${visa.expiryDate.toDateString()}.`,
+        link: `/advisor/students/${visa.student.id}`,
+      });
+    }
 
     // ส่ง email แจ้งเตือนนักศึกษา
     const studentEmail = visa.student.email || visa.student.user.email;

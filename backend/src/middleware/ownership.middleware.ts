@@ -7,7 +7,7 @@ import { AuthRequest } from '../types';
  *
  * ตรวจสอบว่า user ที่ login มีสิทธิ์เข้าถึง student record ใน :id param
  * - STAFF  → ผ่านทุกกรณี
- * - ADVISOR → ผ่านทุกกรณี (ตรวจ advisor assignment ที่ controller ถ้าต้องการ)
+ * - ADVISOR → ต้องเป็น advisor ของ student รายนั้นจริงเท่านั้น
  * - STUDENT → ต้องเป็น student record ของตัวเองเท่านั้น
  */
 export const requireStudentOwnership = async (
@@ -20,7 +20,37 @@ export const requireStudentOwnership = async (
     return;
   }
 
-  if (req.user.activeRole === 'STAFF' || req.user.activeRole === 'ADVISOR') {
+  if (req.user.activeRole === 'STAFF') {
+    next();
+    return;
+  }
+
+  if (req.user.activeRole === 'ADVISOR') {
+    const targetId = parseInt(req.params.id);
+    if (isNaN(targetId)) {
+      res.status(400).json({ success: false, message: 'Invalid student ID' });
+      return;
+    }
+
+    const advisor = await prisma.advisor.findUnique({
+      where: { userId: req.user.userId },
+      select: { id: true },
+    });
+
+    if (!advisor) {
+      res.status(403).json({ success: false, message: 'Advisor profile not found' });
+      return;
+    }
+
+    const student = await prisma.student.findFirst({
+      where: { id: targetId, advisorId: advisor.id },
+      select: { id: true },
+    });
+
+    if (!student) {
+      res.status(403).json({ success: false, message: 'Student is not under your supervision' });
+      return;
+    }
     next();
     return;
   }

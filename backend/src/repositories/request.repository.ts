@@ -17,6 +17,9 @@ export interface UpdateRequestStatusDto {
   staffComment?:   string;
   staffAt?:        Date;
   staffId?:        number;
+  deanComment?:    string;
+  deanAt?:         Date;
+  deanId?:         number;
   attachments?:    string;
 }
 
@@ -87,6 +90,9 @@ export const updateStatus = (id: number, dto: UpdateRequestStatusDto) =>
       staffComment:    dto.staffComment,
       staffAt:         dto.staffAt,
       staffId:         dto.staffId,
+      deanComment:     dto.deanComment,
+      deanAt:          dto.deanAt,
+      deanId:          dto.deanId,
       attachments:     dto.attachments,
     },
   });

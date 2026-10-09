@@ -6,6 +6,7 @@ export interface CreateDocumentTemplateDto {
   body:         string;
   variables?:   string | null;
   isActive?:    boolean;
+  signingMethod?: string;
 }
 
 export interface UpdateDocumentTemplateDto {
@@ -14,6 +15,7 @@ export interface UpdateDocumentTemplateDto {
   body?:        string;
   variables?:   string;
   isActive?:    boolean;
+  signingMethod?: string;
 }
 
 // ── Queries ───────────────────────────────────────────────────────
@@ -27,7 +29,7 @@ export const findById = (id: number) =>
 export const findByRequestTypeId = (requestTypeId: number) =>
   prisma.documentTemplate.findMany({
     where:  { requestTypes: { some: { id: requestTypeId } } },
-    select: { id: true, name: true, description: true, variables: true, body: true },
+    select: { id: true, name: true, description: true, variables: true, body: true, signingMethod: true },
   });
 
 // ── Mutations ─────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ export const create = (dto: CreateDocumentTemplateDto) =>
       body:        dto.body,
       variables:   dto.variables ?? null,
       isActive:    dto.isActive ?? true,
+      signingMethod: dto.signingMethod ?? 'digital',
     },
   });
 
@@ -52,6 +55,7 @@ export const updateById = (id: number, dto: UpdateDocumentTemplateDto) =>
       body:        dto.body,
       variables:   dto.variables,
       isActive:    dto.isActive,
+      signingMethod: dto.signingMethod,
     },
   });
 

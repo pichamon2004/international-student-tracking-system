@@ -9,7 +9,17 @@ export const getStudents = async (req: AuthRequest, res: Response): Promise<void
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
   const search = req.query.search as string | undefined;
-  const advisorId = req.query.advisorId ? parseInt(req.query.advisorId as string) : undefined;
+  let advisorId = req.query.advisorId ? parseInt(req.query.advisorId as string) : undefined;
+
+  // An advisor must only ever see their own advisees — never trust a
+  // client-supplied advisorId for this role, derive it from the session.
+  if (req.user?.activeRole === 'ADVISOR') {
+    const advisor = await prisma.advisor.findUnique({
+      where: { userId: req.user.userId },
+      select: { id: true },
+    });
+    advisorId = advisor?.id ?? -1;
+  }
 
   const { students, total, totalPages } = await studentService.getStudents({ page, limit, search, advisorId });
   res.json({ success: true, data: students, pagination: { page, limit, total, totalPages } });

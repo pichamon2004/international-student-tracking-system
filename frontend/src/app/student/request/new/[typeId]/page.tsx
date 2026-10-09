@@ -13,9 +13,10 @@ import {
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, type ApiTemplateVariable, type SelectOption } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, generatedDocApi, type ApiTemplateVariable, type SelectOption, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 import DateSelect from '@/components/ui/DateSelect';
+import SignatureModal from '@/components/SignatureModal';
 
 /* ─── Variable labels ────────────────────────────────────────── */
 const VARIABLE_LABELS: Record<string, string> = {
@@ -245,14 +246,14 @@ function DocumentPreviewModal({
 
   function handlePrint() {
     const sigBlockHtml = sigVars.length > 0 ? `
-      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;">
-        <div style="display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px;">
+      <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">
+        <div style="font-size:0;">
           ${sigVars.map((sv: string) => `
-            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
-              <div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px;"></div>
-              ${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center;">${SIG_NAMES[sv]}</span>` : ''}
-              <span style="font-size:11px;color:#6b7280;">${SIG_ROLES[sv] ?? sv}</span>
-              <span style="font-size:10px;color:#9ca3af;">Date ....../....../......</span>
+            <div style="display:inline-block;vertical-align:top;width:${(100 / Math.min(sigVars.length, 4)).toFixed(4)}%;box-sizing:border-box;padding:0 12px;text-align:center;font-size:14px;">
+              <div style="width:100%;height:70px;border-bottom:1px solid #1f2937;margin-top:10px;"></div>
+              ${SIG_NAMES[sv] ? `<div style="font-size:11px;font-weight:600;margin-top:4px;">${SIG_NAMES[sv]}</div>` : ''}
+              <div style="font-size:11px;color:#6b7280;margin-top:4px;">${SIG_ROLES[sv] ?? sv}</div>
+              <div style="font-size:10px;color:#9ca3af;margin-top:4px;">Date ....../....../......</div>
             </div>
           `).join('')}
         </div>
@@ -264,8 +265,9 @@ function DocumentPreviewModal({
     const printBody = mergedHtml.replace(/src="\/kkulogo2\.png"/g, `src="${origin}/kkulogo2.png"`);
     pw.document.write(`<!DOCTYPE html><html><head><title>Document</title>
       <style>
-        body { margin: 0; padding: 25mm 20mm; font-family: 'Times New Roman', serif; font-size: 14px; color: #222; line-height: 2; }
-        @media print { @page { margin: 0; } body { padding: 25mm 20mm; } }
+        body { margin: 0; padding: 15mm 20mm; font-family: 'Times New Roman', serif; font-size: 14px; color: #222; line-height: 1.8; }
+        @media print { @page { margin: 0; } body { padding: 15mm 20mm; } }
+        img { display: block; margin-left: auto; margin-right: auto; }
       </style>
     </head><body>
       ${printBody}
@@ -330,19 +332,19 @@ function DocumentPreviewModal({
         {/* A4 Document */}
         <div className="flex-1 overflow-y-auto bg-gray-100 px-6 pb-4">
           {/* A4 paper */}
-          <div className="bg-white shadow-xl mx-auto" style={{ width: '100%', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif" }}>
+          <div className="bg-white shadow-xl mx-auto" style={{ width: '100%', minHeight: '297mm', padding: '15mm 20mm', fontFamily: "'Times New Roman', serif" }}>
             {/* Document content */}
             <div
-              style={{ fontSize: '14px', color: '#222', lineHeight: '2' }}
+              style={{ fontSize: '14px', color: '#222', lineHeight: '1.8' }}
               dangerouslySetInnerHTML={{ __html: mergedHtml }}
             />
             {/* Signature block */}
             {sigVars.length > 0 && (
-              <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
                   {sigVars.map((sv: string) => (
                     <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                      <div style={{ width: '100%', height: '40px', borderBottom: '2px solid #1f2937', marginTop: '16px' }} />
+                      <div style={{ width: '100%', height: '70px', borderBottom: '1px solid #1f2937', marginTop: '10px' }} />
                       {SIG_NAMES[sv] && <span style={{ fontSize: '11px', fontWeight: 600, textAlign: 'center' }}>{SIG_NAMES[sv]}</span>}
                       <span style={{ fontSize: '11px', color: '#6b7280' }}>{SIG_ROLES[sv] ?? sv}</span>
                       <span style={{ fontSize: '10px', color: '#9ca3af' }}>Date ....../....../......</span>
@@ -697,7 +699,7 @@ const PROFILE_INPUT_FALLBACKS: Record<string, { label: string; type: 'text' | 'd
   visa_expiry:      { label: 'Visa Expiry Date',       type: 'date' },
 };
 
-function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: () => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[] }) {
+function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: (formData: Record<string, string>, description: string) => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[] }) {
   const p = profile;
   const baseVarMap = useMemo(() => buildBaseVarMap(p), [p]);
 
@@ -796,6 +798,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
     return true;
   });
   const submitDisabled = hasInputFields && !allInputsFilled;
+  const handleFormSubmit = () => onSubmit(varMap, note);
 
   return (
     <>
@@ -902,7 +905,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
             docs={requiredDocs}
             varMap={varMap}
             onOpenPreview={() => setShowPreview(true)}
-            onSubmit={onSubmit}
+            onSubmit={handleFormSubmit}
             submitDisabled={submitDisabled}
           />
         </div>
@@ -913,7 +916,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
           docs={requiredDocs}
           varMap={varMap}
           onClose={() => setShowPreview(false)}
-          onConfirm={() => { setShowPreview(false); onSubmit(); }}
+          onConfirm={() => { setShowPreview(false); handleFormSubmit(); }}
           deanName={deanName}
           irStaffName={irStaffName}
         />
@@ -968,6 +971,8 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [genDocForSign, setGenDocForSign] = useState<ApiGeneratedDoc | null>(null);
+  const [showSignModal, setShowSignModal] = useState(false);
   const [config, setConfig] = useState<{ id: number; name: string; description: string } | null>(null);
   const [requiredDocs, setRequiredDocs] = useState<DocTemplate[]>([]);
   const [profile, setProfile] = useState<StudentProfile>(EMPTY_PROFILE);
@@ -1012,6 +1017,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
                 isActive: d.isActive,
                 variables: d.variables ? (JSON.parse(d.variables) as string[]) : [],
                 body: d.body,
+                signingMethod: d.signingMethod ?? 'digital',
               }))
           );
         }
@@ -1051,16 +1057,32 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
     loadData();
   }, [typeId]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (formData: Record<string, string>, description: string) => {
     setSubmitting(true);
     try {
-      await requestApi.create({
+      const res = await requestApi.create({
         studentId: studentDbId,
         requestTypeId: Number(typeId),
         title: config?.name ?? 'New Request',
-        description: '',
-        formData: {},
+        description,
+        formData,
       });
+
+      // If one of this request type's templates needs a student signature,
+      // generate the PDF right away and prompt the student to sign it here —
+      // same as the other roles already do on the request detail page —
+      // instead of leaving it to "last" and making them come back later.
+      const sigTemplate = requiredDocs.find(d => d.variables.includes('{{sig_student}}'));
+      if (sigTemplate) {
+        try {
+          const genRes = await generatedDocApi.generate(res.data.data.id, sigTemplate.id, formData);
+          setGenDocForSign(genRes.data.data);
+          setShowSignModal(true);
+        } catch (e) {
+          console.error('Failed to auto-generate document for signing:', e);
+        }
+      }
+
       setDone(true);
     } catch (e) {
       console.error('Failed to submit request:', e);
@@ -1074,6 +1096,21 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm w-full">
         <SuccessScreen onBack={() => router.push('/student/request')} />
+        {showSignModal && genDocForSign && (
+          <SignatureModal
+            docId={genDocForSign.id}
+            myRole="student"
+            signatures={[]}
+            requiredRoles={(() => {
+              const t = requiredDocs.find(d => d.id === genDocForSign.templateId);
+              return (t?.variables ?? []).filter(v => v.startsWith('{{sig_')).map(v => v.slice(6, -2));
+            })()}
+            signingMethod={requiredDocs.find(d => d.id === genDocForSign.templateId)?.signingMethod ?? 'digital'}
+            fileUrl={genDocForSign.signedFileUrl ?? genDocForSign.fileUrl}
+            onSigned={() => setShowSignModal(false)}
+            onClose={() => setShowSignModal(false)}
+          />
+        )}
       </div>
     );
   }

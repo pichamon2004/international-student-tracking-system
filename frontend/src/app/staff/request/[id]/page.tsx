@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiEyeLine, RiCheckLine, RiAttachmentLine, RiPenNibLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserStarLine, RiCloseLine, RiPrinterLine, RiDownloadLine, RiEyeLine, RiCheckLine, RiAttachmentLine, RiPenNibLine, RiMailSendLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
 import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
 
@@ -36,6 +38,11 @@ export default function StaffRequestDetailPage() {
   const [loading, setLoading] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const previewContentRef = useRef<HTMLDivElement>(null);
+  const [comment, setComment] = useState('');
+  const [showRejectError, setShowRejectError] = useState(false);
+  const [followingUp, setFollowingUp] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [deanName, setDeanName] = useState('');
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
@@ -61,16 +68,64 @@ export default function StaffRequestDetailPage() {
       .catch(() => {});
   }, [id]);
 
-  async function updateStatus(status: string) {
+  async function updateStatus(status: string, requireComment = false) {
     if (!req) return;
+    if (requireComment && !comment.trim()) {
+      setShowRejectError(true);
+      return;
+    }
+    setShowRejectError(false);
     try {
-      const res = await requestApi.updateStatus(req.id, status, undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
+      const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
       setAttachedFiles([]);
+      setComment('');
       if (attachInputRef.current) attachInputRef.current.value = '';
       toast.success('Status updated');
     } catch {
       toast.error('Failed to update status');
+    }
+  }
+
+  async function handleGeneratePdf() {
+    const template = req?.requestType?.documentTemplates?.[0];
+    if (!req || !template) return;
+    setGeneratingPdf(true);
+    try {
+      const formData = (() => { try { return JSON.parse(req.formData ?? '{}'); } catch { return {}; } })();
+      const res = await generatedDocApi.generate(req.id, template.id, formData);
+      setGenDoc(res.data.data);
+      toast.success('PDF generated');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to generate PDF');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
+
+  function handleSigned(updated: ApiDocSignature[]) {
+    setSignatures(updated);
+    if (genDoc) generatedDocApi.getById(genDoc.id).then(r => setGenDoc(r.data.data)).catch(() => {});
+  }
+
+  const requiredSigRoles: string[] = (() => {
+    try {
+      const vars: string[] = JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]');
+      return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+    } catch { return []; }
+  })();
+
+  async function handleFollowUp() {
+    if (!req) return;
+    setFollowingUp(true);
+    try {
+      const res = await requestApi.followUp(req.id);
+      toast.success(res.data.message);
+    } catch {
+      toast.error('Failed to send follow-up reminder');
+    } finally {
+      setFollowingUp(false);
     }
   }
 
@@ -156,6 +211,32 @@ export default function StaffRequestDetailPage() {
             View Document
           </button>
 
+          {/* Follow Up Button — shown once a non-finished request has sat in the same status for 3+ days */}
+          {!TERMINAL_STATUSES.includes(req.status as RequestStatus) &&
+            (Date.now() - new Date(req.updatedAt).getTime()) >= 3 * 86_400_000 && (
+            <button
+              onClick={handleFollowUp}
+              disabled={followingUp}
+              title="Remind whoever is responsible for this request's current step"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 text-sm font-medium hover:bg-amber-100 transition-all duration-200 disabled:opacity-50"
+            >
+              <RiMailSendLine size={16} />
+              {followingUp ? 'Sending…' : 'Follow Up'}
+            </button>
+          )}
+
+          {/* Generate PDF Button — required before a document can be signed */}
+          {!genDoc && (req.requestType?.documentTemplates?.length ?? 0) > 0 && (
+            <button
+              onClick={handleGeneratePdf}
+              disabled={generatingPdf}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200 disabled:opacity-50"
+            >
+              <RiFileTextLine size={16} />
+              {generatingPdf ? 'Generating…' : 'Generate PDF'}
+            </button>
+          )}
+
           {/* Sign Document Button */}
           {genDoc && !signatures.some(s => s.role === 'ir_staff') && (
             <button
@@ -175,6 +256,20 @@ export default function StaffRequestDetailPage() {
           {/* Attach Files + Action Buttons */}
           {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED' || req.status === 'STAFF_APPROVED') && (
             <div className="flex flex-col gap-2">
+              {/* Staff comment */}
+              <div className="flex flex-col gap-1">
+                <textarea
+                  value={comment}
+                  onChange={e => { setComment(e.target.value); setShowRejectError(false); }}
+                  placeholder="Enter your comment here..."
+                  rows={3}
+                  className={`w-full border rounded-xl px-4 py-3 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors resize-none ${showRejectError ? 'border-red-400' : 'border-gray-200'}`}
+                />
+                {showRejectError && (
+                  <p className="text-xs text-red-500 pl-1">กรุณากรอกเหตุผลก่อนปฏิเสธคำร้อง</p>
+                )}
+              </div>
+
               {/* File attachment */}
               <div className="flex flex-col gap-2">
                 <label className="flex items-center gap-2 w-full cursor-pointer px-3 py-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors">
@@ -209,19 +304,19 @@ export default function StaffRequestDetailPage() {
               {req.status === 'PENDING' && (
                 <>
                   <Button variant="primary" label="Approve"  onClick={() => updateStatus('STAFF_APPROVED')} />
-                  <Button variant="danger"  label="Reject"   onClick={() => updateStatus('STAFF_REJECTED')} />
+                  <Button variant="danger"  label="Reject"   onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
               {req.status === 'STAFF_APPROVED' && (
                 <>
                   <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
-                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
+                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
               {req.status === 'ADVISOR_APPROVED' && (
                 <>
                   <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus('FORWARDED_TO_DEAN')} />
-                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED')} />
+                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
             </div>
@@ -238,8 +333,26 @@ export default function StaffRequestDetailPage() {
             </div>
             {req.description && (
               <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-400 uppercase">Description / Comment</span>
+                <span className="text-xs font-semibold text-gray-400 uppercase">Description</span>
                 <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.description}</span>
+              </div>
+            )}
+            {req.advisorComment && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-400 uppercase">Advisor Comment</span>
+                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.advisorComment}</span>
+              </div>
+            )}
+            {req.staffComment && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-400 uppercase">Staff Comment</span>
+                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.staffComment}</span>
+              </div>
+            )}
+            {req.deanComment && (
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-400 uppercase">Dean Comment</span>
+                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.deanComment}</span>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -302,11 +415,10 @@ export default function StaffRequestDetailPage() {
           docId={genDoc.id}
           myRole="ir_staff"
           signatures={signatures}
-          requiredRoles={(() => {
-            const vars: string[] = (() => { try { return JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
-            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
-          })()}
-          onSigned={setSignatures}
+          requiredRoles={requiredSigRoles}
+          signingMethod={req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital'}
+          fileUrl={genDoc.signedFileUrl ?? genDoc.fileUrl}
+          onSigned={handleSigned}
           onClose={() => setShowSignModal(false)}
         />
       )}
@@ -383,6 +495,52 @@ export default function StaffRequestDetailPage() {
           return renderTemplate(t.body) + sigHtml;
         }).join('<hr style="margin:32px 0"/>');
 
+        const safeTitle = req.title.replace(/[^a-z0-9]+/gi, '_');
+
+        const saveBlob = async (blob: Blob, filename: string) => {
+          const a = document.createElement('a');
+          const objUrl = URL.createObjectURL(blob);
+          a.href = objUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(objUrl);
+        };
+
+        const handleDownload = async () => {
+          try {
+            if (genDoc) {
+              const url = genDoc.signedFileUrl ?? genDoc.fileUrl;
+              if (!url) return;
+              const res = await fetch(url);
+              const blob = await res.blob();
+              await saveBlob(blob, `${safeTitle}.pdf`);
+            } else if (attachments.length > 0) {
+              for (let i = 0; i < attachments.length; i++) {
+                const url = attachments[i];
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const ext = url.split('.').pop()?.split('?')[0] || 'pdf';
+                await saveBlob(blob, `${safeTitle}_${i + 1}.${ext}`);
+              }
+            } else {
+              const pages = Array.from(previewContentRef.current?.querySelectorAll('.pdf-page') ?? []) as HTMLElement[];
+              if (pages.length === 0) return;
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              for (let i = 0; i < pages.length; i++) {
+                const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL('image/jpeg', 0.92);
+                if (i > 0) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+              }
+              pdf.save(`${safeTitle}.pdf`);
+            }
+          } catch {
+            toast.error('Failed to download document');
+          }
+        };
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 flex flex-col overflow-hidden max-h-[90vh]">
@@ -396,15 +554,31 @@ export default function StaffRequestDetailPage() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
-                {templates.length === 0 && attachments.length === 0 && (
-                  <div className="w-full h-48 bg-white rounded-xl flex items-center justify-center text-gray-400 text-sm">
-                    No document template or attachments for this request type.
+              <div ref={previewContentRef} className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+                {genDoc && (
+                  <div className="w-full max-w-[210mm] mx-auto flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg bg-primary/5 text-primary">
+                    <RiFileTextLine size={13} />
+                    {genDoc.signedFileUrl
+                      ? requiredSigRoles.length > 0
+                        ? `Showing the document (${signatures.length}/${requiredSigRoles.length} signed)`
+                        : 'Showing the signed document'
+                      : 'Showing the generated document (not yet signed)'}
                   </div>
                 )}
 
-                {/* If advisor has uploaded files, show those as the document; otherwise show template */}
-                {attachments.length > 0 ? (
+                {genDoc ? (
+                  <div className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                    <iframe
+                      src={genDoc.signedFileUrl ?? genDoc.fileUrl ?? undefined}
+                      style={{ width: '100%', height: '297mm', border: 'none' }}
+                      title="Generated Document"
+                    />
+                  </div>
+                ) : templates.length === 0 && attachments.length === 0 ? (
+                  <div className="w-full h-48 bg-white rounded-xl flex items-center justify-center text-gray-400 text-sm">
+                    No document template or attachments for this request type.
+                  </div>
+                ) : attachments.length > 0 ? (
                   attachments.map((url, i) => {
                     const isPdf = /\.pdf$/i.test(url) || url.includes('application/pdf');
                     const isImage = /\.(png|jpe?g|gif|webp)$/i.test(url);
@@ -448,7 +622,7 @@ export default function StaffRequestDetailPage() {
                       '{{sig_dean}}':     'Dean',
                     };
                     return (
-                      <div key={tpl.id} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
+                      <div key={tpl.id} className="pdf-page bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
                         <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
                         {sigVars.length > 0 && (
                           <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
@@ -472,12 +646,15 @@ export default function StaffRequestDetailPage() {
 
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
                 <Button variant="ghost" label="Close" onClick={() => setShowModal(false)} />
+                <Button variant="info" label="Download" icon={RiDownloadLine} onClick={handleDownload} />
                 <Button
                   variant="primary"
                   label="Print"
                   icon={RiPrinterLine}
                   onClick={() => {
-                    if (attachments.length > 0) {
+                    if (genDoc) {
+                      window.open(genDoc.signedFileUrl ?? genDoc.fileUrl ?? '', '_blank');
+                    } else if (attachments.length > 0) {
                       // Open each attachment for printing
                       attachments.forEach(url => window.open(url, '_blank'));
                     } else {

@@ -17,7 +17,7 @@ export interface UpdateRequestTypeDto {
 }
 
 const TEMPLATE_SELECT = {
-  id: true, name: true, description: true, isActive: true, variables: true, body: true,
+  id: true, name: true, description: true, isActive: true, variables: true, body: true, signingMethod: true,
 } as const;
 
 // ── Queries ───────────────────────────────────────────────────────

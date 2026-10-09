@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { clsx } from 'clsx';
 import { useRouter } from 'next/navigation';
-import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine, RiUploadLine } from 'react-icons/ri';
+import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine, RiUploadLine, RiForbidLine, RiCheckLine, RiDeleteBinLine } from 'react-icons/ri';
 import Button from '@/components/ui/Button';
 import { studentApi, type ApiStudent } from '@/lib/api';
 import CustomSelect from '@/components/ui/CustomSelect';
 import ImportModal from '@/components/ImportModal';
+import { useAuthStore } from '@/lib/auth';
+import toast from 'react-hot-toast';
 
 const STUDENT_COLUMNS = [
   { key: 'titleEn',      label: 'Prefix',      required: false, example: 'Mr.' },
@@ -177,6 +179,9 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
 /* ── Page ── */
 export default function StaffStudentPage() {
   const router = useRouter();
+  const { hasPermission } = useAuthStore();
+  const canEdit = hasPermission('STUDENT_MANAGEMENT.edit');
+  const canDelete = hasPermission('STUDENT_MANAGEMENT.delete');
   const [students, setStudents] = useState<ApiStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -184,6 +189,7 @@ export default function StaffStudentPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1 });
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
@@ -236,6 +242,36 @@ export default function StaffStudentPage() {
       loadStudents();
     } catch {
       // error handled silently; form stays open
+    }
+  };
+
+  const handleToggleSuspend = async (s: ApiStudent) => {
+    const suspending = s.registrationStatus !== 'SUSPENDED';
+    const name = fullName(s);
+    setBusyId(s.id);
+    try {
+      await studentApi.update(s.id, { registrationStatus: suspending ? 'SUSPENDED' : 'ACTIVE' });
+      toast.success(suspending ? `${name} suspended` : `${name} reactivated`);
+      loadStudents();
+    } catch {
+      toast.error('Failed to update student status');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (s: ApiStudent) => {
+    const name = fullName(s);
+    if (!window.confirm(`Delete ${name}? This permanently removes their profile and all related records. This cannot be undone.`)) return;
+    setBusyId(s.id);
+    try {
+      await studentApi.delete(s.id);
+      toast.success(`${name} deleted`);
+      setStudents(prev => prev.filter(x => x.id !== s.id));
+    } catch {
+      toast.error('Failed to delete student');
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -332,7 +368,37 @@ export default function StaffStudentPage() {
                     <span className={clsx('px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap', cls)}>{label}</span>
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <Button variant="info" onClick={() => router.push(`/staff/students/${s.id}`)} />
+                    <div className="flex items-center justify-center gap-2">
+                      <Button variant="info" onClick={() => router.push(`/staff/students/${s.id}`)} />
+                      {canEdit && (
+                        s.registrationStatus === 'SUSPENDED' ? (
+                          <Button
+                            variant="success"
+                            label="Activate"
+                            icon={RiCheckLine}
+                            disabled={busyId === s.id}
+                            onClick={() => handleToggleSuspend(s)}
+                          />
+                        ) : (
+                          <Button
+                            variant="warning"
+                            label="Suspend"
+                            icon={RiForbidLine}
+                            disabled={busyId === s.id}
+                            onClick={() => handleToggleSuspend(s)}
+                          />
+                        )
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="danger"
+                          label="Delete"
+                          icon={RiDeleteBinLine}
+                          disabled={busyId === s.id}
+                          onClick={() => handleDelete(s)}
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
-import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine, RiPenNibLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine, RiDownloadLine, RiPenNibLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   PENDING:              { label: 'Pending',        className: 'bg-yellow-100 text-yellow-700' },
@@ -37,6 +39,7 @@ export default function RequestDetailPage() {
   const [showSignModal, setShowSignModal] = useState(false);
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
+  const previewContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -60,6 +63,18 @@ export default function RequestDetailPage() {
       })
       .catch(() => {});
   }, [params?.id]);
+
+  function handleSigned(updated: ApiDocSignature[]) {
+    setSignatures(updated);
+    if (genDoc) generatedDocApi.getById(genDoc.id).then(r => setGenDoc(r.data.data)).catch(() => {});
+  }
+
+  const requiredSigRoles: string[] = (() => {
+    try {
+      const vars: string[] = JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]');
+      return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+    } catch { return []; }
+  })();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -299,11 +314,10 @@ export default function RequestDetailPage() {
           docId={genDoc.id}
           myRole="advisor"
           signatures={signatures}
-          requiredRoles={(() => {
-            const vars: string[] = (() => { try { return JSON.parse(req?.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
-            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
-          })()}
-          onSigned={setSignatures}
+          requiredRoles={requiredSigRoles}
+          signingMethod={req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital'}
+          fileUrl={genDoc.signedFileUrl ?? genDoc.fileUrl}
+          onSigned={handleSigned}
           onClose={() => setShowSignModal(false)}
         />
       )}
@@ -370,6 +384,54 @@ export default function RequestDetailPage() {
           return renderTemplate(t.body) + sigHtml;
         }).join('<hr style="margin:32px 0"/>');
 
+        const safeTitle = req.title.replace(/[^a-z0-9]+/gi, '_');
+
+        const saveBlob = async (blob: Blob, filename: string) => {
+          const a = document.createElement('a');
+          const objUrl = URL.createObjectURL(blob);
+          a.href = objUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(objUrl);
+        };
+
+        const handleDownload = async () => {
+          try {
+            if (genDoc) {
+              const url = genDoc.signedFileUrl ?? genDoc.fileUrl;
+              if (!url) return;
+              const res = await fetch(url);
+              const blob = await res.blob();
+              await saveBlob(blob, `${safeTitle}.pdf`);
+              return;
+            }
+            if (templates.length > 0) {
+              const pages = Array.from(previewContentRef.current?.querySelectorAll('.pdf-page') ?? []) as HTMLElement[];
+              if (pages.length > 0) {
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                for (let i = 0; i < pages.length; i++) {
+                  const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true });
+                  const imgData = canvas.toDataURL('image/jpeg', 0.92);
+                  if (i > 0) pdf.addPage();
+                  pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+                }
+                pdf.save(`${safeTitle}.pdf`);
+              }
+            }
+            for (let i = 0; i < attachments.length; i++) {
+              const url = attachments[i];
+              const res = await fetch(url);
+              const blob = await res.blob();
+              const ext = url.split('.').pop()?.split('?')[0] || 'pdf';
+              await saveBlob(blob, `${safeTitle}_attachment_${i + 1}.${ext}`);
+            }
+          } catch {
+            toast.error('Failed to download document');
+          }
+        };
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 flex flex-col overflow-hidden max-h-[90vh]">
@@ -380,20 +442,39 @@ export default function RequestDetailPage() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
-                {templates.length === 0 && attachments.length === 0 && (
+              <div ref={previewContentRef} className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+                {genDoc && (
+                  <div className="w-full max-w-[210mm] mx-auto flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg bg-primary/5 text-primary">
+                    <RiFileTextLine size={13} />
+                    {genDoc.signedFileUrl
+                      ? requiredSigRoles.length > 0
+                        ? `Showing the document (${signatures.length}/${requiredSigRoles.length} signed)`
+                        : 'Showing the signed document'
+                      : 'Showing the generated document (not yet signed)'}
+                  </div>
+                )}
+                {genDoc && (
+                  <div className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                    <iframe
+                      src={genDoc.signedFileUrl ?? genDoc.fileUrl ?? undefined}
+                      style={{ width: '100%', height: '297mm', border: 'none' }}
+                      title="Generated Document"
+                    />
+                  </div>
+                )}
+                {!genDoc && templates.length === 0 && attachments.length === 0 && (
                   <div className="w-full h-48 bg-white rounded-xl flex items-center justify-center text-gray-400 text-sm">
                     No document template or attachments for this request type.
                   </div>
                 )}
-                {templates.map((tpl) => {
+                {!genDoc && templates.map((tpl) => {
                   const tplVars: string[] = (() => { try { return JSON.parse(tpl.variables ?? '[]'); } catch { return []; } })();
                   const sigVars = tplVars.filter((v: string) => v.startsWith('{{sig_'));
                   const studentFullName = [s?.titleEn, s?.firstNameEn, s?.lastNameEn].filter(Boolean).join(' ') || '—';
                   const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
                   const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
                   return (
-                    <div key={tpl.id} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
+                    <div key={tpl.id} className="pdf-page bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
                       <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
                       {sigVars.length > 0 && (
                         <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
@@ -412,7 +493,7 @@ export default function RequestDetailPage() {
                     </div>
                   );
                 })}
-                {attachments.length > 0 && (
+                {!genDoc && attachments.length > 0 && (
                   <div className="bg-white shadow-md mx-auto p-6 flex flex-col gap-2" style={{ width: '210mm' }}>
                     <p className="text-xs font-semibold text-primary/60 uppercase tracking-wide">Attachments</p>
                     {attachments.map((url, i) => {
@@ -427,7 +508,12 @@ export default function RequestDetailPage() {
 
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
                 <Button variant="ghost" label="Close" onClick={() => setShowModal(false)} />
+                <Button variant="info" label="Download" icon={RiDownloadLine} onClick={handleDownload} />
                 <Button variant="primary" label="Print" icon={RiPrinterLine} onClick={() => {
+                  if (genDoc) {
+                    window.open(genDoc.signedFileUrl ?? genDoc.fileUrl ?? '', '_blank');
+                    return;
+                  }
                   const w = window.open('', '_blank');
                   if (!w) return;
                   const origin = window.location.origin;

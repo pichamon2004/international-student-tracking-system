@@ -44,3 +44,9 @@ export const updateRequestStatus = async (req: AuthRequest, res: Response): Prom
   );
   res.json({ success: true, data: updated });
 };
+
+// POST /api/requests/:id/follow-up
+export const followUpRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await requestService.followUp(parseInt(req.params.id));
+  res.json({ success: true, message: `Follow-up reminder sent to ${result.roleLabel}`, data: result });
+};

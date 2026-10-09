@@ -100,7 +100,8 @@ function HealthInsuranceForm() {
         });
         if (res.status === 202) {
           toast.success('Change submitted — awaiting staff approval');
-          router.back(); return;
+          router.push('/student/profile/health-insurance');
+          return;
         }
       } else {
         const res = await healthInsuranceApi.create(studentNumId, {
@@ -113,7 +114,8 @@ function HealthInsuranceForm() {
         });
         if (res.status === 202) {
           toast.success('Change submitted — awaiting staff approval');
-          router.back(); return;
+          router.push('/student/profile/health-insurance');
+          return;
         }
       }
       setProgressField('healthInsuranceCompleted', true);

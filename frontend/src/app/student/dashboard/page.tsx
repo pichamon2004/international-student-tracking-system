@@ -53,6 +53,23 @@ function statusToDots(status: string): DotState[] {
   });
 }
 
+const STATUS_DETAIL: Record<string, string> = {
+  PENDING:              'Waiting for staff review',
+  STAFF_APPROVED:        'Staff approved, forwarded to Advisor',
+  FORWARDED_TO_ADVISOR:  'Forwarded to Advisor for review',
+  ADVISOR_APPROVED:      'Advisor approved, forwarded to Dean',
+  FORWARDED_TO_DEAN:     'Pending Dean approval',
+  DEAN_APPROVED:         'Completed',
+  STAFF_REJECTED:        'Rejected by Staff',
+  ADVISOR_REJECTED:      'Rejected by Advisor',
+  DEAN_REJECTED:         'Rejected by Dean',
+  CANCELLED:             'Cancelled',
+};
+
+function statusDetail(status: string): string {
+  return STATUS_DETAIL[status] ?? status;
+}
+
 function StepDots({ status }: { status: string }) {
   const dots = statusToDots(status);
   return (
@@ -196,7 +213,7 @@ export default function StudentDashboardPage() {
                   <div>
                     <p className="text-sm text-gray-400">Start REQ : {startDate}</p>
                     <p className="text-sm text-gray-400">Update REQ : {updateDate}</p>
-                    <p className="text-sm text-gray-400">Detail Update : {req.description ?? ''}</p>
+                    <p className="text-sm text-gray-400">Detail Update : {statusDetail(req.status)}</p>
                   </div>
                   <div className="flex items-end justify-end">
                     <button

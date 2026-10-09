@@ -34,7 +34,6 @@ const STUDENT_SELECT = {
 
 export const findAll = () =>
   prisma.advisor.findMany({
-    where:   { isActive: true },
     include: { _count: { select: { students: true } }, user: { select: { email: true } } },
     orderBy: { firstNameEn: 'asc' },
   });

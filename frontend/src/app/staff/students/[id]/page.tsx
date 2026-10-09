@@ -646,6 +646,7 @@ export default function StaffStudentDetailPage() {
   const [dependents, setDependents] = useState<ApiDependent[]>([]);
   const [academicDocs, setAcademicDocs] = useState<ApiAcademicDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -1000,6 +1001,7 @@ export default function StaffStudentDetailPage() {
                           <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Type</th>
                           <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Institution</th>
                           <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Issue Date</th>
+                          <th className="text-left py-3 px-4 font-semibold text-primary/60 text-xs uppercase tracking-wide">Document</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1008,6 +1010,17 @@ export default function StaffStudentDetailPage() {
                             <td className="py-3 px-4 text-primary font-medium">{doc.docType}</td>
                             <td className="py-3 px-4 text-primary">{doc.institution}</td>
                             <td className="py-3 px-4 text-primary">{fmt(doc.issueDate)}</td>
+                            <td className="py-3 px-4">
+                              {doc.fileUrl ? (
+                                <button type="button" onClick={() => setPreviewImage(doc.fileUrl)}>
+                                  <img src={doc.fileUrl} alt={doc.docType}
+                                    className="h-12 w-16 object-cover rounded-lg bg-gray-100 border border-gray-200 hover:opacity-80 transition cursor-pointer"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                </button>
+                              ) : (
+                                <span className="text-gray-400 text-xs">—</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1196,6 +1209,26 @@ export default function StaffStudentDetailPage() {
           record={renewalModal}
           onClose={() => setRenewalModal(null)}
         />
+      )}
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition"
+          >
+            <RiCloseLine size={20} />
+          </button>
+          <img
+            src={previewImage}
+            alt="Document preview"
+            className="max-w-full max-h-[85vh] object-contain rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
 
       {approval === 'approving' && (

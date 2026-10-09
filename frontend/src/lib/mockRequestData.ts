@@ -43,6 +43,7 @@ export interface DocTemplate {
   isActive: boolean;
   variables: string[];
   body: string;
+  signingMethod?: 'manual' | 'digital';
 }
 
 export const docTemplates: DocTemplate[] = [

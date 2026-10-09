@@ -23,6 +23,7 @@ import { AiFillPieChart } from 'react-icons/ai';
 import { TbClipboardList } from 'react-icons/tb';
 import { BsPeopleFill } from 'react-icons/bs';
 import { useState, useRef, useEffect } from 'react';
+import NotificationBell from './NotificationBell';
 
 interface NavItem {
   href: string;
@@ -213,6 +214,9 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
           );
         })}
       </div>
+
+      {/* Notifications */}
+      <NotificationBell />
 
       {/* Avatar */}
       <div className="relative shrink-0" ref={dropdownRef}>

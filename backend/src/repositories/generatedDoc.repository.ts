@@ -6,7 +6,7 @@ export interface CreateGeneratedDocDto {
   generatedBy: number;
   fileUrl:     string;
   requestId?:  number;
-  sigCoords?:  string;
+  formData?:   string;
 }
 
 // ── Queries ───────────────────────────────────────────────────────
@@ -18,17 +18,27 @@ export const findByStudentId = (studentId: number) =>
     orderBy: { createdAt: 'desc' },
   });
 
+export const countByTemplateId = (templateId: number) =>
+  prisma.generatedDocument.count({ where: { templateId } });
+
+export const findByRequestId = (requestId: number) =>
+  prisma.generatedDocument.findMany({
+    where:   { requestId },
+    include: { template: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
 export const findById = (id: number) =>
   prisma.generatedDocument.findUnique({
     where:   { id },
-    include: { template: { select: { id: true, name: true } } },
+    include: { template: { select: { id: true, name: true, body: true, variables: true, signingMethod: true } } },
   });
 
 export const findByIdWithSignatures = (id: number) =>
   prisma.generatedDocument.findUnique({
     where:   { id },
     include: {
-      template:   { select: { id: true, name: true } },
+      template:   { select: { id: true, name: true, body: true, variables: true, signingMethod: true } },
       signatures: true,
     },
   });
@@ -46,14 +56,14 @@ export const create = (dto: CreateGeneratedDocDto) =>
       generatedBy: dto.generatedBy,
       fileUrl:     dto.fileUrl,
       requestId:   dto.requestId,
-      sigCoords:   dto.sigCoords,
+      formData:    dto.formData,
     },
   });
 
 export const updateSignedFile = (id: number, signedFileUrl: string, signedBy: string) =>
   prisma.generatedDocument.update({
     where: { id },
-    data:  { signedFileUrl, signedBy, signedAt: new Date() },
+    data:  { signedFileUrl, signedBy, signedAt: new Date(), signingMode: 'manual' },
   });
 
 export const updateFinalizedPdf = (id: number, signedFileUrl: string, signingMode: string) =>

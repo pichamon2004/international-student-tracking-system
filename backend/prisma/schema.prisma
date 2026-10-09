@@ -30,6 +30,7 @@ enum RegistrationStatus {
   PENDING_APPROVAL
   REJECTED
   ACTIVE
+  SUSPENDED
 }
 
 enum VisaStatus {
@@ -294,6 +295,8 @@ model Dependent {
   firstName   String
   middleName  String?
   lastName    String
+  email       String?
+  phone       String?
   dateOfBirth DateTime
   gender      Gender
   nationality String
@@ -373,6 +376,10 @@ model DocumentTemplate {
   body        String  @db.LongText  // HTML content with {{variable}} placeholders
   variables   String? @db.Text      // JSON array of variable tokens e.g. ["{{student_name}}"]
   isActive    Boolean @default(true)
+  // "digital": sign via canvas draw or signature-image upload, embedded per
+  // role into the generated PDF. "manual": download, print, sign by hand,
+  // upload the whole signed PDF back (Foxit-style flow).
+  signingMethod String @default("digital")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -427,6 +434,11 @@ model Request {
   staffComment String?   @db.Text
   staffAt      DateTime?
 
+  // Dean review
+  deanId      Int?
+  deanComment String?   @db.Text
+  deanAt      DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -452,7 +464,10 @@ model GeneratedDocument {
   signedBy      String?
   signedAt      DateTime?
   signingMode   String?
-  sigCoords     String?   @db.Text
+  sigCoords     String?   @db.Text  // legacy: PDFKit x/y coords, unused since the Puppeteer HTML renderer
+  formData      String?   @db.Text  // JSON snapshot of the data used to generate this doc — re-merged with
+                                     // the template body on every signature so the PDF stays pixel-identical
+                                     // to the live preview instead of drifting from a flat pre-rendered file
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -36,6 +36,7 @@ export interface ApiDocTemplate {
   body: string;
   variables: string | null;  // JSON string
   isActive: boolean;
+  signingMethod: 'manual' | 'digital';
   createdAt: string;
   updatedAt: string;
 }
@@ -43,10 +44,10 @@ export interface ApiDocTemplate {
 export const templateApi = {
   getAll: () => api.get<{ success: boolean; data: ApiDocTemplate[] }>('/templates'),
 
-  create: (data: { name: string; description?: string; body: string; variables?: string[]; isActive?: boolean }) =>
+  create: (data: { name: string; description?: string; body: string; variables?: string[]; isActive?: boolean; signingMethod?: 'manual' | 'digital' }) =>
     api.post<{ success: boolean; data: ApiDocTemplate }>('/templates', data),
 
-  update: (id: number, data: Partial<{ name: string; description: string; body: string; variables: string[]; isActive: boolean }>) =>
+  update: (id: number, data: Partial<{ name: string; description: string; body: string; variables: string[]; isActive: boolean; signingMethod: 'manual' | 'digital' }>) =>
     api.put<{ success: boolean; data: ApiDocTemplate }>(`/templates/${id}`, data),
 
   delete: (id: number) =>
@@ -89,7 +90,9 @@ export interface ApiRequest {
   description: string | null;
   formData: string | null;  // JSON string
   status: string;
+  advisorComment: string | null;
   staffComment: string | null;
+  deanComment: string | null;
   createdAt: string;
   updatedAt: string;
   student?: {
@@ -104,10 +107,9 @@ export interface ApiRequest {
     id: number;
     name: string;
     icon: string | null;
-    documentTemplates?: { id: number; name: string; description: string | null; variables: string | null; body: string }[];
+    documentTemplates?: { id: number; name: string; description: string | null; variables: string | null; body: string; signingMethod?: 'manual' | 'digital' }[];
   };
   attachments?: string | null;  // JSON array of file URLs
-  advisorComment?: string | null;
 }
 
 export const requestApi = {
@@ -137,6 +139,8 @@ export const requestApi = {
     }
     return api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}/status`, { status, comment });
   },
+  followUp: (id: number) =>
+    api.post<{ success: boolean; message: string; data: { roleLabel: string; notifiedCount: number } }>(`/requests/${id}/follow-up`),
 };
 
 // ── Students ───────────────────────────────────────────────────
@@ -325,6 +329,8 @@ export const emailTemplateApi = {
     api.put<{ success: boolean; data: ApiEmailTemplate }>(`/email-templates/${id}`, data),
   delete: (id: number) =>
     api.delete<{ success: boolean }>(`/email-templates/${id}`),
+  test: (id: number, to: string, variables?: Record<string, string>) =>
+    api.post<{ success: boolean; message: string }>(`/email-templates/${id}/test`, { to, variables }),
 };
 
 // ── Template Variables ─────────────────────────────────────────
@@ -421,6 +427,8 @@ export interface ApiDependent {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  email: string | null;
+  phone: string | null;
   dateOfBirth: string;
   gender: string;
   nationality: string;
@@ -515,9 +523,9 @@ export const healthInsuranceApi = {
   create: (studentId: number, data: {
     provider: string; startDate: string; expiryDate: string;
     policyNumber?: string; coverageType?: string; fileUrl?: string;
-  }) => api.post<{ success: boolean; data: ApiHealthInsurance }>(`/students/${studentId}/health-insurance`, data),
+  }) => api.post<{ success: boolean; data: ApiHealthInsurance; changeRequest?: ApiChangeRequest }>(`/students/${studentId}/health-insurance`, data),
   update: (studentId: number, insuranceId: number, data: Partial<Omit<ApiHealthInsurance, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>>) =>
-    api.put<{ success: boolean; data: ApiHealthInsurance }>(`/students/${studentId}/health-insurance/${insuranceId}`, data),
+    api.put<{ success: boolean; data: ApiHealthInsurance; changeRequest?: ApiChangeRequest }>(`/students/${studentId}/health-insurance/${insuranceId}`, data),
   delete: (studentId: number, insuranceId: number) =>
     api.delete<{ success: boolean }>(`/students/${studentId}/health-insurance/${insuranceId}`),
 };
@@ -529,7 +537,7 @@ export const dependentApi = {
     api.get<{ success: boolean; data: ApiDependent[] }>(`/students/${studentId}/dependents`),
   create: (studentId: number, data: {
     relationship: string; firstName: string; lastName: string; dateOfBirth: string; gender: string; nationality: string;
-    title?: string; middleName?: string; passportNumber?: string; passportExpiry?: string;
+    title?: string; middleName?: string; email?: string; phone?: string; passportNumber?: string; passportExpiry?: string;
     passportImageUrl?: string; visaType?: string; visaExpiry?: string; visaImageUrl?: string; visaStatus?: string;
   }) => api.post<{ success: boolean; data: ApiDependent }>(`/students/${studentId}/dependents`, data),
   update: (studentId: number, depId: number, data: Partial<Omit<ApiDependent, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>>) =>
@@ -553,7 +561,7 @@ export const advisorApi = {
     api.get<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`),
   update: (data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'> & { nationality?: string }>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>('/advisors/me', data),
-  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'position' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'>>) =>
+  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'position' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry' | 'isActive'>>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`, data),
   getDeans: () =>
     api.get<{ success: boolean; data: ApiDeanUser[] }>('/advisors/deans'),
@@ -655,6 +663,9 @@ export interface ApiGeneratedDoc {
 }
 
 export const generatedDocApi = {
+  generate: (requestId: number, templateId: number, formData: Record<string, string>) =>
+    api.post<{ success: boolean; data: ApiGeneratedDoc }>(`/requests/${requestId}/generate-pdf`, { templateId, formData }),
+
   getByRequest: (requestId: number) =>
     api.get<{ success: boolean; data: ApiGeneratedDoc[] }>(`/requests/${requestId}/generated-documents`),
 
@@ -670,9 +681,10 @@ export const generatedDocApi = {
       { role, imageDataUrl }
     ),
 
-  uploadSignedPdf: (docId: number, file: File) => {
+  uploadSignedPdf: (docId: number, file: File, role: string) => {
     const form = new FormData();
     form.append('file', file);
+    form.append('role', role);
     return api.post<{ success: boolean; data: ApiGeneratedDoc }>(
       `/generated-documents/${docId}/upload-signed`,
       form,

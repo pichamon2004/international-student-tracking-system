@@ -16,6 +16,7 @@ export interface DocTemplate {
   isActive: boolean;
   variables: string[];
   body: string; // stored as HTML
+  signingMethod?: 'manual' | 'digital';
 }
 
 export const SIGNATURE_VARIABLES = ['{{sig_student}}', '{{sig_advisor}}', '{{sig_ir_staff}}', '{{sig_dean}}'];
@@ -87,6 +88,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const [desc, setDesc] = useState(template?.description ?? '');
   const [bodyHtml, setBodyHtml] = useState(() => toHtml(template?.body ?? ''));
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
+  const [signingMethod, setSigningMethod] = useState<'manual' | 'digital'>(template?.signingMethod ?? 'digital');
   const [usedVars, setUsedVars] = useState<string[]>(template?.variables ?? []);
   const [varSearch, setVarSearch] = useState('');
   const [signatories, setSignatories] = useState<string[]>(
@@ -285,12 +287,14 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     // Strip zero-width spaces left by font-size cursor carriers
     const html = (editorRef.current?.innerHTML ?? bodyHtml).replace(/\u200B/g, '');
     const vars = extractVars(html);
+
     onSave({
       id: template?.id,
       name: name.trim(),
       description: desc.trim(),
       body: html,
       isActive,
+      signingMethod,
       variables: Array.from(new Set([...vars, ...signatories])),
     });
   };
@@ -300,7 +304,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     const w = window.open('', '_blank', 'width=900,height=700'); if (!w) return;
     const origin = window.location.origin;
     const html = el.innerHTML.replace(/src="\/kkulogo2\.png"/g, `src="${origin}/kkulogo2.png"`);
-    w.document.write(`<!DOCTYPE html><html><head><title>Document</title><style>body{margin:25mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;}@media print{@page{size:A4;margin:0;}body{margin:25mm 20mm;}}</style></head><body>${html}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script></body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>Document</title><style>body{margin:0;padding:15mm 20mm;font-family:'Times New Roman',serif;font-size:14px;color:#222;line-height:1.8;}img{display:block;margin-left:auto;margin-right:auto}@media print{@page{size:A4;margin:0;}body{padding:15mm 20mm;}}</style></head><body>${html}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}<\/script></body></html>`);
     w.document.close();
   }, []);
 
@@ -370,9 +374,21 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                   <span className={clsx('text-xs font-medium', isActive ? 'text-green-600' : 'text-gray-400')}>{isActive ? 'Active' : 'Inactive'}</span>
                 </button>
               </div>
+              <div className="flex flex-col gap-1 justify-end">
+                <label className="text-[10px] font-semibold text-primary/60 uppercase tracking-wide">Signing Method</label>
+                <div className="flex gap-1 p-1 bg-white border border-[#0776BC]/20 rounded-xl">
+                  {(['digital', 'manual'] as const).map(m => (
+                    <button key={m} type="button" onClick={() => setSigningMethod(m)}
+                      className={clsx('flex-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition capitalize text-center',
+                        signingMethod === m ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-700')}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {[
                 { label: 'Template Name', val: name, set: setName },
                 { label: 'Description', val: desc, set: setDesc },
@@ -383,6 +399,18 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                     className="border border-[#0776BC]/20 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:border-primary transition-colors" />
                 </div>
               ))}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-primary/50 uppercase tracking-wide">Signing Method</label>
+                <div className="flex gap-1 p-1 bg-white border border-[#0776BC]/20 rounded-lg">
+                  {(['digital', 'manual'] as const).map(m => (
+                    <button key={m} type="button" onClick={() => setSigningMethod(m)}
+                      className={clsx('flex-1 px-2.5 py-1 rounded-md text-xs font-semibold transition capitalize text-center',
+                        signingMethod === m ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-700')}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

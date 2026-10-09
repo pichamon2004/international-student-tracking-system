@@ -36,6 +36,12 @@ export const findStudentUserId = (studentId: number) =>
 
 // ── Mutations ─────────────────────────────────────────────────────
 
+export const clearCurrentByStudentId = (studentId: number) =>
+  prisma.healthInsurance.updateMany({
+    where: { studentId, isCurrent: true },
+    data:  { isCurrent: false },
+  });
+
 export const create = (dto: CreateHealthInsuranceDto) =>
   prisma.healthInsurance.create({
     data: {
@@ -46,6 +52,7 @@ export const create = (dto: CreateHealthInsuranceDto) =>
       policyNumber: dto.policyNumber,
       coverageType: dto.coverageType,
       fileUrl:      dto.fileUrl,
+      isCurrent:    true,
     },
   });
 

@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { RiCloseLine, RiMailLine, RiSendPlaneLine } from 'react-icons/ri';
+import { RiCloseLine, RiMailLine, RiSendPlaneLine, RiTestTubeLine } from 'react-icons/ri';
+import toast from 'react-hot-toast';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 export interface EmailTemplate {
@@ -31,21 +32,36 @@ function varLabel(v: string) {
   return VARIABLE_LABELS[v] ?? v.replace(/[{}]/g, '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+const SAMPLE_VALUES: Record<string, string> = {
+  student_name:     'John Doe',
+  student_id:        '6630500001',
+  email:              'student@example.com',
+  visa_expiry_date:   new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-GB'),
+  days_remaining:     '30',
+  request_type:       'Visa Extension',
+  status:              'Approved',
+  program:             'Computer Science',
+  date:                new Date().toLocaleDateString('en-GB'),
+};
+
 interface EmailTemplateModalProps {
   template: EmailTemplate | null;
   isCreate: boolean;
   allVariables: string[];
   onSave: (data: Partial<EmailTemplate> & { id?: number }) => void;
+  onTest?: (id: number, to: string, variables: Record<string, string>) => Promise<void>;
   onClose: () => void;
 }
 
-export default function EmailTemplateModal({ template, isCreate, allVariables, onSave, onClose }: EmailTemplateModalProps) {
+export default function EmailTemplateModal({ template, isCreate, allVariables, onSave, onTest, onClose }: EmailTemplateModalProps) {
   const [name, setName] = useState(template?.name ?? '');
   const [subject, setSubject] = useState(template?.subject ?? '');
   const [body, setBody] = useState(template?.body ?? '');
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
   const [selectedVars, setSelectedVars] = useState<string[]>(template?.variables ?? []);
   const [varSearch, setVarSearch] = useState('');
+  const [testEmail, setTestEmail] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,6 +83,24 @@ export default function EmailTemplateModal({ template, isCreate, allVariables, o
   const handleSave = () => {
     if (!name.trim()) return;
     onSave({ id: template?.id, name: name.trim(), subject: subject.trim(), body, isActive, variables: selectedVars });
+  };
+
+  const handleSendTest = async () => {
+    if (!template || !onTest || !testEmail.trim()) return;
+    setSendingTest(true);
+    try {
+      const sampleVars: Record<string, string> = {};
+      for (const v of (isCreate ? selectedVars : template.variables)) {
+        const key = v.replace(/[{}]/g, '');
+        sampleVars[key] = SAMPLE_VALUES[key] ?? `[${key}]`;
+      }
+      await onTest(template.id, testEmail.trim(), sampleVars);
+      toast.success(`Test email sent to ${testEmail.trim()}`);
+    } catch {
+      toast.error('Failed to send test email');
+    } finally {
+      setSendingTest(false);
+    }
   };
 
   const vars = isCreate ? selectedVars : (template?.variables ?? []);
@@ -170,6 +204,28 @@ export default function EmailTemplateModal({ template, isCreate, allVariables, o
                 <span className={clsx('text-xs font-medium', isActive ? 'text-green-600' : 'text-gray-400')}>{isActive ? 'Active' : 'Inactive'}</span>
               </button>
             </div>
+
+            {/* Send test email */}
+            {!isCreate && template && onTest && (
+              <div className="flex items-center gap-2 pt-2 border-t border-[#0776BC]/10">
+                <RiTestTubeLine size={14} className="text-primary/50 shrink-0" />
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={e => setTestEmail(e.target.value)}
+                  placeholder="Send test to email address..."
+                  className="flex-1 text-xs px-2.5 py-1.5 border border-[#0776BC]/20 rounded-lg bg-white outline-none focus:border-primary transition-colors placeholder:text-gray-400"
+                />
+                <button
+                  onClick={handleSendTest}
+                  disabled={!testEmail.trim() || sendingTest}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  <RiSendPlaneLine size={12} />
+                  {sendingTest ? 'Sending…' : 'Send Test'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

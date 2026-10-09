@@ -59,6 +59,8 @@ function DependentModal({ dep, onClose }: { dep: ApiDependent; onClose: () => vo
           <InfoRow label="Middle Name" value={dep.middleName} />
           <InfoRow label="Last Name" value={dep.lastName} />
           <InfoRow label="Relationship" value={dep.relationship} />
+          <InfoRow label="Email" value={dep.email} />
+          <InfoRow label="Phone No." value={dep.phone} />
           <InfoRow label="Gender" value={dep.gender} />
           <InfoRow label="Date of Birth" value={fmtDate(dep.dateOfBirth)} />
           <InfoRow label="Nationality" value={dep.nationality} />
@@ -146,7 +148,7 @@ export default function DependentPage() {
         {pendingChange && (
           <PendingBanner
             pending={pendingChange}
-            fieldLabels={{ firstName: 'First Name', lastName: 'Last Name', relationship: 'Relationship', nationality: 'Nationality', dateOfBirth: 'Date of Birth', gender: 'Gender' }}
+            fieldLabels={{ firstName: 'First Name', lastName: 'Last Name', relationship: 'Relationship', nationality: 'Nationality', dateOfBirth: 'Date of Birth', gender: 'Gender', email: 'Email', phone: 'Phone No.' }}
             onCancel={() => setPendingChange(null)}
           />
         )}

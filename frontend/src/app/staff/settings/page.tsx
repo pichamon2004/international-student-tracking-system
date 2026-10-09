@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { IconType } from 'react-icons';
 import { templateApi, requestTypeApi, emailTemplateApi, templateVariableApi, type ApiRequestType, type ApiTemplateVariable, type SelectOption } from '@/lib/api';
+import toast from 'react-hot-toast';
 import { clsx } from 'clsx';
 import DocTemplateModal, { DocTemplate } from '@/components/DocTemplateModal';
 import EmailTemplateModal, { EmailTemplate } from '@/components/EmailTemplateModal';
@@ -281,12 +282,17 @@ function EmailTemplatesTab() {
     }
   }
 
+  async function handleTest(id: number, to: string, variables: Record<string, string>) {
+    await emailTemplateApi.test(id, to, variables);
+  }
+
   async function handleDelete(target: EmailTemplate) {
     try {
       await emailTemplateApi.delete(target.id);
       setTemplates(prev => prev.filter(t => t.id !== target.id));
-    } catch (e) {
-      console.error('Failed to delete:', e);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to delete template');
     }
     setDeleteTarget(null);
   }
@@ -342,7 +348,7 @@ function EmailTemplatesTab() {
 
       {modal !== null && (
         <EmailTemplateModal template={modal === 'create' ? null : modal} isCreate={modal === 'create'}
-          allVariables={EMAIL_VARIABLES} onSave={handleSave} onClose={() => setModal(null)} />
+          allVariables={EMAIL_VARIABLES} onSave={handleSave} onTest={handleTest} onClose={() => setModal(null)} />
       )}
       {deleteTarget && (
         <DeleteDialog name={deleteTarget.name}
@@ -646,7 +652,7 @@ function RequestTypesTab({
 /* ─── Helpers: map API → frontend types ─────────────────────── */
 function apiToDocTemplate(t: {
   id: number; name: string; description: string | null;
-  body: string; variables: string | null; isActive: boolean;
+  body: string; variables: string | null; isActive: boolean; signingMethod?: 'manual' | 'digital';
 }): DocTemplate {
   return {
     id: t.id,
@@ -655,6 +661,7 @@ function apiToDocTemplate(t: {
     body: t.body,
     isActive: t.isActive,
     variables: t.variables ? (JSON.parse(t.variables) as string[]) : [],
+    signingMethod: t.signingMethod ?? 'digital',
   };
 }
 
@@ -712,6 +719,7 @@ export default function SettingsPage() {
           body: data.body ?? '',
           variables: data.variables ?? [],
           isActive: data.isActive ?? true,
+          signingMethod: data.signingMethod,
         });
       } else {
         await templateApi.update(data.id, {
@@ -720,6 +728,7 @@ export default function SettingsPage() {
           body: data.body,
           variables: data.variables,
           isActive: data.isActive,
+          signingMethod: data.signingMethod,
         });
       }
       await loadData();
@@ -741,7 +750,10 @@ export default function SettingsPage() {
     try {
       await templateApi.delete(deleteTarget.id);
       await loadData();
-    } catch (e) { console.error(e); }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to delete template');
+    }
     setDeleteTarget(null);
   };
 

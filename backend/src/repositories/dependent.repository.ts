@@ -11,6 +11,8 @@ export interface CreateDependentDto {
   nationality:      string;
   title?:           string;
   middleName?:      string;
+  email?:           string;
+  phone?:           string;
   passportNumber?:  string;
   passportExpiry?:  Date;
   passportImageUrl?: string;
@@ -26,6 +28,8 @@ export interface UpdateDependentDto {
   firstName?:        string;
   middleName?:       string;
   lastName?:         string;
+  email?:             string;
+  phone?:             string;
   dateOfBirth?:      Date;
   gender?:           Gender;
   nationality?:      string;
@@ -66,6 +70,8 @@ export const create = (dto: CreateDependentDto) =>
       nationality:      dto.nationality,
       title:            dto.title,
       middleName:       dto.middleName,
+      email:            dto.email,
+      phone:            dto.phone,
       passportNumber:   dto.passportNumber,
       passportExpiry:   dto.passportExpiry,
       passportImageUrl: dto.passportImageUrl,
@@ -85,6 +91,8 @@ export const updateById = (id: number, dto: UpdateDependentDto) =>
       firstName:        dto.firstName,
       middleName:       dto.middleName,
       lastName:         dto.lastName,
+      email:            dto.email,
+      phone:            dto.phone,
       dateOfBirth:      dto.dateOfBirth,
       gender:           dto.gender,
       nationality:      dto.nationality,

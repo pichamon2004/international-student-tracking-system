@@ -2,11 +2,11 @@
 
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { RiCloseLine, RiUploadCloud2Line, RiCheckLine, RiTimeLine } from 'react-icons/ri';
+import { RiCloseLine, RiUploadCloud2Line, RiCheckLine, RiTimeLine, RiImageLine, RiDownloadLine } from 'react-icons/ri';
 import SignaturePad from '@/components/ui/SignaturePad';
 import { generatedDocApi, type ApiDocSignature } from '@/lib/api';
 
-type Tab = 'digital' | 'manual';
+type DigitalTab = 'draw' | 'uploadImage';
 
 const ROLE_LABELS: Record<string, string> = {
   student:  'Student',
@@ -20,8 +20,19 @@ interface Props {
   myRole:      string;
   signatures:  ApiDocSignature[];
   requiredRoles: string[];
+  signingMethod?: 'manual' | 'digital';
+  fileUrl?:    string | null;
   onSigned:    (updated: ApiDocSignature[]) => void;
   onClose:     () => void;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function SignatureModal({
@@ -29,17 +40,21 @@ export default function SignatureModal({
   myRole,
   signatures,
   requiredRoles,
+  signingMethod = 'digital',
+  fileUrl,
   onSigned,
   onClose,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('digital');
+  const [digitalTab, setDigitalTab] = useState<DigitalTab>('draw');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const isSigned = (role: string) => signatures.some(s => s.role === role);
   const myAlreadySigned = isSigned(myRole);
+  const myRoleNotRequired = requiredRoles.length > 0 && !requiredRoles.includes(myRole);
 
   const handleDigitalConfirm = async (dataUrl: string) => {
     setLoading(true);
@@ -57,7 +72,23 @@ export default function SignatureModal({
     }
   };
 
-  const handleFile = async (file: File) => {
+  const handleImageFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (PNG or JPG)');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      await handleDigitalConfirm(dataUrl);
+    } catch {
+      setError('Failed to read image file');
+      setLoading(false);
+    }
+  };
+
+  const handlePdfFile = async (file: File) => {
     if (!file.name.endsWith('.pdf')) {
       setError('Please upload a PDF file');
       return;
@@ -65,7 +96,9 @@ export default function SignatureModal({
     setLoading(true);
     setError('');
     try {
-      await generatedDocApi.uploadSignedPdf(docId, file);
+      await generatedDocApi.uploadSignedPdf(docId, file, myRole);
+      const res = await generatedDocApi.getSignatures(docId);
+      onSigned(res.data.data);
       onClose();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -115,31 +148,86 @@ export default function SignatureModal({
             </div>
           )}
 
-          {myAlreadySigned ? (
+          {myRoleNotRequired ? (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
+              This document does not require a signature from the {ROLE_LABELS[myRole] ?? myRole} role —
+              only {requiredRoles.map(r => ROLE_LABELS[r] ?? r).join(', ')} need to sign.
+            </div>
+          ) : myAlreadySigned ? (
             <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 flex items-center gap-2">
               <RiCheckLine size={16} />
               You have already signed this document.
             </div>
+          ) : signingMethod === 'manual' ? (
+            /* ── Manual: print, sign by hand, upload the whole signed PDF back ── */
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-gray-500">
+                This document requires a manual signature. Download it, print it, sign it by hand, then scan or
+                photograph the signed copy and upload it here as a PDF.
+              </p>
+              {fileUrl && (
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary text-xs font-semibold hover:bg-primary/10 transition"
+                >
+                  <RiDownloadLine size={14} /> Download Document
+                </a>
+              )}
+              <div
+                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 transition cursor-pointer ${
+                  dragOver ? 'border-primary bg-primary/5' : 'border-gray-300 hover:border-gray-400'
+                }`}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) handlePdfFile(file);
+                }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <RiUploadCloud2Line size={32} className="text-gray-400" />
+                <div className="text-center">
+                  <p className="text-sm font-medium text-gray-600">Drop the signed PDF here or click to browse</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Only .pdf files accepted</p>
+                </div>
+                {loading && <p className="text-xs text-primary font-medium">Uploading…</p>}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handlePdfFile(file);
+                  e.target.value = '';
+                }}
+              />
+            </div>
           ) : (
+            /* ── Digital: draw on canvas, or upload an image of your signature ── */
             <>
-              {/* Tabs */}
               <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
-                {(['digital', 'manual'] as Tab[]).map(t => (
+                {(['draw', 'uploadImage'] as DigitalTab[]).map(t => (
                   <button
                     key={t}
                     type="button"
-                    onClick={() => setTab(t)}
+                    onClick={() => setDigitalTab(t)}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${
-                      tab === t ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-700'
+                      digitalTab === t ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    {t === 'digital' ? 'Draw Signature' : 'Upload Signed PDF'}
+                    {t === 'draw' ? 'Draw Signature' : 'Upload Signature Image'}
                   </button>
                 ))}
               </div>
 
-              {/* Digital tab */}
-              {tab === 'digital' && (
+              {digitalTab === 'draw' && (
                 <div className="flex flex-col gap-3">
                   <p className="text-xs text-gray-500">
                     Draw your signature below. It will be embedded into the PDF automatically.
@@ -154,11 +242,11 @@ export default function SignatureModal({
                 </div>
               )}
 
-              {/* Manual / Foxit tab */}
-              {tab === 'manual' && (
+              {digitalTab === 'uploadImage' && (
                 <div className="flex flex-col gap-3">
                   <p className="text-xs text-gray-500">
-                    Download the PDF, sign it using <strong>Foxit PDF</strong> or any PDF editor, then upload it here.
+                    Upload an image of your signature (PNG or JPG). It will be embedded into the PDF the same way a
+                    drawn signature would be.
                   </p>
                   <div
                     className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 transition cursor-pointer ${
@@ -170,25 +258,25 @@ export default function SignatureModal({
                       e.preventDefault();
                       setDragOver(false);
                       const file = e.dataTransfer.files[0];
-                      if (file) handleFile(file);
+                      if (file) handleImageFile(file);
                     }}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => imageInputRef.current?.click()}
                   >
-                    <RiUploadCloud2Line size={32} className="text-gray-400" />
+                    <RiImageLine size={32} className="text-gray-400" />
                     <div className="text-center">
-                      <p className="text-sm font-medium text-gray-600">Drop PDF here or click to browse</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Only .pdf files accepted</p>
+                      <p className="text-sm font-medium text-gray-600">Drop an image here or click to browse</p>
+                      <p className="text-xs text-gray-400 mt-0.5">PNG or JPG</p>
                     </div>
-                    {loading && <p className="text-xs text-primary font-medium">Uploading…</p>}
+                    {loading && <p className="text-xs text-primary font-medium">Saving…</p>}
                   </div>
                   <input
-                    ref={fileInputRef}
+                    ref={imageInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept="image/*"
                     className="hidden"
                     onChange={e => {
                       const file = e.target.files?.[0];
-                      if (file) handleFile(file);
+                      if (file) handleImageFile(file);
                       e.target.value = '';
                     }}
                   />

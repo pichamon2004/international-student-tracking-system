@@ -185,7 +185,7 @@ export default function StudentRequestPage() {
                   <th className="text-left py-3 px-4 font-semibold text-primary">Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-primary">Start Request</th>
                   <th className="text-left py-3 px-4 font-semibold text-primary">Last Update</th>
-                  <th className="text-left py-3 px-4 font-semibold text-primary">Staff Comment</th>
+                  <th className="text-left py-3 px-4 font-semibold text-primary">Comment</th>
                   <th className="text-center py-3 px-4 font-semibold text-primary">Status</th>
                   <th className="text-center py-3 px-4 font-semibold text-primary">Action</th>
                 </tr>
@@ -202,7 +202,7 @@ export default function StudentRequestPage() {
                       <td className="py-3 px-4 text-gray-600">{formatDate(item.createdAt)}</td>
                       <td className="py-3 px-4 text-gray-600">{formatDate(item.updatedAt)}</td>
                       <td className="py-3 px-4 text-gray-500 max-w-[180px] truncate">
-                        {item.staffComment ?? '—'}
+                        {item.deanComment ?? item.advisorComment ?? item.staffComment ?? '—'}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className={clsx(

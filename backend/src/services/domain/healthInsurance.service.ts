@@ -45,6 +45,8 @@ export const createHealthInsurance = async (
     throw Object.assign(new Error('startDate must be before expiryDate'), { statusCode: 400 });
   }
 
+  await healthInsuranceRepository.clearCurrentByStudentId(studentId);
+
   const insurance = await healthInsuranceRepository.create({
     studentId,
     provider: dto.provider,

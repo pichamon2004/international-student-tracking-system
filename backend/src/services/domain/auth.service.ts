@@ -35,6 +35,39 @@ const getUserRoles = (userId: number) =>
     include: { role: { select: { id: true, code: true, name: true, isActive: true } } },
   });
 
+// A suspended student / deactivated advisor keeps their User/UserRole rows
+// (so staff can reactivate them later) but must be blocked from signing in
+// while suspended/inactive. `authenticate` only verifies the JWT signature on
+// every request (stateless), so this DB-state check only happens at the
+// points where a new token is issued — it must run in all of them.
+const assertAccountNotSuspended = async (userId: number, roleCode: string): Promise<void> => {
+  if (roleCode === 'STUDENT') {
+    const student = await prisma.student.findUnique({
+      where: { userId },
+      select: { registrationStatus: true },
+    });
+    if (student?.registrationStatus === 'SUSPENDED') {
+      throw Object.assign(
+        new Error('Your account has been suspended. Please contact the office.'),
+        { statusCode: 403, errorCode: 'suspended' }
+      );
+    }
+  }
+
+  if (roleCode === 'ADVISOR') {
+    const advisor = await prisma.advisor.findUnique({
+      where: { userId },
+      select: { isActive: true },
+    });
+    if (advisor && !advisor.isActive) {
+      throw Object.assign(
+        new Error('Your advisor account has been deactivated. Please contact the office.'),
+        { statusCode: 403, errorCode: 'suspended' }
+      );
+    }
+  }
+};
+
 // ── login ─────────────────────────────────────────────────────────
 
 export const login = async (email: string, password: string) => {
@@ -67,6 +100,7 @@ export const login = async (email: string, password: string) => {
 
   // มี role เดียว → auto-select
   const role = activeRoles[0].role;
+  await assertAccountNotSuspended(user.id, role.code);
   const permissions = await buildPermissions(role.id);
 
   return {
@@ -93,6 +127,7 @@ export const selectRole = async (userId: number, roleId: number) => {
     throw Object.assign(new Error('Role not assigned to user'), { statusCode: 403 });
   }
 
+  await assertAccountNotSuspended(userId, userRole.role.code);
   const permissions = await buildPermissions(roleId);
 
   return {
@@ -130,6 +165,7 @@ export const verifyAndRefresh = async (cookieToken: string) => {
     throw Object.assign(new Error('Role no longer assigned'), { statusCode: 401 });
   }
 
+  await assertAccountNotSuspended(user.id, role.code);
   const permissions = await buildPermissions(role.id);
 
   return {
@@ -207,6 +243,7 @@ export const processGoogleLogin = async (code: string, redirectUri: string) => {
   }
 
   const role = activeRoles[0].role;
+  await assertAccountNotSuspended(user.id, role.code);
   const permissions = await buildPermissions(role.id);
 
   return {

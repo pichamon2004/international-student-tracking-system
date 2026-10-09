@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RiEditLine, RiAddLine, RiUploadLine } from 'react-icons/ri';
+import { RiEditLine, RiAddLine, RiUploadLine, RiForbidLine, RiCheckLine } from 'react-icons/ri';
 import AddAdvisorModal, { NewAdvisorData } from '@/components/AddAdvisorModal';
 import ImportModal from '@/components/ImportModal';
 import { advisorApi, type ApiAdvisor } from '@/lib/api';
@@ -25,6 +25,7 @@ export default function StaffAdvisorsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   const refreshAdvisors = () => advisorApi.getAll().then(res => setAdvisors(res.data.data)).catch(() => {});
 
@@ -43,6 +44,21 @@ export default function StaffAdvisorsPage() {
   const getInitials = (advisor: ApiAdvisor) => {
     const name = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ');
     return name.split(' ').filter(w => /^[A-Z]/i.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+  };
+
+  const handleToggleActive = async (advisor: ApiAdvisor) => {
+    const activating = !advisor.isActive;
+    const name = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ') || 'Advisor';
+    setBusyId(advisor.id);
+    try {
+      await advisorApi.updateById(advisor.id, { isActive: activating });
+      toast.success(activating ? `${name} activated` : `${name} deactivated`);
+      refreshAdvisors();
+    } catch {
+      toast.error('Failed to update advisor status');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const handleAddAdvisor = async (data: NewAdvisorData) => {
@@ -177,6 +193,19 @@ export default function StaffAdvisorsPage() {
                     {studentCount === 0 && <span className="text-xs text-gray-400">No students assigned</span>}
                   </div>
                 </div>
+
+                <button
+                  onClick={() => handleToggleActive(advisor)}
+                  disabled={busyId === advisor.id}
+                  className={`flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-sm font-medium transition disabled:opacity-50 ${
+                    advisor.isActive
+                      ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                      : 'bg-green-50 text-green-600 hover:bg-green-100'
+                  }`}
+                >
+                  {advisor.isActive ? <RiForbidLine size={15} /> : <RiCheckLine size={15} />}
+                  {advisor.isActive ? 'Suspend' : 'Activate'}
+                </button>
 
               </div>
             );

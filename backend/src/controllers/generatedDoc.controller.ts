@@ -16,7 +16,8 @@ export const generatePdf = async (req: AuthRequest, res: Response): Promise<void
     parseInt(req.params.id),
     parseInt(templateId),
     formData as Record<string, string>,
-    req.user!.userId
+    req.user!.userId,
+    req.user?.activeRole
   );
 
   res.status(201).json({ success: true, data: genDoc });
@@ -49,7 +50,9 @@ export const uploadSignedDocHandler = async (req: AuthRequest, res: Response): P
   const updated = await generatedDocService.uploadSignedDoc(
     parseInt(req.params.docId),
     req.file,
-    req.user!.userId
+    req.user!.userId,
+    req.user?.activeRole,
+    typeof req.body.role === 'string' ? req.body.role : undefined
   );
   res.json({ success: true, data: updated });
 };

@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import SignatureModal from '@/components/SignatureModal';
 import { clsx } from 'clsx';
+import toast from 'react-hot-toast';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   RiArrowLeftLine, RiCheckLine, RiTimeLine, RiCloseCircleLine,
   RiFileTextLine, RiCalendarLine, RiInformationLine, RiEyeLine,
-  RiCloseLine, RiPrinterLine, RiPenNibLine,
+  RiCloseLine, RiPrinterLine, RiDownloadLine, RiPenNibLine,
 } from 'react-icons/ri';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -31,53 +34,11 @@ interface RequestDetail {
   submittedDate: string;
   updatedDate: string;
   status: RequestStatus;
+  advisorComment: string | null;
   staffComment: string | null;
+  deanComment: string | null;
   description: string | null;
 }
-
-/* ─── Mock Data ──────────────────────────────────────────────── */
-const mockRequests: Record<string, RequestDetail> = {
-  '1': {
-    id: 1,
-    title: 'Leave Request Form',
-    requestType: 'Leave Request Form',
-    submittedDate: '25/03/2026',
-    updatedDate: '25/03/2026',
-    status: 'PENDING',
-    staffComment: null,
-    description: null,
-  },
-  '2': {
-    id: 2,
-    title: 'Enrollment Certificate',
-    requestType: 'Enrollment Certificate',
-    submittedDate: '10/03/2026',
-    updatedDate: '12/03/2026',
-    status: 'ADVISOR_APPROVED',
-    staffComment: null,
-    description: null,
-  },
-  '3': {
-    id: 3,
-    title: 'Conference Letter',
-    requestType: 'Conference Letter',
-    submittedDate: '01/03/2026',
-    updatedDate: '05/03/2026',
-    status: 'STAFF_REJECTED',
-    staffComment: 'Missing conference acceptance letter. Please resubmit with the required document.',
-    description: null,
-  },
-  '4': {
-    id: 4,
-    title: 'Leave Request Form',
-    requestType: 'Leave Request Form',
-    submittedDate: '15/02/2026',
-    updatedDate: '20/02/2026',
-    status: 'DEAN_APPROVED',
-    staffComment: 'Approved. Document ready for pickup at the IR office.',
-    description: null,
-  },
-};
 
 /* ─── Status config ──────────────────────────────────────────── */
 const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -184,9 +145,11 @@ export default function StudentRequestDetailPage() {
   const [reqData, setReqData] = useState<RequestDetail | null>(null);
   const [fullReq, setFullReq] = useState<ApiRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [deanName, setDeanName] = useState('');
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
+  const previewContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -205,11 +168,13 @@ export default function StudentRequestDetailPage() {
           submittedDate: new Date(r.createdAt).toLocaleDateString('en-GB'),
           updatedDate: new Date(r.updatedAt).toLocaleDateString('en-GB'),
           status: r.status as RequestStatus,
-          staffComment: r.description ?? null,
+          advisorComment: r.advisorComment ?? null,
+          staffComment: r.staffComment ?? null,
+          deanComment: r.deanComment ?? null,
           description: r.description ?? null,
         });
       })
-      .catch(() => {})
+      .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
     generatedDocApi.getByRequest(Number(id))
       .then(res => {
@@ -222,13 +187,17 @@ export default function StudentRequestDetailPage() {
       .catch(() => {});
   }, [id]);
 
-  // fallback to mock while loading
-  const req: RequestDetail = reqData ?? (mockRequests[id] ?? mockRequests['1']);
-  const statusCfg = STATUS_CONFIG[req.status];
-  const timeline = buildTimeline(req.status);
+  function handleSigned(updated: ApiDocSignature[]) {
+    setSignatures(updated);
+    if (genDoc) generatedDocApi.getById(genDoc.id).then(r => setGenDoc(r.data.data)).catch(() => {});
+  }
 
-  const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
-  const isCompleted = req.status === 'DEAN_APPROVED';
+  const requiredSigRoles: string[] = (() => {
+    try {
+      const vars: string[] = JSON.parse(fullReq?.requestType?.documentTemplates?.[0]?.variables ?? '[]');
+      return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
+    } catch { return []; }
+  })();
 
   if (loading) {
     return (
@@ -242,16 +211,39 @@ export default function StudentRequestDetailPage() {
     );
   }
 
+  if (notFound || !reqData) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-4 py-24 w-full">
+        <RiCloseCircleLine size={36} className="text-gray-300" />
+        <p className="text-gray-500 font-medium">Request not found</p>
+        <p className="text-sm text-gray-400 -mt-2">It may have been removed, or you don&apos;t have access to view it.</p>
+        <button
+          onClick={() => router.push('/student/request')}
+          className="mt-2 bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-primary/90 transition"
+        >
+          Back to My Requests
+        </button>
+      </div>
+    );
+  }
+
+  const req = reqData;
+  const statusCfg = STATUS_CONFIG[req.status];
+  const timeline = buildTimeline(req.status);
+
+  const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
+  const isCompleted = req.status === 'DEAN_APPROVED';
+
   return (
     <div className="flex flex-col gap-5 w-full">
 
       {/* Header card */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className={clsx(
           'px-6 py-5 flex items-center gap-4',
-          isCompleted ? 'bg-gradient-to-r from-green-500 to-emerald-400'
-            : isRejected ? 'bg-gradient-to-r from-red-500 to-rose-400'
-            : 'bg-gradient-to-r from-primary to-blue-400'
+          isCompleted ? 'bg-green-400'
+            : isRejected ? 'bg-red-400'
+            : 'bg-primary/80'
         )}>
           <button
             onClick={() => router.back()}
@@ -333,12 +325,20 @@ export default function StudentRequestDetailPage() {
         <div className="flex-1 flex flex-col gap-4 min-w-0">
 
           {/* Rejection / Completion banner */}
-          {isRejected && req.staffComment && (
+          {isRejected && (
+            req.status === 'ADVISOR_REJECTED' ? req.advisorComment :
+            req.status === 'DEAN_REJECTED'    ? req.deanComment :
+            req.staffComment
+          ) && (
             <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 flex gap-3">
               <RiCloseCircleLine size={18} className="text-red-500 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-red-700">Request Rejected</p>
-                <p className="text-sm text-red-600 mt-1">{req.staffComment}</p>
+                <p className="text-sm text-red-600 mt-1">
+                  {req.status === 'ADVISOR_REJECTED' ? req.advisorComment :
+                   req.status === 'DEAN_REJECTED'    ? req.deanComment :
+                   req.staffComment}
+                </p>
               </div>
             </div>
           )}
@@ -348,8 +348,8 @@ export default function StudentRequestDetailPage() {
               <RiCheckLine size={18} className="text-green-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-green-700">Request Completed</p>
-                {req.staffComment
-                  ? <p className="text-sm text-green-600 mt-1">{req.staffComment}</p>
+                {req.deanComment
+                  ? <p className="text-sm text-green-600 mt-1">{req.deanComment}</p>
                   : <p className="text-sm text-green-600 mt-1">Your request has been fully approved.</p>
                 }
               </div>
@@ -377,11 +377,27 @@ export default function StudentRequestDetailPage() {
               </div>
             )}
 
-            {/* Staff comment (non-rejection) */}
-            {!isRejected && !isCompleted && req.staffComment && (
+            {/* Advisor comment */}
+            {req.advisorComment && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Advisor Comment</p>
+                <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.advisorComment}</p>
+              </div>
+            )}
+
+            {/* Staff comment */}
+            {req.staffComment && (
               <div className="flex flex-col gap-1">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Staff Comment</p>
                 <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.staffComment}</p>
+              </div>
+            )}
+
+            {/* Dean comment */}
+            {req.deanComment && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dean Comment</p>
+                <p className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.deanComment}</p>
               </div>
             )}
           </div>
@@ -432,11 +448,10 @@ export default function StudentRequestDetailPage() {
           docId={genDoc.id}
           myRole="student"
           signatures={signatures}
-          requiredRoles={(() => {
-            const vars: string[] = (() => { try { return JSON.parse(fullReq.requestType?.documentTemplates?.[0]?.variables ?? '[]'); } catch { return []; } })();
-            return vars.filter((v: string) => v.startsWith('{{sig_')).map((v: string) => v.slice(6, -2));
-          })()}
-          onSigned={setSignatures}
+          requiredRoles={requiredSigRoles}
+          signingMethod={fullReq?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital'}
+          fileUrl={genDoc.signedFileUrl ?? genDoc.fileUrl}
+          onSigned={handleSigned}
           onClose={() => setShowSignModal(false)}
         />
       )}
@@ -488,6 +503,52 @@ export default function StudentRequestDetailPage() {
               return renderTemplate(t.body) + sigHtml;
             }).join('<hr style="margin:32px 0"/>');
 
+        const safeTitle = req.title.replace(/[^a-z0-9]+/gi, '_');
+
+        const saveBlob = async (blob: Blob, filename: string) => {
+          const a = document.createElement('a');
+          const objUrl = URL.createObjectURL(blob);
+          a.href = objUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(objUrl);
+        };
+
+        const handleDownload = async () => {
+          try {
+            if (genDoc) {
+              const url = genDoc.signedFileUrl ?? genDoc.fileUrl;
+              if (!url) return;
+              const res = await fetch(url);
+              const blob = await res.blob();
+              await saveBlob(blob, `${safeTitle}.pdf`);
+            } else if (attachments.length > 0) {
+              for (let i = 0; i < attachments.length; i++) {
+                const url = attachments[i];
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const ext = url.split('.').pop()?.split('?')[0] || 'pdf';
+                await saveBlob(blob, `${safeTitle}_${i + 1}.${ext}`);
+              }
+            } else {
+              const pages = Array.from(previewContentRef.current?.querySelectorAll('.pdf-page') ?? []) as HTMLElement[];
+              if (pages.length === 0) return;
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              for (let i = 0; i < pages.length; i++) {
+                const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true });
+                const imgData = canvas.toDataURL('image/jpeg', 0.92);
+                if (i > 0) pdf.addPage();
+                pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+              }
+              pdf.save(`${safeTitle}.pdf`);
+            }
+          } catch {
+            toast.error('Failed to download document');
+          }
+        };
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh]">
@@ -506,8 +567,27 @@ export default function StudentRequestDetailPage() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
-                {attachments.length > 0 ? (
+              <div ref={previewContentRef} className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+                {genDoc && (
+                  <div className="w-full max-w-[210mm] mx-auto flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg bg-primary/5 text-primary">
+                    <RiFileTextLine size={13} />
+                    {genDoc.signedFileUrl
+                      ? requiredSigRoles.length > 0
+                        ? `Showing the document (${signatures.length}/${requiredSigRoles.length} signed)`
+                        : 'Showing the signed document'
+                      : 'Showing the generated document (not yet signed)'}
+                  </div>
+                )}
+
+                {genDoc ? (
+                  <div className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                    <iframe
+                      src={genDoc.signedFileUrl ?? genDoc.fileUrl ?? undefined}
+                      style={{ width: '100%', height: '297mm', border: 'none' }}
+                      title="Generated Document"
+                    />
+                  </div>
+                ) : attachments.length > 0 ? (
                   attachments.map((url, i) => {
                     const isPdf = /\.pdf$/i.test(url);
                     const isImage = /\.(png|jpe?g|gif|webp)$/i.test(url);
@@ -537,7 +617,7 @@ export default function StudentRequestDetailPage() {
                     const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
                     const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
                     return (
-                      <div key={tpl.id} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
+                      <div key={tpl.id} className="pdf-page bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '25mm 20mm', fontFamily: "'Times New Roman', serif", fontSize: '14px', color: '#222', lineHeight: '2' }}>
                         <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
                         {sigVars.length > 0 && (
                           <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
@@ -565,7 +645,9 @@ export default function StudentRequestDetailPage() {
               <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
                 <button
                   onClick={() => {
-                    if (attachments.length > 0) {
+                    if (genDoc) {
+                      window.open(genDoc.signedFileUrl ?? genDoc.fileUrl ?? '', '_blank');
+                    } else if (attachments.length > 0) {
                       attachments.forEach(url => window.open(url, '_blank'));
                     } else {
                       const origin = window.location.origin;
@@ -582,9 +664,17 @@ export default function StudentRequestDetailPage() {
                 >
                   <RiPrinterLine size={14} /> Print
                 </button>
-                <button onClick={() => setShowPreview(false)} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
-                  Close
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownload}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition"
+                  >
+                    <RiDownloadLine size={14} /> Download
+                  </button>
+                  <button onClick={() => setShowPreview(false)} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>

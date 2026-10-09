@@ -1,10 +1,13 @@
 import { RequestStatus } from '@prisma/client';
+import prisma from '../../utils/prisma';
 import * as requestRepository from '../../repositories/request.repository';
 import * as advisorRepository from '../../repositories/advisor.repository';
 import * as studentRepository from '../../repositories/student.repository';
 import * as documentTemplateRepository from '../../repositories/documentTemplate.repository';
+import * as templateVariableRepository from '../../repositories/templateVariable.repository';
 import * as deanDelegationRepository from '../../repositories/deanDelegation.repository';
-import { createNotification } from '../notification.service';
+import * as deanDelegationService from './deanDelegation.service';
+import { createNotification, createNotifications } from '../notification.service';
 import { sendEmail } from '../external/email.service';
 import { uploadToR2 } from '../external/r2.service';
 
@@ -62,6 +65,14 @@ export const getRequestById = async (
     }
   }
 
+  if (userRole === 'ADVISOR' && userId !== undefined) {
+    const advisor = await advisorRepository.findStudentIdsByUserId(userId);
+    const myStudentIds = advisor?.students.map((s) => s.id) ?? [];
+    if (!myStudentIds.includes(request.studentId)) {
+      throw Object.assign(new Error('Access denied'), { statusCode: 403 });
+    }
+  }
+
   const documentTemplates = request.requestTypeId
     ? await documentTemplateRepository.findByRequestTypeId(request.requestTypeId)
     : [];
@@ -103,6 +114,43 @@ export const createRequest = async (
     throw Object.assign(new Error('studentId is required'), { statusCode: 400 });
   }
 
+  // The "Submit disabled until filled" check on the frontend is only a UI
+  // nicety — it can be bypassed (devtools, direct API calls), and the
+  // student-entered data that fills it is not trustworthy on its own. Re-derive
+  // which variables actually require student input (inputType !== 'auto') from
+  // the request type's document templates and reject if any are missing.
+  if (dto.requestTypeId) {
+    const templates = await documentTemplateRepository.findByRequestTypeId(parseInt(String(dto.requestTypeId)));
+    const requiredKeys = new Set<string>();
+    for (const t of templates) {
+      const vars: string[] = t.variables ? JSON.parse(t.variables) : [];
+      for (const token of vars) {
+        const key = token.replace(/[{}]/g, '');
+        if (!key.startsWith('sig_')) requiredKeys.add(key);
+      }
+    }
+
+    if (requiredKeys.size > 0) {
+      const varDefs = await templateVariableRepository.findAll();
+      const inputTypeByKey = new Map(varDefs.map(v => [v.key, v.inputType]));
+      const formData = (dto.formData ?? {}) as Record<string, string>;
+
+      const missing = [...requiredKeys].filter((key) => {
+        const inputType = inputTypeByKey.get(key) ?? 'auto';
+        if (inputType === 'auto') return false; // auto-filled from student profile, not student input
+        const val = formData[key];
+        return !val || !String(val).trim() || val === '—';
+      });
+
+      if (missing.length > 0) {
+        throw Object.assign(
+          new Error(`Please fill in the required fields: ${missing.join(', ')}`),
+          { statusCode: 400 }
+        );
+      }
+    }
+  }
+
   return requestRepository.create({
     studentId,
     requestTypeId: dto.requestTypeId ? parseInt(String(dto.requestTypeId)) : null,
@@ -136,6 +184,7 @@ export const updateRequestStatus = async (
 
   const attachmentsPatch = attachmentsJson !== undefined ? { attachments: attachmentsJson } : {};
   const isAdvisor = userRole === 'ADVISOR';
+  const isDean = userRole === 'DEAN' || userRole === 'VICE_DEAN';
 
   const updateData = isAdvisor
     ? {
@@ -143,6 +192,14 @@ export const updateRequestStatus = async (
         advisorComment: dto.comment,
         advisorAt: new Date(),
         advisorId: userId,
+        ...attachmentsPatch,
+      }
+    : isDean
+    ? {
+        status: dto.status as RequestStatus,
+        deanComment: dto.comment,
+        deanAt: new Date(),
+        deanId: userId,
         ...attachmentsPatch,
       }
     : {
@@ -192,4 +249,82 @@ export const updateRequestStatus = async (
   }
 
   return updated;
+};
+
+// ── follow-up reminder ──────────────────────────────────────────────
+
+export const followUp = async (requestId: number) => {
+  const request = await prisma.request.findUnique({
+    where: { id: requestId },
+    include: {
+      student: {
+        select: {
+          firstNameEn: true,
+          lastNameEn: true,
+          advisor: { select: { userId: true, user: { select: { email: true } } } },
+        },
+      },
+    },
+  });
+  if (!request) {
+    throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+  }
+
+  const studentName = [request.student.firstNameEn, request.student.lastNameEn].filter(Boolean).join(' ') || 'A student';
+  const message = `Reminder: the request "${request.title}" for ${studentName} has been pending in the same status for a while and needs your attention.`;
+
+  let recipients: { userId: number; email: string | null }[] = [];
+  let roleLabel = 'Staff';
+  let linkBase = '/staff/request';
+
+  if (request.status === 'FORWARDED_TO_ADVISOR' && request.student.advisor?.userId) {
+    recipients = [{ userId: request.student.advisor.userId, email: request.student.advisor.user?.email ?? null }];
+    roleLabel = 'Advisor';
+    linkBase = '/advisor/request';
+  } else if (request.status === 'FORWARDED_TO_DEAN') {
+    const signatory = await deanDelegationService.getActiveSignatory();
+    const deanUser = await prisma.user.findUnique({ where: { id: signatory.id }, select: { email: true } });
+    recipients = [{ userId: signatory.id, email: deanUser?.email ?? null }];
+    roleLabel = signatory.isDelegated ? 'Vice Dean (delegate)' : 'Dean';
+    linkBase = '/dean/request';
+  } else {
+    // PENDING, STAFF_APPROVED, ADVISOR_APPROVED (awaiting staff to forward it) → whole staff pool
+    const staffUsers = await prisma.user.findMany({
+      where: { isActive: true, userRoles: { some: { role: { code: 'STAFF' } } } },
+      select: { id: true, email: true },
+    });
+    recipients = staffUsers.map(u => ({ userId: u.id, email: u.email }));
+    roleLabel = 'Staff';
+    linkBase = '/staff/request';
+  }
+
+  if (recipients.length === 0) {
+    throw Object.assign(
+      new Error("No responsible person found for this request's current status"),
+      { statusCode: 404 }
+    );
+  }
+
+  const link = `${linkBase}/${requestId}`;
+
+  await createNotifications(recipients.map(r => r.userId), {
+    type: 'REQUEST_UPDATE',
+    title: 'Follow-up: Request Needs Attention',
+    message,
+    link,
+  });
+
+  await Promise.all(
+    recipients
+      .filter((r): r is { userId: number; email: string } => !!r.email)
+      .map(r => sendEmail(
+        r.email,
+        `[IST] Follow-up Reminder — ${request.title}`,
+        `<p>Dear ${roleLabel},</p>
+         <p>${message}</p>
+         <p>Please log in to the IST system to take action.</p>`
+      ))
+  );
+
+  return { roleLabel, notifiedCount: recipients.length };
 };

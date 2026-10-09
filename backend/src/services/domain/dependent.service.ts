@@ -55,6 +55,8 @@ export const createDependent = async (
     nationality: string;
     title?: string;
     middleName?: string;
+    email?: string;
+    phone?: string;
     passportNumber?: string;
     passportExpiry?: string;
     passportImageUrl?: string;
@@ -78,6 +80,8 @@ export const createDependent = async (
     firstName: dto.firstName,
     middleName: dto.middleName,
     lastName: dto.lastName,
+    email: dto.email,
+    phone: dto.phone,
     dateOfBirth: new Date(dto.dateOfBirth),
     gender: dto.gender as never,
     nationality: dto.nationality,
@@ -104,6 +108,8 @@ export const updateDependent = async (
     firstName?: string;
     middleName?: string;
     lastName?: string;
+    email?: string;
+    phone?: string;
     dateOfBirth?: string;
     gender?: string;
     nationality?: string;
@@ -127,6 +133,8 @@ export const updateDependent = async (
     firstName: dto.firstName,
     middleName: dto.middleName,
     lastName: dto.lastName,
+    email: dto.email,
+    phone: dto.phone,
     gender: dto.gender as never,
     nationality: dto.nationality,
     passportNumber: dto.passportNumber,

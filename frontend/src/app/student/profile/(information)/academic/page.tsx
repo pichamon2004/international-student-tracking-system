@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiDeleteBinLine, RiAddLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiDeleteBinLine, RiAddLine, RiCloseLine } from 'react-icons/ri';
 import { studentMeApi, academicDocumentApi, changeRequestApi, type ApiAcademicDocument, type ApiChangeRequest } from '@/lib/api';
 import PendingBanner from '@/components/PendingBanner';
 import toast from 'react-hot-toast';
@@ -31,6 +31,7 @@ export default function AcademicPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   useEffect(() => {
     studentMeApi.get().then(res => {
@@ -127,7 +128,9 @@ export default function AcademicPage() {
                     <hr className="border-gray-100" />
                     <div className="flex flex-col gap-3">
                       <p className="text-sm font-semibold text-gray-700">Document Image</p>
-                      <img src={doc.fileUrl} alt="Document" className="w-40 h-52 object-cover rounded-xl border border-gray-200" />
+                      <button type="button" onClick={() => setPreviewImage(doc.fileUrl)}>
+                        <img src={doc.fileUrl} alt="Document" className="w-40 h-52 object-cover rounded-xl border border-gray-200 hover:opacity-80 transition cursor-pointer" />
+                      </button>
                     </div>
                   </>
                 )}
@@ -136,6 +139,26 @@ export default function AcademicPage() {
           </div>
         )}
       </div>
+
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 text-white hover:bg-white/20 transition"
+          >
+            <RiCloseLine size={20} />
+          </button>
+          <img
+            src={previewImage}
+            alt="Document preview"
+            className="max-w-full max-h-[85vh] object-contain rounded-xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

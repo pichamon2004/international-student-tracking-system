@@ -53,6 +53,8 @@ const ADVISOR_PERMISSIONS = new Set([
   'STUDENT_MANAGEMENT.view',
   'INTERSERVICE_MANAGEMENT.view',
   'NOTIFICATION_MANAGEMENT.view',
+  // อัปโหลด PDF ที่เซ็นมือแล้วกลับเข้าระบบ ในเทมเพลต manual signing
+  'GENERATED_DOC_MANAGEMENT.edit',
 ]);
 
 // module ที่ STAFF ไม่ได้รับ (ROLE_MANAGEMENT เป็นของ ADMIN เท่านั้น)
@@ -63,6 +65,8 @@ const DEAN_PERMISSIONS = new Set([
   'REQUEST_MANAGEMENT.view',
   'REQUEST_MANAGEMENT.edit',
   'NOTIFICATION_MANAGEMENT.view',
+  // อัปโหลด PDF ที่เซ็นมือแล้วกลับเข้าระบบ ในเทมเพลต manual signing
+  'GENERATED_DOC_MANAGEMENT.edit',
 ]);
 
 // permission codes ที่ ADMIN ได้รับ
@@ -138,8 +142,13 @@ async function main() {
     let targetPermissions: typeof allPermissions = [];
 
     if (role.code === 'STUDENT') {
-      // STUDENT ไม่มี permission (ใช้ ownership check แทน)
-      targetPermissions = [];
+      // STUDENT ไม่มี permission ส่วนใหญ่ (ใช้ ownership check แทน) ยกเว้น
+      // generate-pdf (gen เอกสารเองตอน submit request) และ edit (อัปโหลด PDF
+      // ที่เซ็นมือแล้วกลับเข้าระบบ ในเทมเพลต manual signing) — ownership ถูก
+      // บังคับแยกต่างหากใน generatedDoc.service ทั้งสองฟังก์ชัน
+      targetPermissions = allPermissions.filter(p =>
+        p.code === 'GENERATED_DOC_MANAGEMENT.create' || p.code === 'GENERATED_DOC_MANAGEMENT.edit'
+      );
 
     } else if (role.code === 'ADVISOR') {
       targetPermissions = allPermissions.filter(p => ADVISOR_PERMISSIONS.has(p.code));

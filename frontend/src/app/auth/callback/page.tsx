@@ -8,6 +8,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   no_code:      'Google login cancelled.',
   inactive:     'Your account has been deactivated. Please contact staff.',
   no_role:      'Your account has not been assigned a role yet. Please contact staff.',
+  suspended:    'Your account has been suspended. Please contact staff.',
   oauth_failed: 'Google login failed. Please try again.',
 };
 
