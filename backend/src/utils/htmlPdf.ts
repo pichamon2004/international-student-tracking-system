@@ -75,7 +75,7 @@ const SIG_ROLE_LABELS: Record<string, string> = {
 // signed) with the signer's name, role, and a date placeholder beneath it.
 export function buildSignatureGridHtml(
   requiredSigKeys: string[],
-  entries: Record<string, { name?: string; imageUrl?: string }>
+  entries: Record<string, { name?: string; imageUrl?: string; date?: Date }>
 ): string {
   if (requiredSigKeys.length === 0) return '';
   const cols = Math.min(requiredSigKeys.length, 4);
@@ -98,7 +98,7 @@ export function buildSignatureGridHtml(
       + `<div style="position:relative;width:100%;height:70px;border-bottom:1px solid #1f2937;margin-top:10px">${img}</div>`
       + name
       + `<div style="font-size:11px;color:#6b7280;margin-top:4px">${SIG_ROLE_LABELS[key] ?? key.replace(/^sig_/, '')}</div>`
-      + `<div style="font-size:10px;color:#9ca3af;margin-top:4px">Date ....../....../......</div>`
+      + `<div style="font-size:10px;color:#9ca3af;margin-top:4px">Date ${e.date ? e.date.toLocaleDateString('en-GB') : '....../....../......'}</div>`
       + `</div>`;
   }).join('');
   // font-size:0 on the row collapses the whitespace between adjacent

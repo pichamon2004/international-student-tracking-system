@@ -16,6 +16,9 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   },
 };
 
+const normalizeSigningMethod = (m?: string) =>
+  m === 'manual' || m === 'approval' ? m : 'digital';
+
 export const getTemplates = () =>
   documentTemplateRepository.findAll();
 
@@ -34,7 +37,7 @@ export const createTemplate = (dto: {
     body: cleanBody,
     variables: dto.variables ? JSON.stringify(dto.variables) : null,
     isActive: dto.isActive,
-    signingMethod: dto.signingMethod === 'manual' ? 'manual' : 'digital',
+    signingMethod: normalizeSigningMethod(dto.signingMethod),
   });
 };
 
@@ -53,9 +56,7 @@ export const updateTemplate = (id: number, dto: {
     ...(cleanBody !== undefined && { body: cleanBody }),
     variables: dto.variables !== undefined ? JSON.stringify(dto.variables) : undefined,
     isActive: dto.isActive,
-    signingMethod: dto.signingMethod !== undefined
-      ? (dto.signingMethod === 'manual' ? 'manual' : 'digital')
-      : undefined,
+    signingMethod: dto.signingMethod !== undefined ? normalizeSigningMethod(dto.signingMethod) : undefined,
   });
 };
 

@@ -36,7 +36,7 @@ export interface ApiDocTemplate {
   body: string;
   variables: string | null;  // JSON string
   isActive: boolean;
-  signingMethod: 'manual' | 'digital';
+  signingMethod: 'manual' | 'digital' | 'approval';
   createdAt: string;
   updatedAt: string;
 }
@@ -44,10 +44,10 @@ export interface ApiDocTemplate {
 export const templateApi = {
   getAll: () => api.get<{ success: boolean; data: ApiDocTemplate[] }>('/templates'),
 
-  create: (data: { name: string; description?: string; body: string; variables?: string[]; isActive?: boolean; signingMethod?: 'manual' | 'digital' }) =>
+  create: (data: { name: string; description?: string; body: string; variables?: string[]; isActive?: boolean; signingMethod?: 'manual' | 'digital' | 'approval' }) =>
     api.post<{ success: boolean; data: ApiDocTemplate }>('/templates', data),
 
-  update: (id: number, data: Partial<{ name: string; description: string; body: string; variables: string[]; isActive: boolean; signingMethod: 'manual' | 'digital' }>) =>
+  update: (id: number, data: Partial<{ name: string; description: string; body: string; variables: string[]; isActive: boolean; signingMethod: 'manual' | 'digital' | 'approval' }>) =>
     api.put<{ success: boolean; data: ApiDocTemplate }>(`/templates/${id}`, data),
 
   delete: (id: number) =>
@@ -82,6 +82,17 @@ export const requestTypeApi = {
 
 // ── Requests ───────────────────────────────────────────────────
 
+export interface ApiRequestCancellation {
+  id: number;
+  requestId: number;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedBy: number | null;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
 export interface ApiRequest {
   id: number;
   studentId: number;
@@ -107,9 +118,10 @@ export interface ApiRequest {
     id: number;
     name: string;
     icon: string | null;
-    documentTemplates?: { id: number; name: string; description: string | null; variables: string | null; body: string; signingMethod?: 'manual' | 'digital' }[];
+    documentTemplates?: { id: number; name: string; description: string | null; variables: string | null; body: string; signingMethod?: 'manual' | 'digital' | 'approval' }[];
   };
   attachments?: string | null;  // JSON array of file URLs
+  cancellations?: ApiRequestCancellation[];  // newest first
 }
 
 export const requestApi = {
@@ -126,6 +138,15 @@ export const requestApi = {
     description?: string;
     formData?: Record<string, string>;
   }) => api.post<{ success: boolean; data: ApiRequest }>('/requests', data),
+
+  update: (id: number, data: { description?: string; formData?: Record<string, string> }) =>
+    api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}`, data),
+
+  requestCancel: (id: number, reason: string) =>
+    api.post<{ success: boolean; data: ApiRequestCancellation }>(`/requests/${id}/cancel`, { reason }),
+
+  reviewCancel: (id: number, approve: boolean, note?: string) =>
+    api.post<{ success: boolean; data: ApiRequestCancellation }>(`/requests/${id}/cancel/review`, { approve, note }),
 
   updateStatus: (id: number, status: string, comment?: string, files?: File[]) => {
     if (files && files.length > 0) {

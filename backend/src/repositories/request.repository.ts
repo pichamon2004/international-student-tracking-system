@@ -31,6 +31,8 @@ const STUDENT_SELECT = {
 
 const REQUEST_TYPE_SELECT = { id: true, name: true, icon: true } as const;
 
+const CANCELLATIONS_INCLUDE = { orderBy: { createdAt: 'desc' } } as const;
+
 // ── Queries ───────────────────────────────────────────────────────
 
 export const findMany = (where: Record<string, unknown>) =>
@@ -39,6 +41,7 @@ export const findMany = (where: Record<string, unknown>) =>
     include: {
       student:     { select: STUDENT_SELECT },
       requestType: { select: REQUEST_TYPE_SELECT },
+      cancellations: CANCELLATIONS_INCLUDE,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -53,6 +56,7 @@ export const findById = (id: number) =>
         },
       },
       requestType: { select: REQUEST_TYPE_SELECT },
+      cancellations: CANCELLATIONS_INCLUDE,
     },
   });
 
@@ -61,6 +65,7 @@ export const findByIdWithStudent = (id: number) =>
     where:   { id },
     include: {
       student: { select: { userId: true, email: true, firstNameEn: true, lastNameEn: true } },
+      cancellations: { where: { status: 'PENDING' }, take: 1 },
     },
   });
 
@@ -95,4 +100,14 @@ export const updateStatus = (id: number, dto: UpdateRequestStatusDto) =>
       deanId:          dto.deanId,
       attachments:     dto.attachments,
     },
+  });
+
+export const updateContent = (id: number, dto: { description?: string; formData?: string | null }) =>
+  prisma.request.update({
+    where: { id },
+    data: {
+      description: dto.description,
+      formData:    dto.formData,
+    },
+    include: { requestType: { select: REQUEST_TYPE_SELECT } },
   });

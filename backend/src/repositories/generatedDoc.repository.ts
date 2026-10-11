@@ -83,3 +83,7 @@ export const upsertSignature = (data: {
     create: data,
     update: { imageUrl: data.imageUrl, signerUserId: data.signerUserId, signedAt: new Date() },
   });
+
+// Signatures go with their document (onDelete: Cascade on DocSignature).
+export const deleteByRequestId = (requestId: number) =>
+  prisma.generatedDocument.deleteMany({ where: { requestId } });

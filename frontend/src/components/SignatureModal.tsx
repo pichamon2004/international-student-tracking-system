@@ -20,7 +20,7 @@ interface Props {
   myRole:      string;
   signatures:  ApiDocSignature[];
   requiredRoles: string[];
-  signingMethod?: 'manual' | 'digital';
+  signingMethod?: 'manual' | 'digital' | 'approval';
   fileUrl?:    string | null;
   onSigned:    (updated: ApiDocSignature[]) => void;
   onClose:     () => void;
@@ -157,6 +157,10 @@ export default function SignatureModal({
             <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 flex items-center gap-2">
               <RiCheckLine size={16} />
               You have already signed this document.
+            </div>
+          ) : signingMethod === 'approval' ? (
+            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-primary">
+              No signature needed — your name is printed on this document automatically when you approve the request.
             </div>
           ) : signingMethod === 'manual' ? (
             /* ── Manual: print, sign by hand, upload the whole signed PDF back ── */

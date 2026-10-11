@@ -46,6 +46,8 @@ export default function StaffRequestDetailPage() {
   const [deanName, setDeanName] = useState('');
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
+  const [cancelNote, setCancelNote] = useState('');
+  const [reviewingCancel, setReviewingCancel] = useState(false);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -57,15 +59,7 @@ export default function StaffRequestDetailPage() {
       .then(res => setReq(res.data.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-    generatedDocApi.getByRequest(Number(id))
-      .then(res => {
-        const doc = res.data.data[0] ?? null;
-        setGenDoc(doc);
-        if (doc) {
-          generatedDocApi.getSignatures(doc.id).then(r => setSignatures(r.data.data)).catch(() => {});
-        }
-      })
-      .catch(() => {});
+    loadGeneratedDoc(Number(id));
   }, [id]);
 
   async function updateStatus(status: string, requireComment = false) {
@@ -78,6 +72,7 @@ export default function StaffRequestDetailPage() {
     try {
       const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
+      if (status === 'STAFF_APPROVED') loadGeneratedDoc(req.id);
       setAttachedFiles([]);
       setComment('');
       if (attachInputRef.current) attachInputRef.current.value = '';
@@ -87,14 +82,35 @@ export default function StaffRequestDetailPage() {
     }
   }
 
+  async function handleReviewCancel(approve: boolean) {
+    if (!req) return;
+    setReviewingCancel(true);
+    try {
+      const res = await requestApi.reviewCancel(req.id, approve, cancelNote.trim() || undefined);
+      const reviewed = res.data.data;
+      setReq(prev => prev ? {
+        ...prev,
+        status: approve ? 'CANCELLED' : prev.status,
+        cancellations: (prev.cancellations ?? []).map(c => c.id === reviewed.id ? reviewed : c),
+      } : prev);
+      setCancelNote('');
+      toast.success(approve ? 'Cancellation approved' : 'Cancellation rejected');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to review cancellation');
+    } finally {
+      setReviewingCancel(false);
+    }
+  }
+
   async function handleGeneratePdf() {
     const template = req?.requestType?.documentTemplates?.[0];
     if (!req || !template) return;
     setGeneratingPdf(true);
     try {
       const formData = (() => { try { return JSON.parse(req.formData ?? '{}'); } catch { return {}; } })();
-      const res = await generatedDocApi.generate(req.id, template.id, formData);
-      setGenDoc(res.data.data);
+      await generatedDocApi.generate(req.id, template.id, formData);
+      loadGeneratedDoc(req.id);
       toast.success('PDF generated');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -103,6 +119,22 @@ export default function StaffRequestDetailPage() {
       setGeneratingPdf(false);
     }
   }
+
+  // Re-read the generated document + its signatures — also after Approve, since
+  // "approval"-signed templates get the approver's name printed in server-side.
+  function loadGeneratedDoc(requestId: number) {
+    generatedDocApi.getByRequest(requestId)
+      .then(res => {
+        const doc = res.data.data[0] ?? null;
+        setGenDoc(doc);
+        if (doc) {
+          generatedDocApi.getSignatures(doc.id).then(r => setSignatures(r.data.data)).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
+
+  const isApprovalSigning = req?.requestType?.documentTemplates?.[0]?.signingMethod === 'approval';
 
   function handleSigned(updated: ApiDocSignature[]) {
     setSignatures(updated);
@@ -152,6 +184,7 @@ export default function StaffRequestDetailPage() {
   const statusCfg = statusLabelConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
   const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
   const advisorName = '—'; // advisor info not in request response directly
+  const pendingCancel = req.cancellations?.[0]?.status === 'PENDING' ? req.cancellations[0] : null;
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
@@ -238,7 +271,7 @@ export default function StaffRequestDetailPage() {
           )}
 
           {/* Sign Document Button */}
-          {genDoc && !signatures.some(s => s.role === 'ir_staff') && (
+          {genDoc && !isApprovalSigning && !signatures.some(s => s.role === 'ir_staff') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -253,8 +286,28 @@ export default function StaffRequestDetailPage() {
             </div>
           )}
 
+          {/* Cancellation request from the student — freezes the normal workflow until reviewed */}
+          {pendingCancel && (
+            <div className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-700">Student requested cancellation</p>
+              <p className="text-xs text-amber-700/80">
+                Submitted on {new Date(pendingCancel.createdAt).toLocaleDateString('en-GB')}
+              </p>
+              <p className="text-sm text-gray-700 bg-white rounded-xl px-3 py-2 border border-amber-100">{pendingCancel.reason}</p>
+              <textarea
+                value={cancelNote}
+                onChange={e => setCancelNote(e.target.value)}
+                placeholder="Note to student (optional)"
+                rows={2}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-primary placeholder-gray-400 bg-white outline-none focus:border-primary transition-colors resize-none"
+              />
+              <Button variant="danger"  label={reviewingCancel ? 'Processing…' : 'Approve Cancellation'} disabled={reviewingCancel} onClick={() => handleReviewCancel(true)} />
+              <Button variant="primary" label="Reject Cancellation" disabled={reviewingCancel} onClick={() => handleReviewCancel(false)} />
+            </div>
+          )}
+
           {/* Attach Files + Action Buttons */}
-          {(req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED' || req.status === 'STAFF_APPROVED') && (
+          {!pendingCancel && (req.status === 'PENDING' || req.status === 'ADVISOR_APPROVED' || req.status === 'STAFF_APPROVED') && (
             <div className="flex flex-col gap-2">
               {/* Staff comment */}
               <div className="flex flex-col gap-1">
@@ -266,7 +319,7 @@ export default function StaffRequestDetailPage() {
                   className={`w-full border rounded-xl px-4 py-3 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors resize-none ${showRejectError ? 'border-red-400' : 'border-gray-200'}`}
                 />
                 {showRejectError && (
-                  <p className="text-xs text-red-500 pl-1">กรุณากรอกเหตุผลก่อนปฏิเสธคำร้อง</p>
+                  <p className="text-xs text-red-500 pl-1">Please enter a reason before rejecting this request.</p>
                 )}
               </div>
 

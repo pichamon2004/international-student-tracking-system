@@ -214,6 +214,7 @@ function DocumentPreviewModal({
   onConfirm,
   deanName,
   irStaffName,
+  confirmLabel = 'Confirm & Submit',
 }: {
   docs: DocTemplate[];
   varMap: Record<string, string>;
@@ -221,6 +222,7 @@ function DocumentPreviewModal({
   onConfirm: () => void;
   deanName?: string;
   irStaffName?: string;
+  confirmLabel?: string;
 }) {
   const [activeDoc, setActiveDoc] = useState(0);
   const currentDoc = docs[activeDoc];
@@ -369,7 +371,7 @@ function DocumentPreviewModal({
             </button>
             <button onClick={onConfirm}
               className="px-6 py-2.5 rounded-xl bg-green-500 text-white text-sm font-bold hover:bg-green-600 active:scale-95 transition shadow-sm">
-              Confirm & Submit
+              {confirmLabel}
             </button>
           </div>
         </div>
@@ -609,12 +611,14 @@ function SidePanelActions({
   onOpenPreview,
   onSubmit,
   submitDisabled,
+  submitLabel = 'Submit Request',
 }: {
   docs: DocTemplate[];
   varMap: Record<string, string>;
   onOpenPreview: () => void;
   onSubmit: () => void;
   submitDisabled: boolean;
+  submitLabel?: string;
 }) {
   const allTokens = docs.flatMap(d => extractVarTokens(d.body).filter(v => !v.startsWith('{{sig_')));
   const filledCount = allTokens.filter(v => { const k = v.slice(2, -2); return varMap[k] && varMap[k] !== '—'; }).length;
@@ -671,7 +675,7 @@ function SidePanelActions({
               !submitDisabled ? 'bg-primary text-white hover:bg-primary/90 active:scale-[0.99]' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             )}
           >
-            <RiSendPlaneLine size={15} /> Submit Request
+            <RiSendPlaneLine size={15} /> {submitLabel}
           </button>
         </div>
       </div>
@@ -699,7 +703,7 @@ const PROFILE_INPUT_FALLBACKS: Record<string, { label: string; type: 'text' | 'd
   visa_expiry:      { label: 'Visa Expiry Date',       type: 'date' },
 };
 
-function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: (formData: Record<string, string>, description: string) => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[] }) {
+function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs, initialFormData, initialNote, isEdit }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: (formData: Record<string, string>, description: string) => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[]; initialFormData?: Record<string, string>; initialNote?: string; isEdit?: boolean }) {
   const p = profile;
   const baseVarMap = useMemo(() => buildBaseVarMap(p), [p]);
 
@@ -757,10 +761,34 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
   }, [allVarTokens, p, varDefMap]);
 
   const allInputKeys = [...missingProfileKeys, ...userInputKeys];
-  const [formData, setFormData] = useState<Record<string, string>>(() =>
-    Object.fromEntries(allInputKeys.map(k => [k, baseVarMap[k] || '']))
-  );
-  const [note, setNote] = useState('');
+  const [formData, setFormData] = useState<Record<string, string>>(() => {
+    if (!initialFormData) {
+      return Object.fromEntries(allInputKeys.map(k => [k, baseVarMap[k] || '']));
+    }
+    // Editing: the saved formData is the submitted varMap, where a select's
+    // free-text "others" answer replaced the option label. Map it back onto the
+    // option + `${key}__others` pair so the radio shows the right choice.
+    const entries: [string, string][] = [];
+    for (const k of allInputKeys) {
+      const saved = initialFormData[k];
+      const val = saved && saved !== '—' ? saved : (baseVarMap[k] || '');
+      const dbDef = varDefMap[k];
+      if (dbDef?.inputType === 'select' && val) {
+        try {
+          const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
+          const labels = opts.map(o => (typeof o === 'string' ? o : o.label));
+          const othersOpt = opts.find(o => typeof o !== 'string' && o.allowInput);
+          if (!labels.includes(val) && othersOpt) {
+            entries.push([k, othersOpt.label], [`${k}__others`, val]);
+            continue;
+          }
+        } catch { /* ignore */ }
+      }
+      entries.push([k, val]);
+    }
+    return Object.fromEntries(entries);
+  });
+  const [note, setNote] = useState(initialNote ?? '');
   const [showPreview, setShowPreview] = useState(false);
 
   const varMap: Record<string, string> = useMemo(() => {
@@ -907,6 +935,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
             onOpenPreview={() => setShowPreview(true)}
             onSubmit={handleFormSubmit}
             submitDisabled={submitDisabled}
+            submitLabel={isEdit ? 'Save Changes' : undefined}
           />
         </div>
       </div>
@@ -919,6 +948,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
           onConfirm={() => { setShowPreview(false); handleFormSubmit(); }}
           deanName={deanName}
           irStaffName={irStaffName}
+          confirmLabel={isEdit ? 'Confirm & Save' : undefined}
         />
       )}
     </>
@@ -926,7 +956,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
 }
 
 /* ─── Success Screen ─────────────────────────────────────────── */
-function SuccessScreen({ onBack }: { onBack: () => void }) {
+function SuccessScreen({ onBack, isEdit }: { onBack: () => void; isEdit?: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-6 text-center">
       <div className="relative">
@@ -938,8 +968,12 @@ function SuccessScreen({ onBack }: { onBack: () => void }) {
         </div>
       </div>
       <div>
-        <h2 className="text-2xl font-bold text-primary">Request Submitted!</h2>
-        <p className="text-sm text-gray-500 mt-2 max-w-sm">Your request has been received and is being reviewed. You will be notified by email once it is processed.</p>
+        <h2 className="text-2xl font-bold text-primary">{isEdit ? 'Request Updated!' : 'Request Submitted!'}</h2>
+        <p className="text-sm text-gray-500 mt-2 max-w-sm">
+          {isEdit
+            ? 'Your changes have been saved. Staff will review the updated request.'
+            : 'Your request has been received and is being reviewed. You will be notified by email once it is processed.'}
+        </p>
       </div>
       <div className="flex items-center gap-3 text-xs">
         <div className="flex items-center gap-1.5 text-green-600 font-medium"><RiCheckboxCircleLine size={15} /> Submitted</div>
@@ -949,7 +983,7 @@ function SuccessScreen({ onBack }: { onBack: () => void }) {
         <div className="flex items-center gap-1.5 text-gray-400"><RiCheckLine size={15} /> Approved</div>
       </div>
       <button onClick={onBack} className="px-8 py-3 rounded-2xl bg-primary text-white text-sm font-bold hover:bg-primary/90 active:scale-[0.99] transition shadow-sm">
-        Back to Requests
+        {isEdit ? 'Back to Request' : 'Back to Requests'}
       </button>
     </div>
   );
@@ -965,8 +999,10 @@ const EMPTY_PROFILE: StudentProfile = {
   passportNumber: '',
 };
 
-export default function NewRequestFormPage({ params }: { params: { typeId: string } }) {
+export default function NewRequestFormPage({ params, searchParams }: { params: { typeId: string }; searchParams: { edit?: string } }) {
   const { typeId } = params;
+  const editId = searchParams.edit ? Number(searchParams.edit) : null;
+  const isEdit = editId !== null && !Number.isNaN(editId);
   const router = useRouter();
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -980,6 +1016,9 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const [irStaffName, setIrStaffName] = useState<string>('');
   const [deanName, setDeanName] = useState<string>('');
   const [varDefs, setVarDefs] = useState<ApiTemplateVariable[]>([]);
+  const [varDefsLoaded, setVarDefsLoaded] = useState(false);
+  const [editInitial, setEditInitial] = useState<{ formData: Record<string, string>; note: string } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     userApi.getIRStaff()
@@ -993,8 +1032,26 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
         console.log('[varDefs]', res.data.data.map(v => ({ key: v.key, inputType: v.inputType, options: v.options })));
         setVarDefs(res.data.data);
       })
-      .catch(err => console.error('[varDefs] failed:', err));
+      .catch(err => console.error('[varDefs] failed:', err))
+      .finally(() => setVarDefsLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (!isEdit || editId === null) return;
+    requestApi.getById(editId)
+      .then(res => {
+        const r = res.data.data;
+        const pendingCancel = r.cancellations?.[0]?.status === 'PENDING';
+        if (r.status !== 'PENDING' || pendingCancel) {
+          setEditError('This request can no longer be edited.');
+          return;
+        }
+        let fd: Record<string, string> = {};
+        try { fd = JSON.parse(r.formData ?? '{}'); } catch { /* ignore */ }
+        setEditInitial({ formData: fd, note: r.description ?? '' });
+      })
+      .catch(() => setEditError('Request not found.'));
+  }, [isEdit, editId]);
 
   useEffect(() => {
     async function loadData() {
@@ -1060,13 +1117,15 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   const handleSubmit = async (formData: Record<string, string>, description: string) => {
     setSubmitting(true);
     try {
-      const res = await requestApi.create({
-        studentId: studentDbId,
-        requestTypeId: Number(typeId),
-        title: config?.name ?? 'New Request',
-        description,
-        formData,
-      });
+      const res = isEdit && editId !== null
+        ? await requestApi.update(editId, { description, formData })
+        : await requestApi.create({
+            studentId: studentDbId,
+            requestTypeId: Number(typeId),
+            title: config?.name ?? 'New Request',
+            description,
+            formData,
+          });
 
       // If one of this request type's templates needs a student signature,
       // generate the PDF right away and prompt the student to sign it here —
@@ -1076,8 +1135,12 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
       if (sigTemplate) {
         try {
           const genRes = await generatedDocApi.generate(res.data.data.id, sigTemplate.id, formData);
-          setGenDocForSign(genRes.data.data);
-          setShowSignModal(true);
+          // "approval" templates print the student's name on generation —
+          // there's nothing for them to sign.
+          if (sigTemplate.signingMethod !== 'approval') {
+            setGenDocForSign(genRes.data.data);
+            setShowSignModal(true);
+          }
         } catch (e) {
           console.error('Failed to auto-generate document for signing:', e);
         }
@@ -1086,7 +1149,8 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
       setDone(true);
     } catch (e) {
       console.error('Failed to submit request:', e);
-      toast.error('Failed to submit request. Please try again.');
+      const msg = (e as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(msg ?? 'Failed to submit request. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -1095,7 +1159,10 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
   if (done) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm w-full">
-        <SuccessScreen onBack={() => router.push('/student/request')} />
+        <SuccessScreen
+          isEdit={isEdit}
+          onBack={() => router.push(isEdit ? `/student/request/${editId}` : '/student/request')}
+        />
         {showSignModal && genDocForSign && (
           <SignatureModal
             docId={genDocForSign.id}
@@ -1115,7 +1182,23 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
     );
   }
 
-  if (loading) {
+  if (editError) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm w-full py-20 flex flex-col items-center gap-4">
+        <p className="text-gray-500 text-sm">{editError}</p>
+        <button
+          onClick={() => router.push(editId !== null ? `/student/request/${editId}` : '/student/request')}
+          className="bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-primary/90 transition"
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  // In edit mode the form's initial state is computed once on mount, so wait
+  // for the saved request and the variable definitions it is mapped against.
+  if (loading || (isEdit && (!editInitial || !varDefsLoaded))) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm w-full py-20 text-center text-gray-400 text-sm animate-pulse">
         Loading request type…
@@ -1134,7 +1217,7 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
               <RiArrowLeftLine size={18} />
             </button>
             <div>
-              <h1 className="text-lg font-bold text-white">{config?.name ?? 'Request Form'}</h1>
+              <h1 className="text-lg font-bold text-white">{isEdit ? 'Edit: ' : ''}{config?.name ?? 'Request Form'}</h1>
               {config?.description && <p className="text-xs text-white/70 mt-0.5">{config.description}</p>}
             </div>
           </div>
@@ -1150,13 +1233,24 @@ export default function NewRequestFormPage({ params }: { params: { typeId: strin
       </div>
 
 
-      <DynamicRequestForm typeName={config?.name ?? 'Request'} requiredDocs={requiredDocs} onSubmit={handleSubmit} profile={profile} irStaffName={irStaffName} deanName={deanName} varDefs={varDefs} />
+      <DynamicRequestForm
+        typeName={config?.name ?? 'Request'}
+        requiredDocs={requiredDocs}
+        onSubmit={handleSubmit}
+        profile={profile}
+        irStaffName={irStaffName}
+        deanName={deanName}
+        varDefs={varDefs}
+        isEdit={isEdit}
+        initialFormData={editInitial?.formData}
+        initialNote={editInitial?.note}
+      />
 
       {submitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-medium text-gray-600">Submitting request…</p>
+            <p className="text-sm font-medium text-gray-600">{isEdit ? 'Saving changes…' : 'Submitting request…'}</p>
           </div>
         </div>
       )}

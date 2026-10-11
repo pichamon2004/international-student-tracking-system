@@ -24,16 +24,16 @@ const DONE_STATUSES: RequestStatus[] = ['DEAN_APPROVED', 'STAFF_REJECTED', 'DEAN
 const isDone = (s: string) => DONE_STATUSES.includes(s as RequestStatus);
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  PENDING:              { label: 'รออนุมัติ',           className: 'bg-yellow-100 text-yellow-700' },
-  FORWARDED_TO_ADVISOR: { label: 'ส่งให้อาจารย์แล้ว',    className: 'bg-blue-100 text-blue-700' },
-  ADVISOR_APPROVED:     { label: 'อาจารย์อนุมัติแล้ว',   className: 'bg-teal-100 text-teal-700' },
-  ADVISOR_REJECTED:     { label: 'อาจารย์ปฏิเสธ',        className: 'bg-orange-100 text-orange-700' },
-  STAFF_APPROVED:       { label: 'คณะอนุมัติแล้ว',       className: 'bg-indigo-100 text-indigo-700' },
-  FORWARDED_TO_DEAN:    { label: 'ส่งให้ Dean แล้ว',      className: 'bg-purple-100 text-purple-700' },
-  DEAN_APPROVED:        { label: 'สมบูรณ์',              className: 'bg-green-100 text-green-700' },
-  STAFF_REJECTED:       { label: 'ยกเลิก',               className: 'bg-red-100 text-red-600' },
-  DEAN_REJECTED:        { label: 'ยกเลิก',               className: 'bg-red-100 text-red-600' },
-  CANCELLED:            { label: 'ยกเลิก',               className: 'bg-red-100 text-red-600' },
+  PENDING:              { label: 'Pending',               className: 'bg-yellow-100 text-yellow-700' },
+  FORWARDED_TO_ADVISOR: { label: 'Sent to Advisor',       className: 'bg-blue-100 text-blue-700' },
+  ADVISOR_APPROVED:     { label: 'Advisor Approved',      className: 'bg-teal-100 text-teal-700' },
+  ADVISOR_REJECTED:     { label: 'Advisor Rejected',      className: 'bg-orange-100 text-orange-700' },
+  STAFF_APPROVED:       { label: 'Faculty Approved',      className: 'bg-indigo-100 text-indigo-700' },
+  FORWARDED_TO_DEAN:    { label: 'Sent to Dean',          className: 'bg-purple-100 text-purple-700' },
+  DEAN_APPROVED:        { label: 'Completed',             className: 'bg-green-100 text-green-700' },
+  STAFF_REJECTED:       { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  DEAN_REJECTED:        { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  CANCELLED:            { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
 };
 
 const STATUS_FILTERS = ['All', 'Active', 'Done'] as const;
@@ -145,6 +145,7 @@ export default function StaffRequestPage() {
               const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
               const docType = req.requestType?.name ?? req.title;
               const submittedDate = new Date(req.createdAt).toLocaleDateString('en-GB');
+              const cancelPending = req.cancellations?.[0]?.status === 'PENDING';
               return (
                 <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
                   <td className="py-3 px-4 text-primary font-medium">{studentName}</td>
@@ -154,9 +155,18 @@ export default function StaffRequestPage() {
                     <span className={clsx('px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap', cfg.className)}>
                       {cfg.label}
                     </span>
+                    {cancelPending && (
+                      <span className="ml-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap bg-amber-100 text-amber-700">
+                        Cancellation Requested
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4 w-px whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2">
+                      {/* Pending cancellation freezes the workflow — review it on the detail page */}
+                      {cancelPending ? (
+                        <Button variant="info" onClick={() => router.push(`/staff/request/${req.id}`)} />
+                      ) : (<>
                       {req.status === 'PENDING' && (
                         <>
                           <Button variant="danger"  label="Reject"  onClick={() => updateStatus(req.id, 'STAFF_REJECTED')} />
@@ -190,6 +200,7 @@ export default function StaffRequestPage() {
                       {(req.status === 'FORWARDED_TO_DEAN' || isDone(req.status)) && (
                         <Button variant="info" onClick={() => router.push(`/staff/request/${req.id}`)} />
                       )}
+                      </>)}
                     </div>
                   </td>
                 </tr>

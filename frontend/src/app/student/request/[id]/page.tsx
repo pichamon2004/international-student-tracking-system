@@ -12,6 +12,7 @@ import {
   RiArrowLeftLine, RiCheckLine, RiTimeLine, RiCloseCircleLine,
   RiFileTextLine, RiCalendarLine, RiInformationLine, RiEyeLine,
   RiCloseLine, RiPrinterLine, RiDownloadLine, RiPenNibLine,
+  RiEditLine, RiForbidLine,
 } from 'react-icons/ri';
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -149,6 +150,9 @@ export default function StudentRequestDetailPage() {
   const [deanName, setDeanName] = useState('');
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const previewContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -176,7 +180,30 @@ export default function StudentRequestDetailPage() {
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-    generatedDocApi.getByRequest(Number(id))
+    loadGeneratedDoc(Number(id));
+  }, [id]);
+
+  async function handleRequestCancel() {
+    if (!fullReq || !cancelReason.trim()) return;
+    setCancelSubmitting(true);
+    try {
+      const res = await requestApi.requestCancel(fullReq.id, cancelReason.trim());
+      setFullReq({ ...fullReq, cancellations: [res.data.data, ...(fullReq.cancellations ?? [])] });
+      setShowCancelModal(false);
+      setCancelReason('');
+      toast.success('Cancellation request sent to staff');
+    } catch (e) {
+      const msg = (e as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(msg ?? 'Failed to send cancellation request');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  }
+
+  // Re-read the generated document + its signatures — also after Approve, since
+  // "approval"-signed templates get the approver's name printed in server-side.
+  function loadGeneratedDoc(requestId: number) {
+    generatedDocApi.getByRequest(requestId)
       .then(res => {
         const doc = res.data.data[0] ?? null;
         setGenDoc(doc);
@@ -185,7 +212,9 @@ export default function StudentRequestDetailPage() {
         }
       })
       .catch(() => {});
-  }, [id]);
+  }
+
+  const isApprovalSigning = fullReq?.requestType?.documentTemplates?.[0]?.signingMethod === 'approval';
 
   function handleSigned(updated: ApiDocSignature[]) {
     setSignatures(updated);
@@ -233,6 +262,12 @@ export default function StudentRequestDetailPage() {
 
   const isRejected = ['STAFF_REJECTED', 'ADVISOR_REJECTED', 'DEAN_REJECTED', 'CANCELLED'].includes(req.status);
   const isCompleted = req.status === 'DEAN_APPROVED';
+
+  const latestCancel = fullReq?.cancellations?.[0] ?? null;
+  const cancelPending = latestCancel?.status === 'PENDING';
+  const cancelRejected = latestCancel?.status === 'REJECTED' && !isRejected && !isCompleted;
+  const canEdit = req.status === 'PENDING' && !cancelPending;
+  const canRequestCancel = !isRejected && !isCompleted && !cancelPending;
 
   return (
     <div className="flex flex-col gap-5 w-full">
@@ -324,6 +359,28 @@ export default function StudentRequestDetailPage() {
         {/* RIGHT: Details */}
         <div className="flex-1 flex flex-col gap-4 min-w-0">
 
+          {cancelPending && latestCancel && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex gap-3">
+              <RiTimeLine size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-700">Cancellation pending staff approval</p>
+                <p className="text-sm text-amber-700/80 mt-1">Reason: {latestCancel.reason}</p>
+                <p className="text-xs text-amber-600 mt-1">The request is on hold until staff review your cancellation.</p>
+              </div>
+            </div>
+          )}
+
+          {cancelRejected && latestCancel && (
+            <div className="bg-red-50 border border-red-100 rounded-2xl px-5 py-4 flex gap-3">
+              <RiCloseCircleLine size={18} className="text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-600">Cancellation rejected</p>
+                {latestCancel.reviewNote && <p className="text-sm text-red-500 mt-1">{latestCancel.reviewNote}</p>}
+                <p className="text-xs text-red-400 mt-1">Your request continues through the normal approval process.</p>
+              </div>
+            </div>
+          )}
+
           {/* Rejection / Completion banner */}
           {isRejected && (
             req.status === 'ADVISOR_REJECTED' ? req.advisorComment :
@@ -364,7 +421,7 @@ export default function StudentRequestDetailPage() {
               <span className={clsx('text-sm font-semibold', statusCfg.color)}>{statusCfg.label}</span>
             </div>
 
-            {!isRejected && !isCompleted && (
+            {!isRejected && !isCompleted && !cancelPending && (
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
                 <RiInformationLine size={14} className="text-primary shrink-0 mt-0.5" />
                 <p className="text-xs text-primary">
@@ -402,6 +459,36 @@ export default function StudentRequestDetailPage() {
             )}
           </div>
 
+          {/* Student actions */}
+          {(canEdit || canRequestCancel) && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</p>
+              <p className="text-sm text-gray-500">
+                {canEdit
+                  ? 'Staff have not started on this request yet, so you can still edit it.'
+                  : 'Cancelling a request needs staff approval.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {canEdit && fullReq?.requestTypeId && (
+                  <button
+                    onClick={() => router.push(`/student/request/new/${fullReq.requestTypeId}?edit=${req.id}`)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm transition"
+                  >
+                    <RiEditLine size={15} /> Edit Request
+                  </button>
+                )}
+                {canRequestCancel && (
+                  <button
+                    onClick={() => setShowCancelModal(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 active:scale-95 transition"
+                  >
+                    <RiForbidLine size={15} /> Request Cancellation
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* View document button */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Document</p>
@@ -424,7 +511,7 @@ export default function StudentRequestDetailPage() {
                 <RiEyeLine size={15} /> View Document
               </button>
 
-              {genDoc && !signatures.some(s => s.role === 'student') && (
+              {genDoc && !isApprovalSigning && !signatures.some(s => s.role === 'student') && (
                 <button
                   onClick={() => setShowSignModal(true)}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm transition"
@@ -442,6 +529,46 @@ export default function StudentRequestDetailPage() {
 
         </div>
       </div>
+
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <p className="text-sm font-bold text-gray-800">Request Cancellation</p>
+              <button onClick={() => setShowCancelModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition">
+                <RiCloseLine size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-3">
+              <p className="text-sm text-gray-500">
+                Your cancellation will be sent to staff for approval. The request is put on hold until they decide.
+              </p>
+              <label className="text-xs font-semibold text-gray-600">
+                Reason<span className="text-red-400 ml-0.5">*</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                rows={4}
+                placeholder="Why do you want to cancel this request?"
+                className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setShowCancelModal(false)} className="px-5 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200 transition">
+                Back
+              </button>
+              <button
+                onClick={handleRequestCancel}
+                disabled={!cancelReason.trim() || cancelSubmitting}
+                className="px-5 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {cancelSubmitting ? 'Sending…' : 'Send Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSignModal && genDoc && fullReq && (
         <SignatureModal

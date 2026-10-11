@@ -131,7 +131,7 @@ export default function AdvisorRequestPage() {
             ) : filtered.map(req => {
               const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
               const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
-              const isPendingAdvisor = req.status === 'FORWARDED_TO_ADVISOR';
+              const isPendingAdvisor = req.status === 'FORWARDED_TO_ADVISOR' && req.cancellations?.[0]?.status !== 'PENDING';
               return (
                 <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
                   <td className="py-3 px-4 text-primary">{studentName}</td>

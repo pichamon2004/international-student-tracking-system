@@ -16,7 +16,7 @@ export interface DocTemplate {
   isActive: boolean;
   variables: string[];
   body: string; // stored as HTML
-  signingMethod?: 'manual' | 'digital';
+  signingMethod?: 'manual' | 'digital' | 'approval';
 }
 
 export const SIGNATURE_VARIABLES = ['{{sig_student}}', '{{sig_advisor}}', '{{sig_ir_staff}}', '{{sig_dean}}'];
@@ -77,6 +77,13 @@ interface DocTemplateModalProps {
   onClose: () => void;
 }
 
+const SIGNING_METHOD_LABELS = { digital: 'Digital', manual: 'Manual', approval: 'On Approve' } as const;
+const SIGNING_METHOD_HINTS = {
+  digital:  'Each signer draws or uploads a signature image',
+  manual:   'Each signer prints, signs by hand, and uploads the signed PDF',
+  approval: "No signing step — each approver's name and date are printed automatically when they press Approve",
+} as const;
+
 export default function DocTemplateModal({ template, isCreate, allVariables, onSave, onClose }: DocTemplateModalProps) {
   const labelMap = Object.fromEntries(allVariables.map(v => [`{{${v.key}}}`, v.label]));
   const varLabel = (v: string) => labelMap[v] ?? fallbackVarLabel(v);
@@ -88,7 +95,7 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const [desc, setDesc] = useState(template?.description ?? '');
   const [bodyHtml, setBodyHtml] = useState(() => toHtml(template?.body ?? ''));
   const [isActive, setIsActive] = useState(template?.isActive ?? true);
-  const [signingMethod, setSigningMethod] = useState<'manual' | 'digital'>(template?.signingMethod ?? 'digital');
+  const [signingMethod, setSigningMethod] = useState<'manual' | 'digital' | 'approval'>(template?.signingMethod ?? 'digital');
   const [usedVars, setUsedVars] = useState<string[]>(template?.variables ?? []);
   const [varSearch, setVarSearch] = useState('');
   const [signatories, setSignatories] = useState<string[]>(
@@ -377,11 +384,11 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
               <div className="flex flex-col gap-1 justify-end">
                 <label className="text-[10px] font-semibold text-primary/60 uppercase tracking-wide">Signing Method</label>
                 <div className="flex gap-1 p-1 bg-white border border-[#0776BC]/20 rounded-xl">
-                  {(['digital', 'manual'] as const).map(m => (
-                    <button key={m} type="button" onClick={() => setSigningMethod(m)}
-                      className={clsx('flex-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition capitalize text-center',
+                  {(['digital', 'manual', 'approval'] as const).map(m => (
+                    <button key={m} type="button" title={SIGNING_METHOD_HINTS[m]} onClick={() => setSigningMethod(m)}
+                      className={clsx('flex-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition whitespace-nowrap text-center',
                         signingMethod === m ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-700')}>
-                      {m}
+                      {SIGNING_METHOD_LABELS[m]}
                     </button>
                   ))}
                 </div>
@@ -402,11 +409,11 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-semibold text-primary/50 uppercase tracking-wide">Signing Method</label>
                 <div className="flex gap-1 p-1 bg-white border border-[#0776BC]/20 rounded-lg">
-                  {(['digital', 'manual'] as const).map(m => (
-                    <button key={m} type="button" onClick={() => setSigningMethod(m)}
-                      className={clsx('flex-1 px-2.5 py-1 rounded-md text-xs font-semibold transition capitalize text-center',
+                  {(['digital', 'manual', 'approval'] as const).map(m => (
+                    <button key={m} type="button" title={SIGNING_METHOD_HINTS[m]} onClick={() => setSigningMethod(m)}
+                      className={clsx('flex-1 px-2.5 py-1 rounded-md text-xs font-semibold transition whitespace-nowrap text-center',
                         signingMethod === m ? 'bg-primary text-white' : 'text-gray-500 hover:text-gray-700')}>
-                      {m}
+                      {SIGNING_METHOD_LABELS[m]}
                     </button>
                   ))}
                 </div>

@@ -118,7 +118,7 @@ export default function DeanRequestPage() {
             ) : filtered.map(req => {
               const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
               const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
-              const isPending = req.status === 'FORWARDED_TO_DEAN';
+              const isPending = req.status === 'FORWARDED_TO_DEAN' && req.cancellations?.[0]?.status !== 'PENDING';
               return (
                 <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
                   <td className="py-3 px-4 text-primary">{studentName}</td>

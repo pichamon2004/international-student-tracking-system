@@ -6,7 +6,10 @@ import * as studentRepository from '../../repositories/student.repository';
 import * as documentTemplateRepository from '../../repositories/documentTemplate.repository';
 import * as templateVariableRepository from '../../repositories/templateVariable.repository';
 import * as deanDelegationRepository from '../../repositories/deanDelegation.repository';
+import * as requestCancellationRepository from '../../repositories/requestCancellation.repository';
+import * as generatedDocRepository from '../../repositories/generatedDoc.repository';
 import * as deanDelegationService from './deanDelegation.service';
+import * as generatedDocService from './generatedDoc.service';
 import { createNotification, createNotifications } from '../notification.service';
 import { sendEmail } from '../external/email.service';
 import { uploadToR2 } from '../external/r2.service';
@@ -85,6 +88,67 @@ export const getRequestById = async (
   };
 };
 
+// The "Submit disabled until filled" check on the frontend is only a UI
+// nicety — it can be bypassed (devtools, direct API calls), and the
+// student-entered data that fills it is not trustworthy on its own. Re-derive
+// which variables actually require student input (inputType !== 'auto') from
+// the request type's document templates and reject if any are missing.
+const assertRequiredFields = async (requestTypeId: number, rawFormData: unknown) => {
+  const templates = await documentTemplateRepository.findByRequestTypeId(requestTypeId);
+  const requiredKeys = new Set<string>();
+  for (const t of templates) {
+    const vars: string[] = t.variables ? JSON.parse(t.variables) : [];
+    for (const token of vars) {
+      const key = token.replace(/[{}]/g, '');
+      if (!key.startsWith('sig_')) requiredKeys.add(key);
+    }
+  }
+
+  if (requiredKeys.size === 0) return;
+
+  const varDefs = await templateVariableRepository.findAll();
+  const inputTypeByKey = new Map(varDefs.map(v => [v.key, v.inputType]));
+  const formData = (rawFormData ?? {}) as Record<string, string>;
+
+  const missing = [...requiredKeys].filter((key) => {
+    const inputType = inputTypeByKey.get(key) ?? 'auto';
+    if (inputType === 'auto') return false; // auto-filled from student profile, not student input
+    const val = formData[key];
+    return !val || !String(val).trim() || val === '—';
+  });
+
+  if (missing.length > 0) {
+    throw Object.assign(
+      new Error(`Please fill in the required fields: ${missing.join(', ')}`),
+      { statusCode: 400 }
+    );
+  }
+};
+
+// Loads a request and confirms it belongs to the calling student.
+const findOwnRequest = async (requestId: number, userId?: number) => {
+  const request = await requestRepository.findByIdWithStudent(requestId);
+  if (!request) {
+    throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+  }
+  const student = userId !== undefined ? await studentRepository.findByUserId(userId) : null;
+  if (!student || request.studentId !== student.id) {
+    throw Object.assign(new Error('Access denied'), { statusCode: 403 });
+  }
+  return request;
+};
+
+// Statuses where the request is still moving through the workflow.
+const OPEN_STATUSES: RequestStatus[] = [
+  'PENDING', 'STAFF_APPROVED', 'FORWARDED_TO_ADVISOR', 'ADVISOR_APPROVED', 'FORWARDED_TO_DEAN',
+];
+
+const findActiveStaffUsers = () =>
+  prisma.user.findMany({
+    where: { isActive: true, userRoles: { some: { role: { code: 'STAFF' } } } },
+    select: { id: true, email: true },
+  });
+
 export const createRequest = async (
   dto: {
     requestTypeId?: string | number;
@@ -114,41 +178,8 @@ export const createRequest = async (
     throw Object.assign(new Error('studentId is required'), { statusCode: 400 });
   }
 
-  // The "Submit disabled until filled" check on the frontend is only a UI
-  // nicety — it can be bypassed (devtools, direct API calls), and the
-  // student-entered data that fills it is not trustworthy on its own. Re-derive
-  // which variables actually require student input (inputType !== 'auto') from
-  // the request type's document templates and reject if any are missing.
   if (dto.requestTypeId) {
-    const templates = await documentTemplateRepository.findByRequestTypeId(parseInt(String(dto.requestTypeId)));
-    const requiredKeys = new Set<string>();
-    for (const t of templates) {
-      const vars: string[] = t.variables ? JSON.parse(t.variables) : [];
-      for (const token of vars) {
-        const key = token.replace(/[{}]/g, '');
-        if (!key.startsWith('sig_')) requiredKeys.add(key);
-      }
-    }
-
-    if (requiredKeys.size > 0) {
-      const varDefs = await templateVariableRepository.findAll();
-      const inputTypeByKey = new Map(varDefs.map(v => [v.key, v.inputType]));
-      const formData = (dto.formData ?? {}) as Record<string, string>;
-
-      const missing = [...requiredKeys].filter((key) => {
-        const inputType = inputTypeByKey.get(key) ?? 'auto';
-        if (inputType === 'auto') return false; // auto-filled from student profile, not student input
-        const val = formData[key];
-        return !val || !String(val).trim() || val === '—';
-      });
-
-      if (missing.length > 0) {
-        throw Object.assign(
-          new Error(`Please fill in the required fields: ${missing.join(', ')}`),
-          { statusCode: 400 }
-        );
-      }
-    }
+    await assertRequiredFields(parseInt(String(dto.requestTypeId)), dto.formData);
   }
 
   return requestRepository.create({
@@ -170,6 +201,12 @@ export const updateRequestStatus = async (
   const existing = await requestRepository.findByIdWithStudent(requestId);
   if (!existing) {
     throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+  }
+  if (existing.cancellations.length > 0) {
+    throw Object.assign(
+      new Error('This request has a cancellation pending staff review'),
+      { statusCode: 409 }
+    );
   }
 
   let attachmentsJson: string | undefined;
@@ -211,6 +248,19 @@ export const updateRequestStatus = async (
       };
 
   const updated = await requestRepository.updateStatus(requestId, updateData);
+
+  // Templates using the "approval" signing method get the approver's name
+  // printed into their signature box as soon as they approve.
+  const approvalRole: Record<string, string> = {
+    STAFF_APPROVED:   'ir_staff',
+    ADVISOR_APPROVED: 'advisor',
+    DEAN_APPROVED:    'dean',
+  };
+  if (approvalRole[dto.status] && userId !== undefined) {
+    await generatedDocService
+      .recordApprovalSignature(requestId, approvalRole[dto.status], userId)
+      .catch(console.error);
+  }
 
   const statusLabels: Record<string, string> = {
     ADVISOR_APPROVED:     'approved by your advisor',
@@ -264,6 +314,7 @@ export const followUp = async (requestId: number) => {
           advisor: { select: { userId: true, user: { select: { email: true } } } },
         },
       },
+      cancellations: { where: { status: 'PENDING' }, take: 1 },
     },
   });
   if (!request) {
@@ -277,11 +328,15 @@ export const followUp = async (requestId: number) => {
   let roleLabel = 'Staff';
   let linkBase = '/staff/request';
 
-  if (request.status === 'FORWARDED_TO_ADVISOR' && request.student.advisor?.userId) {
+  // A pending cancellation freezes the workflow until staff decide on it,
+  // so staff are the ones holding things up regardless of the status.
+  const cancellationPending = request.cancellations.length > 0;
+
+  if (!cancellationPending && request.status === 'FORWARDED_TO_ADVISOR' && request.student.advisor?.userId) {
     recipients = [{ userId: request.student.advisor.userId, email: request.student.advisor.user?.email ?? null }];
     roleLabel = 'Advisor';
     linkBase = '/advisor/request';
-  } else if (request.status === 'FORWARDED_TO_DEAN') {
+  } else if (!cancellationPending && request.status === 'FORWARDED_TO_DEAN') {
     const signatory = await deanDelegationService.getActiveSignatory();
     const deanUser = await prisma.user.findUnique({ where: { id: signatory.id }, select: { email: true } });
     recipients = [{ userId: signatory.id, email: deanUser?.email ?? null }];
@@ -289,10 +344,7 @@ export const followUp = async (requestId: number) => {
     linkBase = '/dean/request';
   } else {
     // PENDING, STAFF_APPROVED, ADVISOR_APPROVED (awaiting staff to forward it) → whole staff pool
-    const staffUsers = await prisma.user.findMany({
-      where: { isActive: true, userRoles: { some: { role: { code: 'STAFF' } } } },
-      select: { id: true, email: true },
-    });
+    const staffUsers = await findActiveStaffUsers();
     recipients = staffUsers.map(u => ({ userId: u.id, email: u.email }));
     roleLabel = 'Staff';
     linkBase = '/staff/request';
@@ -327,4 +379,141 @@ export const followUp = async (requestId: number) => {
   );
 
   return { roleLabel, notifiedCount: recipients.length };
+};
+
+// ── student edit ────────────────────────────────────────────────────
+
+export const updateRequest = async (
+  requestId: number,
+  dto: { description?: string; formData?: unknown },
+  userId?: number
+) => {
+  const existing = await findOwnRequest(requestId, userId);
+
+  if (existing.status !== 'PENDING') {
+    throw Object.assign(
+      new Error('This request is already being processed and can no longer be edited'),
+      { statusCode: 409 }
+    );
+  }
+  if (existing.cancellations.length > 0) {
+    throw Object.assign(
+      new Error('This request has a cancellation pending staff review'),
+      { statusCode: 409 }
+    );
+  }
+
+  if (existing.requestTypeId) {
+    await assertRequiredFields(existing.requestTypeId, dto.formData);
+  }
+
+  const updated = await requestRepository.updateContent(requestId, {
+    description: dto.description,
+    formData: dto.formData ? JSON.stringify(dto.formData) : null,
+  });
+
+  // Any generated PDF (and the signatures on it) was built from the old form
+  // data — drop it so the student re-generates and re-signs the new version.
+  await generatedDocRepository.deleteByRequestId(requestId);
+
+  return updated;
+};
+
+// ── cancellation ────────────────────────────────────────────────────
+
+export const requestCancel = async (requestId: number, reason: string, userId?: number) => {
+  if (!reason || !reason.trim()) {
+    throw Object.assign(new Error('reason is required'), { statusCode: 400 });
+  }
+
+  const existing = await findOwnRequest(requestId, userId);
+
+  if (!OPEN_STATUSES.includes(existing.status)) {
+    throw Object.assign(new Error('This request is already closed'), { statusCode: 409 });
+  }
+  if (existing.cancellations.length > 0) {
+    throw Object.assign(
+      new Error('A cancellation request is already pending for this request'),
+      { statusCode: 409 }
+    );
+  }
+
+  const cancellation = await requestCancellationRepository.create(requestId, reason.trim());
+
+  const studentName =
+    [existing.student.firstNameEn, existing.student.lastNameEn].filter(Boolean).join(' ') || 'A student';
+  const message = `${studentName} asked to cancel the request "${existing.title}". Reason: ${reason.trim()}`;
+  const link = `/staff/request/${requestId}`;
+
+  findActiveStaffUsers()
+    .then(async (staff) => {
+      await createNotifications(staff.map(u => u.id), {
+        type: 'REQUEST_UPDATE',
+        title: 'Cancellation Requested',
+        message,
+        link,
+      });
+      await Promise.all(
+        staff
+          .filter((u): u is { id: number; email: string } => !!u.email)
+          .map(u => sendEmail(
+            u.email,
+            `[IST] Cancellation Requested — ${existing.title}`,
+            `<p>Dear Staff,</p>
+             <p>${message}</p>
+             <p>Please log in to the IST system to approve or reject the cancellation.</p>`
+          ))
+      );
+    })
+    .catch(console.error);
+
+  return cancellation;
+};
+
+export const reviewCancel = async (
+  requestId: number,
+  dto: { approve: boolean; note?: string },
+  staffUserId?: number
+) => {
+  if (staffUserId === undefined) {
+    throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+  }
+
+  const existing = await requestRepository.findByIdWithStudent(requestId);
+  if (!existing) {
+    throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+  }
+  const pending = existing.cancellations[0];
+  if (!pending) {
+    throw Object.assign(new Error('No pending cancellation for this request'), { statusCode: 404 });
+  }
+
+  const result = await requestCancellationRepository.review(
+    pending.id, requestId, dto.approve, staffUserId, dto.note
+  );
+
+  const label = dto.approve ? 'approved' : 'rejected';
+  createNotification({
+    userId: existing.student.userId,
+    type: 'REQUEST_UPDATE',
+    title: `Cancellation ${dto.approve ? 'Approved' : 'Rejected'}`,
+    message: `Your cancellation request for "${existing.title}" has been ${label}.`,
+    link: `/student/request/${requestId}`,
+  }).catch(console.error);
+
+  if (existing.student.email) {
+    const studentName =
+      [existing.student.firstNameEn, existing.student.lastNameEn].filter(Boolean).join(' ') || 'Student';
+    sendEmail(
+      existing.student.email,
+      `Cancellation ${dto.approve ? 'Approved' : 'Rejected'} — ${existing.title}`,
+      `<p>Dear ${studentName},</p>
+       <p>Your cancellation request for <strong>"${existing.title}"</strong> has been <strong>${label}</strong>.</p>
+       ${dto.note ? `<p>Comment: ${dto.note}</p>` : ''}
+       ${dto.approve ? '' : '<p>Your request will continue through the normal approval process.</p>'}
+       <p>Please log in to the IST system to view the details.</p>`
+    ).catch(console.error);
+  }
+
+  return result;
 };

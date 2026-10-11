@@ -69,6 +69,18 @@ export const generatePdf = async (
     }
   }
 
+  return createDoc(request, template, formData, userId);
+};
+
+type RequestForDoc = NonNullable<Awaited<ReturnType<typeof requestRepository.findById>>>;
+type TemplateForDoc = { id: number; body: string; variables: string | null; signingMethod: string };
+
+async function createDoc(
+  request: RequestForDoc,
+  template: TemplateForDoc,
+  formData: Record<string, string>,
+  userId: number
+) {
   const requiredSigKeys = parseRequiredSigKeys(template.variables);
   const { html: mergedHtml, missing } = mergeTemplateToHtml(template.body, formData);
   if (missing.length > 0) {
@@ -87,17 +99,76 @@ export const generatePdf = async (
 
   const pdfBuffer = await renderHtmlToPdf(fullBodyHtml);
 
-  const filename = `${Date.now()}-req${requestId}.pdf`;
+  const filename = `${Date.now()}-req${request.id}.pdf`;
   const { url } = await uploadToR2(pdfBuffer, filename, 'application/pdf', 'generated');
 
-  return generatedDocRepository.create({
-    templateId,
-    studentId:  request.studentId,
+  const doc = await generatedDocRepository.create({
+    templateId:  template.id,
+    studentId:   request.studentId,
     generatedBy: userId,
-    fileUrl:    url,
-    requestId,
-    formData:   JSON.stringify(formData),
+    fileUrl:     url,
+    requestId:   request.id,
+    formData:    JSON.stringify(formData),
   });
+
+  if (template.signingMethod !== 'approval') return doc;
+  await backfillApprovalSignatures(doc.id, request, requiredSigKeys);
+  return (await generatedDocRepository.findById(doc.id)) ?? doc;
+}
+
+// ── "approval" signing: the approver's name is printed on Approve ────
+
+// Which approval each role's box reflects, derived from where the request is
+// in the workflow — so a document generated after some approvals already
+// happened (or the student's own, generated on submit) still shows them.
+const STAFF_APPROVED_STATUSES = ['STAFF_APPROVED', 'FORWARDED_TO_ADVISOR', 'ADVISOR_APPROVED', 'ADVISOR_REJECTED', 'FORWARDED_TO_DEAN', 'DEAN_APPROVED', 'DEAN_REJECTED'];
+const ADVISOR_APPROVED_STATUSES = ['ADVISOR_APPROVED', 'FORWARDED_TO_DEAN', 'DEAN_APPROVED', 'DEAN_REJECTED'];
+
+async function backfillApprovalSignatures(docId: number, request: RequestForDoc, requiredSigKeys: string[]) {
+  const signers: Record<string, number | null | undefined> = {
+    student:  request.student.userId,
+    ir_staff: STAFF_APPROVED_STATUSES.includes(request.status) ? request.staffId : null,
+    advisor:  ADVISOR_APPROVED_STATUSES.includes(request.status) ? request.advisorId : null,
+    dean:     request.status === 'DEAN_APPROVED' ? request.deanId : null,
+  };
+  let recorded = false;
+  for (const key of requiredSigKeys) {
+    const role = key.replace('sig_', '');
+    const signerUserId = signers[role];
+    if (!signerUserId) continue;
+    await generatedDocRepository.upsertSignature({ docId, role, signerUserId, imageUrl: '' });
+    recorded = true;
+  }
+  if (recorded) await embedAndFinalize(docId);
+}
+
+// Called when a role approves the request — prints that approver's name into
+// every "approval" document of the request that has a box for their role,
+// generating the document first if nobody has yet.
+export const recordApprovalSignature = async (requestId: number, role: string, userId: number) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request?.requestTypeId) return;
+
+  const templates = (await documentTemplateRepository.findByRequestTypeId(request.requestTypeId))
+    .filter(t => t.isActive && t.signingMethod === 'approval');
+  if (templates.length === 0) return;
+
+  const docs = await generatedDocRepository.findByRequestId(requestId);
+  for (const template of templates) {
+    const requiredSigKeys = parseRequiredSigKeys(template.variables);
+    if (!requiredSigKeys.includes(`sig_${role}`)) continue;
+
+    const existing = docs.find(d => d.templateId === template.id);
+    if (!existing) {
+      // Fresh document — backfill already records this approval (the
+      // request's status/approver ids were updated before this call).
+      const formData: Record<string, string> = request.formData ? JSON.parse(request.formData) : {};
+      await createDoc(request, template, formData, userId);
+      continue;
+    }
+    await generatedDocRepository.upsertSignature({ docId: existing.id, role, signerUserId: userId, imageUrl: '' });
+    await embedAndFinalize(existing.id);
+  }
 };
 
 export const getGeneratedDocs = async (requestId: number) => {
@@ -266,13 +337,16 @@ export const embedAndFinalize = async (docId: number) => {
 
   // For each required role that has signed, show the actual signer's name
   // (not just who was expected to sign) alongside their drawn/uploaded image.
-  const entries: Record<string, { name?: string; imageUrl?: string }> = {};
+  // "approval" documents have no image — the printed name + approval date is
+  // the signature itself.
+  const isApproval = doc.template.signingMethod === 'approval';
+  const entries: Record<string, { name?: string; imageUrl?: string; date?: Date }> = {};
   for (const key of requiredSigKeys) {
     const role = key.replace('sig_', '');
     const sig = signatures.find(s => s.role === role);
     if (!sig) continue;
     const signer = await userRepository.findByIdFull(sig.signerUserId);
-    entries[key] = { name: signer?.name, imageUrl: sig.imageUrl };
+    entries[key] = { name: signer?.name, imageUrl: sig.imageUrl, ...(isApproval && { date: sig.signedAt }) };
   }
 
   const sigGridHtml = buildSignatureGridHtml(requiredSigKeys, entries);
@@ -282,5 +356,5 @@ export const embedAndFinalize = async (docId: number) => {
   const filename = `finalized-doc${docId}-${Date.now()}.pdf`;
   const { url: finalUrl } = await uploadToR2(pdfBuffer, filename, 'application/pdf', 'finalized');
 
-  return generatedDocRepository.updateFinalizedPdf(docId, finalUrl, 'digital');
+  return generatedDocRepository.updateFinalizedPdf(docId, finalUrl, isApproval ? 'approval' : 'digital');
 };

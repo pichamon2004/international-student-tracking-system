@@ -652,7 +652,7 @@ function RequestTypesTab({
 /* ─── Helpers: map API → frontend types ─────────────────────── */
 function apiToDocTemplate(t: {
   id: number; name: string; description: string | null;
-  body: string; variables: string | null; isActive: boolean; signingMethod?: 'manual' | 'digital';
+  body: string; variables: string | null; isActive: boolean; signingMethod?: 'manual' | 'digital' | 'approval';
 }): DocTemplate {
   return {
     id: t.id,

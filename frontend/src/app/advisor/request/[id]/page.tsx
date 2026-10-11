@@ -53,7 +53,13 @@ export default function RequestDetailPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-    generatedDocApi.getByRequest(Number(params.id))
+    loadGeneratedDoc(Number(params.id));
+  }, [params?.id]);
+
+  // Re-read the generated document + its signatures — also after Approve, since
+  // "approval"-signed templates get the approver's name printed in server-side.
+  function loadGeneratedDoc(requestId: number) {
+    generatedDocApi.getByRequest(requestId)
       .then(res => {
         const doc = res.data.data[0] ?? null;
         setGenDoc(doc);
@@ -62,7 +68,9 @@ export default function RequestDetailPage() {
         }
       })
       .catch(() => {});
-  }, [params?.id]);
+  }
+
+  const isApprovalSigning = req?.requestType?.documentTemplates?.[0]?.signingMethod === 'approval';
 
   function handleSigned(updated: ApiDocSignature[]) {
     setSignatures(updated);
@@ -91,6 +99,7 @@ export default function RequestDetailPage() {
     try {
       const res = await requestApi.updateStatus(req.id, 'ADVISOR_APPROVED', comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status: 'ADVISOR_APPROVED', attachments: res.data.data.attachments } : prev);
+      loadGeneratedDoc(req.id);
       setActionDone(true);
       toast.success('Request approved');
     } catch {
@@ -140,7 +149,9 @@ export default function RequestDetailPage() {
 
   const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
   const isPending = req.status === 'FORWARDED_TO_ADVISOR';
-  const isActionable = isPending;
+  // A pending cancellation from the student freezes the workflow until staff review it.
+  const cancelPending = req.cancellations?.[0]?.status === 'PENDING';
+  const isActionable = isPending && !cancelPending;
   const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
 
   return (
@@ -195,7 +206,7 @@ export default function RequestDetailPage() {
             View Document
           </button>
 
-          {genDoc && !signatures.some(s => s.role === 'advisor') && (
+          {genDoc && !isApprovalSigning && !signatures.some(s => s.role === 'advisor') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -254,7 +265,11 @@ export default function RequestDetailPage() {
                 Advisor Response
               </p>
               {!isActionable && (
-                <span className="text-xs text-gray-400 italic">This request has already been processed.</span>
+                <span className={clsx('text-xs italic', cancelPending ? 'text-amber-600' : 'text-gray-400')}>
+                  {cancelPending
+                    ? 'On hold — the student asked to cancel this request; waiting for staff review.'
+                    : 'This request has already been processed.'}
+                </span>
               )}
             </div>
 
@@ -273,7 +288,7 @@ export default function RequestDetailPage() {
             </div>
 
             <div className="flex items-center justify-between gap-4">
-              {isPending && (
+              {isActionable && (
                 <div className="flex flex-col gap-2">
                   <label className="flex items-center gap-2 w-fit cursor-pointer px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors">
                     <RiAttachmentLine size={15} />
@@ -297,7 +312,7 @@ export default function RequestDetailPage() {
               {!isActionable && <div />}
 
               <div className="flex items-center gap-3 shrink-0">
-                {isPending && (
+                {isActionable && (
                   <>
                     <Button variant="danger"  label="Reject"  onClick={handleReject} />
                     <Button variant="success" label="Approve" onClick={handleApprove} />

@@ -29,7 +29,7 @@ export const findById = (id: number) =>
 export const findByRequestTypeId = (requestTypeId: number) =>
   prisma.documentTemplate.findMany({
     where:  { requestTypes: { some: { id: requestTypeId } } },
-    select: { id: true, name: true, description: true, variables: true, body: true, signingMethod: true },
+    select: { id: true, name: true, description: true, variables: true, body: true, signingMethod: true, isActive: true },
   });
 
 // ── Mutations ─────────────────────────────────────────────────────
