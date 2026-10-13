@@ -22,11 +22,11 @@ const statusLabelConfig: Record<string, { label: string; className: string }> = 
   ADVISOR_APPROVED:     { label: 'Advisor Approved',      className: 'bg-teal-100 text-teal-700' },
   ADVISOR_REJECTED:     { label: 'Advisor Rejected',      className: 'bg-orange-100 text-orange-700' },
   STAFF_APPROVED:       { label: 'Staff Approved',        className: 'bg-indigo-100 text-indigo-700' },
-  STAFF_REJECTED:       { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  STAFF_REJECTED:       { label: 'Rejected',              className: 'bg-red-100 text-red-600' },
   FORWARDED_TO_DEAN:    { label: 'Forwarded to Dean',     className: 'bg-purple-100 text-purple-700' },
   DEAN_APPROVED:        { label: 'Completed',             className: 'bg-green-100 text-green-700' },
   DEAN_REJECTED:        { label: 'Dean Rejected',         className: 'bg-red-100 text-red-600' },
-  CANCELLED:            { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  CANCELLED:            { label: 'Cancelled',             className: 'bg-gray-100 text-gray-500' },
 };
 
 export default function StaffRequestDetailPage() {
@@ -62,13 +62,18 @@ export default function StaffRequestDetailPage() {
     loadGeneratedDoc(Number(id));
   }, [id]);
 
+  // Status being submitted — approving can take a few seconds (the PDF is
+  // re-rendered server-side), so the action buttons are locked meanwhile.
+  const [submittingStatus, setSubmittingStatus] = useState<string | null>(null);
+
   async function updateStatus(status: string, requireComment = false) {
-    if (!req) return;
+    if (!req || submittingStatus) return;
     if (requireComment && !comment.trim()) {
       setShowRejectError(true);
       return;
     }
     setShowRejectError(false);
+    setSubmittingStatus(status);
     try {
       const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
@@ -79,6 +84,8 @@ export default function StaffRequestDetailPage() {
       toast.success('Status updated');
     } catch {
       toast.error('Failed to update status');
+    } finally {
+      setSubmittingStatus(null);
     }
   }
 
@@ -356,20 +363,20 @@ export default function StaffRequestDetailPage() {
 
               {req.status === 'PENDING' && (
                 <>
-                  <Button variant="primary" label="Approve"  onClick={() => updateStatus('STAFF_APPROVED')} />
-                  <Button variant="danger"  label="Reject"   onClick={() => updateStatus('STAFF_REJECTED', true)} />
+                  <Button variant="primary" label={submittingStatus === 'STAFF_APPROVED' ? 'Processing…' : 'Approve'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_APPROVED')} />
+                  <Button variant="danger"  label={submittingStatus === 'STAFF_REJECTED' ? 'Processing…' : 'Reject'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
               {req.status === 'STAFF_APPROVED' && (
                 <>
-                  <Button variant="primary" label="Send to Advisor" onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
-                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED', true)} />
+                  <Button variant="primary" label={submittingStatus === 'FORWARDED_TO_ADVISOR' ? 'Processing…' : 'Send to Advisor'} disabled={!!submittingStatus} onClick={() => updateStatus('FORWARDED_TO_ADVISOR')} />
+                  <Button variant="danger"  label={submittingStatus === 'STAFF_REJECTED' ? 'Processing…' : 'Reject'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
               {req.status === 'ADVISOR_APPROVED' && (
                 <>
-                  <Button variant="primary" label="Forward to Dean" onClick={() => updateStatus('FORWARDED_TO_DEAN')} />
-                  <Button variant="danger"  label="Reject"          onClick={() => updateStatus('STAFF_REJECTED', true)} />
+                  <Button variant="primary" label={submittingStatus === 'FORWARDED_TO_DEAN' ? 'Processing…' : 'Forward to Dean'} disabled={!!submittingStatus} onClick={() => updateStatus('FORWARDED_TO_DEAN')} />
+                  <Button variant="danger"  label={submittingStatus === 'STAFF_REJECTED' ? 'Processing…' : 'Reject'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
             </div>

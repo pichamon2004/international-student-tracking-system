@@ -31,9 +31,9 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   STAFF_APPROVED:       { label: 'Faculty Approved',      className: 'bg-indigo-100 text-indigo-700' },
   FORWARDED_TO_DEAN:    { label: 'Sent to Dean',          className: 'bg-purple-100 text-purple-700' },
   DEAN_APPROVED:        { label: 'Completed',             className: 'bg-green-100 text-green-700' },
-  STAFF_REJECTED:       { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
-  DEAN_REJECTED:        { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
-  CANCELLED:            { label: 'Cancelled',             className: 'bg-red-100 text-red-600' },
+  STAFF_REJECTED:       { label: 'Rejected',              className: 'bg-red-100 text-red-600' },
+  DEAN_REJECTED:        { label: 'Dean Rejected',         className: 'bg-red-100 text-red-600' },
+  CANCELLED:            { label: 'Cancelled',             className: 'bg-gray-100 text-gray-500' },
 };
 
 const STATUS_FILTERS = ['All', 'Active', 'Done'] as const;

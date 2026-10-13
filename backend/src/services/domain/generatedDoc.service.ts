@@ -340,13 +340,17 @@ export const embedAndFinalize = async (docId: number) => {
   // "approval" documents have no image — the printed name + approval date is
   // the signature itself.
   const isApproval = doc.template.signingMethod === 'approval';
-  const entries: Record<string, { name?: string; imageUrl?: string; date?: Date }> = {};
+  const entries: Record<string, { name?: string; imageUrl?: string; date?: Date; signatureText?: string }> = {};
   for (const key of requiredSigKeys) {
     const role = key.replace('sig_', '');
     const sig = signatures.find(s => s.role === role);
     if (!sig) continue;
     const signer = await userRepository.findByIdFull(sig.signerUserId);
-    entries[key] = { name: signer?.name, imageUrl: sig.imageUrl, ...(isApproval && { date: sig.signedAt }) };
+    entries[key] = {
+      name: signer?.name,
+      imageUrl: sig.imageUrl,
+      ...(isApproval && { date: sig.signedAt, signatureText: signer?.name ?? undefined }),
+    };
   }
 
   const sigGridHtml = buildSignatureGridHtml(requiredSigKeys, entries);

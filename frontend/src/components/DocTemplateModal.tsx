@@ -3,10 +3,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line } from 'react-icons/ri';
+import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line, RiAddLine } from 'react-icons/ri';
 import CustomSelect from '@/components/ui/CustomSelect';
 import { type ApiTemplateVariable } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
+import TemplateFieldModal from '@/components/TemplateFieldModal';
 
 /* ─── Types ──────────────────────────────────────────────────── */
 export interface DocTemplate {
@@ -31,7 +32,9 @@ function makeVarChip(v: string, label?: string) {
   if (v.startsWith('{{sig_')) {
     return `<span contenteditable="false" data-var="${v}" style="display:inline-flex;align-items:center;gap:4px;width:100%;margin:4px 0;border:1.5px dashed rgba(7,118,188,0.35);border-radius:4px;padding:4px 10px;font-size:12px;color:rgba(7,118,188,0.6);font-family:inherit;">✍ ${displayLabel} .................................................</span>`;
   }
-  return `<span contenteditable="false" data-var="${v}" style="display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap;">${displayLabel}</span>`;
+  // display:inline + line-height:1 — an inline-block chip with padding/border
+  // made every line containing a variable taller than plain-text lines.
+  return `<span contenteditable="false" data-var="${v}" style="display:inline;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);line-height:1;white-space:nowrap;">${displayLabel}</span>`;
 }
 
 /* ─── Extract used variables from HTML body ──────────────────── */
@@ -73,6 +76,8 @@ interface DocTemplateModalProps {
   template: DocTemplate | null;
   isCreate: boolean;
   allVariables: ApiTemplateVariable[];
+  // Called after "+ Field" creates a new variable, so the caller's list stays in sync
+  onVariableCreated?: (variable: ApiTemplateVariable) => void;
   onSave: (data: Partial<DocTemplate> & { id?: number }) => void;
   onClose: () => void;
 }
@@ -84,10 +89,13 @@ const SIGNING_METHOD_HINTS = {
   approval: "No signing step — each approver's name and date are printed automatically when they press Approve",
 } as const;
 
-export default function DocTemplateModal({ template, isCreate, allVariables, onSave, onClose }: DocTemplateModalProps) {
-  const labelMap = Object.fromEntries(allVariables.map(v => [`{{${v.key}}}`, v.label]));
+export default function DocTemplateModal({ template, isCreate, allVariables, onVariableCreated, onSave, onClose }: DocTemplateModalProps) {
+  // Local copy so a field created with "+ Field" gets its label on the chip right away
+  const [vars, setVars] = useState(allVariables);
+  const [showFieldModal, setShowFieldModal] = useState(false);
+  const labelMap = Object.fromEntries(vars.map(v => [`{{${v.key}}}`, v.label]));
   const varLabel = (v: string) => labelMap[v] ?? fallbackVarLabel(v);
-  const allVarTokens = allVariables.map(v => `{{${v.key}}}`);
+  const allVarTokens = vars.map(v => `{{${v.key}}}`);
 
   const currentUser = useAuthStore(s => s.user);
   const [subTab, setSubTab] = useState<DocSubTab>('Edit');
@@ -108,10 +116,12 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
   const savedRangeRef = useRef<Range | null>(null);
 
   useEffect(() => {
+    // While "+ Field" is open, Escape closes only that dialog
+    if (showFieldModal) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, showFieldModal]);
 
   // Track active formats, save selection range, and read font size at cursor
   useEffect(() => {
@@ -261,21 +271,21 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
     handleInput();
   };
 
-  const insertVariable = (v: string) => {
+  const insertVariable = (v: string, label = varLabel(v)) => {
     editorRef.current?.focus();
     const sel = window.getSelection();
     const range = savedRangeRef.current ?? (sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null);
     if (!range || !editorRef.current?.contains(range.commonAncestorContainer)) {
       // Fallback: append at end
       const tmp = document.createElement('div');
-      tmp.innerHTML = makeVarChip(v, varLabel(v)) + '\u200B';
+      tmp.innerHTML = makeVarChip(v, label) + '\u200B';
       while (tmp.firstChild) editorRef.current?.appendChild(tmp.firstChild);
       handleInput();
       return;
     }
     range.deleteContents();
     const tmp = document.createElement('div');
-    tmp.innerHTML = makeVarChip(v, varLabel(v));
+    tmp.innerHTML = makeVarChip(v, label);
     const chipNode = tmp.firstChild as Node;
     range.insertNode(chipNode);
     // Place cursor after chip
@@ -427,6 +437,11 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
           #dtm-editor ul, .dtm-content ul { list-style-type: disc; padding-left: 1.6em; margin: 0.25em 0; }
           #dtm-editor ol, .dtm-content ol { list-style-type: decimal; padding-left: 1.6em; margin: 0.25em 0; }
           #dtm-editor li, .dtm-content li { margin: 0.1em 0; }
+          /* Templates saved earlier store the old inline-block chip style in
+             their HTML — override it so variable lines keep normal height. */
+          #dtm-editor [data-var]:not([data-var^="{{sig_"]), .dtm-content [data-var]:not([data-var^="{{sig_"]) {
+            display: inline !important; vertical-align: baseline !important; line-height: 1 !important;
+          }
         `}</style>
 
         {/* ── Body ── */}
@@ -542,6 +557,12 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
                       ))}
                     </div>
                   </div>
+                  <button
+                    onMouseDown={e => { e.preventDefault(); setShowFieldModal(true); }}
+                    className="w-full flex items-center justify-center gap-1 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all"
+                  >
+                    <RiAddLine size={13} /> Field
+                  </button>
                   <div className="relative">
                     <svg className="absolute left-2 top-1/2 -translate-y-1/2 text-primary/40" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                     <input value={varSearch} onChange={e => setVarSearch(e.target.value)} placeholder="Search..."
@@ -648,6 +669,19 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onS
           </div>
         </div>
         <div className="hidden" id="dtm-print" />
+
+        {showFieldModal && (
+          <TemplateFieldModal
+            existingKeys={vars.map(v => v.key)}
+            onClose={() => setShowFieldModal(false)}
+            onCreated={v => {
+              setShowFieldModal(false);
+              setVars(prev => [...prev, v]);
+              insertVariable(`{{${v.key}}}`, v.label);
+              onVariableCreated?.(v);
+            }}
+          />
+        )}
       </div>
     </div>
   );

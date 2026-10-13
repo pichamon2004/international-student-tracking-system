@@ -10,7 +10,7 @@ export interface CreateTemplateVariableDto {
 
 export interface UpdateTemplateVariableDto {
   label?:       string;
-  description?: string;
+  description?: string | null;
   inputType?:   string;
   options?:     string;
 }

@@ -18,7 +18,7 @@ export const createVariable = async (dto: {
   return repo.create({
     key,
     label: dto.label,
-    description: dto.description,
+    description: dto.description?.trim() || undefined,
     inputType: dto.inputType ?? 'auto',
     options: dto.options ? JSON.stringify(dto.options) : undefined,
   });
@@ -28,6 +28,8 @@ export const updateVariable = (id: number, dto: UpdateTemplateVariableDto & { op
   const { options, ...rest } = dto as any;
   return repo.updateById(id, {
     ...rest,
+    // An emptied description arrives as '' — store it as cleared (null)
+    ...(typeof rest.description === 'string' ? { description: rest.description.trim() || null } : {}),
     ...(options !== undefined ? { options: JSON.stringify(options) } : {}),
   });
 };

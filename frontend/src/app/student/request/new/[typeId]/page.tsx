@@ -13,9 +13,10 @@ import {
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, generatedDocApi, type ApiTemplateVariable, type SelectOption, type ApiGeneratedDoc } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, generatedDocApi, hasOptions, type ApiTemplateVariable, type SelectOption, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 import DateSelect from '@/components/ui/DateSelect';
+import CustomSelect from '@/components/ui/CustomSelect';
 import SignatureModal from '@/components/SignatureModal';
 
 /* ─── Variable labels ────────────────────────────────────────── */
@@ -191,8 +192,10 @@ function SectionCard({ icon, title, subtitle, color = 'blue', children }: {
   const gradients: Record<string, string> = { blue: 'from-blue-50 to-white', green: 'from-green-50 to-white', amber: 'from-amber-50 to-white' };
   const iconBgs: Record<string, string> = { blue: 'bg-primary/10 text-primary', green: 'bg-green-500/10 text-green-600', amber: 'bg-amber-400/10 text-amber-600' };
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className={clsx('flex items-center gap-2.5 px-5 py-4 border-b border-gray-100 bg-gradient-to-r', gradients[color])}>
+    // No overflow-hidden here — it would clip the dropdown / date-picker popups
+    // of the fields inside; the header rounds its own top corners instead.
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
+      <div className={clsx('flex items-center gap-2.5 px-5 py-4 border-b border-gray-100 bg-gradient-to-r rounded-t-2xl', gradients[color])}>
         <div className={clsx('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', iconBgs[color])}>{icon}</div>
         <div>
           <h3 className="text-sm font-bold text-gray-700">{title}</h3>
@@ -207,6 +210,19 @@ function SectionCard({ icon, title, subtitle, color = 'blue', children }: {
 /* ═══════════════════════════════════════════════════════════════
    DOCUMENT PREVIEW MODAL — A4 style, full realistic look
 ═══════════════════════════════════════════════════════════════ */
+// Same base styles the backend PDF renderer applies (DOC_BASE_CSS in
+// backend/src/utils/htmlPdf.ts) — so the preview, the browser print, and the
+// generated PDF all lay out the template identically.
+const DOC_BASE_CSS = `
+  *, ::before, ::after { box-sizing: border-box; }
+  p, h1, h2, h3, h4, h5, h6, blockquote, figure { margin: 0; }
+  h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+  ul { list-style-type: disc; padding-left: 1.6em; margin: 0.25em 0; }
+  ol { list-style-type: decimal; padding-left: 1.6em; margin: 0.25em 0; }
+  li { margin: 0.1em 0; }
+  table { border-collapse: collapse; }
+`;
+
 function DocumentPreviewModal({
   docs,
   varMap,
@@ -270,6 +286,7 @@ function DocumentPreviewModal({
         body { margin: 0; padding: 15mm 20mm; font-family: 'Times New Roman', serif; font-size: 14px; color: #222; line-height: 1.8; }
         @media print { @page { margin: 0; } body { padding: 15mm 20mm; } }
         img { display: block; margin-left: auto; margin-right: auto; }
+        ${DOC_BASE_CSS}
       </style>
     </head><body>
       ${printBody}
@@ -282,7 +299,7 @@ function DocumentPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{ maxHeight: '92vh' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden" style={{ maxHeight: '92vh' }}>
 
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
@@ -334,7 +351,15 @@ function DocumentPreviewModal({
         {/* A4 Document */}
         <div className="flex-1 overflow-y-auto bg-gray-100 px-6 pb-4">
           {/* A4 paper */}
-          <div className="bg-white shadow-xl mx-auto" style={{ width: '100%', minHeight: '297mm', padding: '15mm 20mm', fontFamily: "'Times New Roman', serif" }}>
+          {/* True A4 width (not "fit the modal") so lines wrap exactly where the PDF's do */}
+          {/* Tailwind's base styles already zero <p>/<h*> margins here (matching
+              DOC_BASE_CSS); only the list styles it strips need restoring. */}
+          <style>{`
+            .doc-preview-page ul { list-style-type: disc; padding-left: 1.6em; margin: 0.25em 0; }
+            .doc-preview-page ol { list-style-type: decimal; padding-left: 1.6em; margin: 0.25em 0; }
+            .doc-preview-page li { margin: 0.1em 0; }
+          `}</style>
+          <div className="doc-preview-page bg-white shadow-xl mx-auto" style={{ width: '210mm', maxWidth: 'none', minHeight: '297mm', padding: '15mm 20mm', fontFamily: "'Times New Roman', serif" }}>
             {/* Document content */}
             <div
               style={{ fontSize: '14px', color: '#222', lineHeight: '1.8' }}
@@ -773,9 +798,14 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
       const saved = initialFormData[k];
       const val = saved && saved !== '—' ? saved : (baseVarMap[k] || '');
       const dbDef = varDefMap[k];
-      if (dbDef?.inputType === 'select' && val) {
+      if (hasOptions(dbDef?.inputType) && val) {
         try {
           const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
+          const savedOpt = opts.find(o => typeof o !== 'string' && !o.allowInput && (o.docText?.trim() || o.label) === val);
+          if (savedOpt) {
+            entries.push([k, savedOpt.label]);
+            continue;
+          }
           const labels = opts.map(o => (typeof o === 'string' ? o : o.label));
           const othersOpt = opts.find(o => typeof o !== 'string' && o.allowInput);
           if (!labels.includes(val) && othersOpt) {
@@ -794,13 +824,16 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
   const varMap: Record<string, string> = useMemo(() => {
     const entries = allInputKeys.map(k => {
       const dbDef = varDefMap[k];
-      if (dbDef?.inputType === 'select') {
+      if (hasOptions(dbDef?.inputType)) {
         const val = formData[k] || '';
         try {
           const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
           const selectedOpt = opts.find(o => o.label === val);
           if (selectedOpt?.allowInput) {
             return [k, formData[`${k}__others`] || '—'];
+          }
+          if (selectedOpt?.docText?.trim()) {
+            return [k, selectedOpt.docText.trim()];
           }
         } catch { /* ignore */ }
       }
@@ -814,7 +847,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
     const val = formData[k]?.trim();
     if (!val) return false;
     const dbDef = varDefMap[k];
-    if (dbDef?.inputType === 'select') {
+    if (hasOptions(dbDef?.inputType)) {
       try {
         const opts: SelectOption[] = JSON.parse(dbDef.options ?? '[]');
         const selectedOpt = opts.find(o => o.label === val);
@@ -855,7 +888,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
                   const dbDef = varDefMap[key];
                   const fallback = PROFILE_INPUT_FALLBACKS[key];
                   const label = dbDef?.label ?? fallback?.label ?? key.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-                  const inputType = (dbDef?.inputType ?? fallback?.type ?? 'text') as 'text' | 'date' | 'textarea' | 'select';
+                  const inputType = (dbDef?.inputType ?? fallback?.type ?? 'text') as 'text' | 'date' | 'textarea' | 'select' | 'radio';
                   const placeholder = dbDef?.description ?? undefined;
                   const selectOptions: SelectOption[] = (() => {
                     try {
@@ -873,13 +906,14 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
 
                   return (
                     <Field key={key} label={label} required>
-                      {inputType === 'select' ? (
+                      {hasOptions(inputType) ? (
                         selectOptions.length === 0 ? (
                           <input type="text" value={selectedVal}
                             onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
                             placeholder={placeholder ?? 'Please specify...'}
                             className={inputCls} />
                         ) : (
+                        inputType === 'radio' ? (
                         <div className="flex flex-col gap-2">
                           {selectOptions.map(opt => (
                             <div key={opt.label}>
@@ -887,9 +921,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
                                 name={key}
                                 value={opt.label}
                                 checked={selectedVal === opt.label}
-                                onChange={() => {
-                                  setFormData(prev => ({ ...prev, [key]: opt.label, [othersKey]: '' }));
-                                }}
+                                onChange={() => setFormData(prev => ({ ...prev, [key]: opt.label, [othersKey]: '' }))}
                                 label={opt.label}
                               />
                               {opt.allowInput && selectedVal === opt.label && (
@@ -904,7 +936,26 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
                             </div>
                           ))}
                         </div>
-                        )
+                        ) : (
+                        <div className="flex flex-col gap-2">
+                          <CustomSelect
+                            searchable
+                            value={selectedVal}
+                            onChange={v => setFormData(prev => ({ ...prev, [key]: v, [othersKey]: '' }))}
+                            options={selectOptions.map(o => o.label)}
+                            placeholder={placeholder ?? '— Select —'}
+                          />
+                          {selectOptions.find(o => o.label === selectedVal)?.allowInput && (
+                            <input
+                              type="text"
+                              value={formData[othersKey] ?? ''}
+                              onChange={e => setFormData(prev => ({ ...prev, [othersKey]: e.target.value }))}
+                              placeholder="Please specify..."
+                              className={inputCls}
+                            />
+                          )}
+                        </div>
+                        ))
                       ) : inputType === 'textarea' ? (
                         <textarea value={selectedVal} onChange={e => setFormData(prev => ({ ...prev, [key]: e.target.value }))}
                           rows={3} placeholder={placeholder} className={`${inputCls} resize-none`} />

@@ -75,7 +75,7 @@ const SIG_ROLE_LABELS: Record<string, string> = {
 // signed) with the signer's name, role, and a date placeholder beneath it.
 export function buildSignatureGridHtml(
   requiredSigKeys: string[],
-  entries: Record<string, { name?: string; imageUrl?: string; date?: Date }>
+  entries: Record<string, { name?: string; imageUrl?: string; date?: Date; signatureText?: string }>
 ): string {
   if (requiredSigKeys.length === 0) return '';
   const cols = Math.min(requiredSigKeys.length, 4);
@@ -85,8 +85,12 @@ export function buildSignatureGridHtml(
     // Positioned absolutely within the line box instead of flex align-items,
     // so the image sits a fixed 6px above the line (never overlapping it)
     // regardless of how much of its own canvas the signer's ink fills.
+    // "approval" signing has no image — the approver's name is written on the
+    // line instead, in the same style as the printed name under it.
     const img = e.imageUrl
       ? `<img src="${e.imageUrl}" style="max-width:100%;max-height:60px;object-fit:contain;position:absolute;bottom:6px;left:50%;transform:translateX(-50%)" />`
+      : e.signatureText
+      ? `<div style="position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:11px;font-weight:600;line-height:1.3;overflow-wrap:anywhere">${escapeHtml(e.signatureText)}</div>`
       : '';
     const name = e.name ? `<div style="font-size:11px;font-weight:600;margin-top:4px">${escapeHtml(e.name)}</div>` : '';
     // inline-block columns (not CSS grid/flex) — Chromium's print pagination
@@ -109,6 +113,21 @@ export function buildSignatureGridHtml(
     + `</div>`;
 }
 
+// The student's live preview renders inside the app, where Tailwind's base
+// styles zero paragraph/heading margins. Without the same reset here every
+// <p> picks up Chromium's default 1em margin, so the PDF's line spacing jumps
+// around wherever a paragraph lacks an explicit inline margin. Keep in sync
+// with DOC_BASE_CSS in frontend student/request/new/[typeId]/page.tsx.
+const DOC_BASE_CSS = `
+    *, ::before, ::after { box-sizing:border-box; }
+    p, h1, h2, h3, h4, h5, h6, blockquote, figure { margin:0; }
+    h1, h2, h3, h4, h5, h6 { font-size:inherit; font-weight:inherit; }
+    ul { list-style-type:disc; padding-left:1.6em; margin:0.25em 0; }
+    ol { list-style-type:decimal; padding-left:1.6em; margin:0.25em 0; }
+    li { margin:0.1em 0; }
+    table { border-collapse:collapse; }
+`;
+
 // Matches the print CSS the frontend already uses for its own "Print" button
 // (student/request/new/[typeId]/page.tsx handlePrint), so a generated PDF
 // and a browser print of the same filled-in preview look identical.
@@ -122,6 +141,7 @@ export async function renderHtmlToPdf(bodyHtml: string): Promise<Buffer> {
        removes that line-height-driven padding; auto margins keep it
        centered the way the surrounding text-align:center intended. */
     img { max-width:100%; display:block; margin-left:auto; margin-right:auto; }
+    ${DOC_BASE_CSS}
   </style></head><body>${bodyHtml}</body></html>`;
 
   const browser = await puppeteer.launch({

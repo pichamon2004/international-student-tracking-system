@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { RiCloseLine, RiAddLine, RiDeleteBinLine } from 'react-icons/ri';
-import type { ApiTemplateVariable, SelectOption } from '@/lib/api';
+import { RiCloseLine } from 'react-icons/ri';
+import ChoiceOptionsTable from './ChoiceOptionsTable';
+import { hasOptions, type ApiTemplateVariable, type SelectOption } from '@/lib/api';
 
 export type { SelectOption };
 
-type InputType = 'auto' | 'text' | 'date' | 'textarea' | 'select';
+type InputType = 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio';
 
 interface Props {
   variable: ApiTemplateVariable | null;
@@ -27,7 +28,8 @@ const INPUT_TYPE_OPTIONS: { value: InputType; label: string; desc: string }[] = 
   { value: 'text',     label: 'Text',        desc: 'Student types a short answer' },
   { value: 'date',     label: 'Date',        desc: 'Student picks a date' },
   { value: 'textarea', label: 'Long Text',   desc: 'Student types a longer answer' },
-  { value: 'select',   label: 'Choices',     desc: 'Student picks from a list of options' },
+  { value: 'radio',    label: 'Choice',      desc: 'Student picks one option' },
+  { value: 'select',   label: 'Dropdown',    desc: 'Student picks from a searchable list' },
 ];
 
 function parseOptions(raw: string | null | undefined): SelectOption[] {
@@ -56,17 +58,6 @@ export default function TemplateVariableModal({ variable, onSave, onClose }: Pro
   const [options, setOptions] = useState<SelectOption[]>(() => parseOptions(variable?.options));
   const [keyError, setKeyError] = useState('');
 
-  const setOptionLabel = (i: number, val: string) =>
-    setOptions(prev => prev.map((o, idx) => idx === i ? { ...o, label: val } : o));
-
-  const setOptionAllowInput = (i: number, val: boolean) =>
-    setOptions(prev => prev.map((o, idx) => idx === i ? { ...o, allowInput: val } : o));
-
-  const addOption = () => setOptions(prev => [...prev, { label: '', allowInput: false }]);
-
-  const removeOption = (i: number) =>
-    setOptions(prev => prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimKey = key.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
@@ -76,20 +67,22 @@ export default function TemplateVariableModal({ variable, onSave, onClose }: Pro
     }
     if (!label.trim()) return;
     const validOptions = options.filter(o => o.label.trim());
-    if (inputType === 'select' && validOptions.length < 2) return;
+    if (hasOptions(inputType) && validOptions.length < 2) return;
     onSave({
       id: variable?.id,
       key: trimKey,
       label: label.trim(),
-      description: description.trim() || undefined,
+      // Send '' (not undefined) when cleared — undefined is dropped from the
+      // request body, so the backend would keep the old description.
+      description: description.trim(),
       inputType,
-      options: inputType === 'select' ? validOptions : undefined,
+      options: hasOptions(inputType) ? validOptions : undefined,
     });
   };
 
   const modal = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="bg-primary flex items-center justify-between px-6 py-4 rounded-t-2xl sticky top-0 z-10">
@@ -141,7 +134,7 @@ export default function TemplateVariableModal({ variable, onSave, onClose }: Pro
             <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Input Type <span className="text-red-400">*</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {INPUT_TYPE_OPTIONS.map(opt => (
                 <button key={opt.value} type="button" onClick={() => setInputType(opt.value)}
                   className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl border-2 text-left transition ${
@@ -155,72 +148,13 @@ export default function TemplateVariableModal({ variable, onSave, onClose }: Pro
           </div>
 
           {/* Options editor */}
-          {inputType === 'select' && (
+          {hasOptions(inputType) && (
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
                 Options <span className="text-red-400">*</span>
               </label>
 
-              {/* Column headers */}
-              <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-1">
-                <span className="text-[10px] text-gray-400 font-medium">Option label</span>
-                <span className="text-[10px] text-gray-400 font-medium w-20 text-center">Allow input</span>
-                <span className="w-7" />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                {options.map((opt, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                    {/* Radio indicator + text */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full border-2 border-gray-300 shrink-0" />
-                      <input
-                        value={opt.label}
-                        onChange={e => setOptionLabel(i, e.target.value)}
-                        placeholder={`Option ${i + 1}`}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition"
-                      />
-                    </div>
-
-                    {/* Allow input toggle */}
-                    <div className="w-20 flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => setOptionAllowInput(i, !opt.allowInput)}
-                        className={`w-10 h-5 rounded-full transition-colors relative ${opt.allowInput ? 'bg-primary' : 'bg-gray-200'}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${opt.allowInput ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </button>
-                    </div>
-
-                    {/* Delete */}
-                    <button
-                      type="button"
-                      onClick={() => removeOption(i)}
-                      disabled={options.length <= 1}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-400 transition disabled:opacity-30"
-                    >
-                      <RiDeleteBinLine size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <button type="button" onClick={addOption}
-                className="flex items-center gap-1.5 text-xs text-primary font-semibold px-3 py-1.5 rounded-lg border border-dashed border-primary/30 hover:bg-primary/5 transition">
-                <RiAddLine size={13} /> Add option
-              </button>
-
-              {/* Show hint if any option has allowInput */}
-              {options.some(o => o.allowInput) && (
-                <p className="text-[11px] text-primary/70 bg-primary/5 rounded-lg px-3 py-2">
-                  Options with "Allow input" toggled on will show a text field when selected.
-                </p>
-              )}
-
-              {options.filter(o => o.label.trim()).length < 2 && (
-                <p className="text-xs text-red-400">At least 2 options are required.</p>
-              )}
+              <ChoiceOptionsTable options={options} onChange={setOptions} />
             </div>
           )}
 
@@ -249,7 +183,7 @@ export default function TemplateVariableModal({ variable, onSave, onClose }: Pro
               disabled={
                 !label.trim() ||
                 (!isEdit && !key.trim()) ||
-                (inputType === 'select' && options.filter(o => o.label.trim()).length < 2)
+                (hasOptions(inputType) && options.filter(o => o.label.trim()).length < 2)
               }
               className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed">
               {isEdit ? 'Save Changes' : 'Create Variable'}

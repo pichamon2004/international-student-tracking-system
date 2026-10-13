@@ -790,6 +790,7 @@ export default function SettingsPage() {
               <DocTemplatesTabControlled
                 templates={docTemplates}
                 allVariables={allVars}
+                onVariableCreated={v => setAllVars(prev => [...prev, v])}
                 modal={modal}
                 deleteTarget={deleteTarget}
                 onOpenCreate={() => setModal('create')}
@@ -907,12 +908,14 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
                     v.inputType === 'date'     ? 'bg-blue-100 text-blue-700' :
                     v.inputType === 'textarea' ? 'bg-amber-100 text-amber-700' :
                     v.inputType === 'select'   ? 'bg-purple-100 text-purple-700' :
+                    v.inputType === 'radio'    ? 'bg-indigo-100 text-indigo-700' :
                                                  'bg-gray-100 text-gray-600'
                   }`}>
                     {v.inputType === 'auto'     ? 'Auto' :
                      v.inputType === 'textarea' ? 'Long Text' :
                      v.inputType === 'date'     ? 'Date' :
-                     v.inputType === 'select'   ? `Choices (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
+                     v.inputType === 'select'   ? `Dropdown (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
+                     v.inputType === 'radio'    ? `Choice (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
                      'Text'}
                   </span>
                 </div>
@@ -956,6 +959,7 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
 type DocTemplatesTabControlledProps = {
   templates: DocTemplate[];
   allVariables: ApiTemplateVariable[];
+  onVariableCreated: (v: ApiTemplateVariable) => void;
   modal: null | 'create' | DocTemplate;
   deleteTarget: DocTemplate | null;
   onOpenCreate: () => void;
@@ -968,7 +972,7 @@ type DocTemplatesTabControlledProps = {
   onDeleteCancel: () => void;
 };
 
-function DocTemplatesTabControlled({ templates, allVariables, modal, deleteTarget, onOpenCreate, onOpenEdit, onToggle, onSave, onCloseModal, onDeleteTarget, onDeleteConfirm, onDeleteCancel }: DocTemplatesTabControlledProps) {
+function DocTemplatesTabControlled({ templates, allVariables, onVariableCreated, modal, deleteTarget, onOpenCreate, onOpenEdit, onToggle, onSave, onCloseModal, onDeleteTarget, onDeleteConfirm, onDeleteCancel }: DocTemplatesTabControlledProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -1012,7 +1016,7 @@ function DocTemplatesTabControlled({ templates, allVariables, modal, deleteTarge
       )}
       {modal !== null && (
         <DocTemplateModal template={modal === 'create' ? null : modal} isCreate={modal === 'create'}
-          allVariables={allVariables} onSave={onSave} onClose={onCloseModal}
+          allVariables={allVariables} onVariableCreated={onVariableCreated} onSave={onSave} onClose={onCloseModal}
         />
       )}
       {deleteTarget && (

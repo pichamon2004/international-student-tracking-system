@@ -359,14 +359,21 @@ export const emailTemplateApi = {
 export interface SelectOption {
   label: string;
   allowInput: boolean;
+  // Text written into the document when this option is picked — falls back
+  // to `label` when empty, so options saved before this field still work.
+  docText?: string;
 }
+
+// Input types whose answers come from a staff-defined option list:
+// 'select' = Dropdown (searchable), 'radio' = Choice (radio buttons).
+export const hasOptions = (t?: string) => t === 'select' || t === 'radio';
 
 export interface ApiTemplateVariable {
   id: number;
   key: string;
   label: string;
   description: string | null;
-  inputType: 'auto' | 'text' | 'date' | 'textarea' | 'select';
+  inputType: 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio';
   options: string | null; // JSON SelectOption[] stored as string
   createdAt: string;
   updatedAt: string;

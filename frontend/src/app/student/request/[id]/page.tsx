@@ -495,18 +495,16 @@ export default function StudentRequestDetailPage() {
             <p className="text-sm text-gray-500">
               {isCompleted
                 ? 'Your document is ready. You can preview or print it below.'
-                : 'Document preview is available once the request is completed.'}
+                : 'You can preview your document at any time — it updates as each approver signs.'}
             </p>
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => setShowPreview(true)}
-                disabled={!isCompleted}
-                className={clsx(
-                  'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition',
-                  isCompleted
-                    ? 'bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                )}
+                onClick={() => {
+                  // Re-read the document so approvals since the page loaded show up
+                  loadGeneratedDoc(Number(id));
+                  setShowPreview(true);
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition bg-primary text-white hover:bg-primary/90 active:scale-95 shadow-sm"
               >
                 <RiEyeLine size={15} /> View Document
               </button>

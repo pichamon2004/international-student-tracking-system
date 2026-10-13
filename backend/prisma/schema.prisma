@@ -549,8 +549,8 @@ model TemplateVariable {
   key         String   @unique
   label       String
   description String?  @db.Text
-  inputType   String   @default("auto") // auto | text | date | textarea | select
-  options     String?  @db.Text // JSON string[] — used when inputType = 'select'
+  inputType   String   @default("auto") // auto | text | date | textarea | select (dropdown) | radio (choice)
+  options     String?  @db.Text // JSON SelectOption[] — used when inputType = 'select' or 'radio'
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

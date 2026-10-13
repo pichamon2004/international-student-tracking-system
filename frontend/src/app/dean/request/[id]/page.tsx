@@ -28,6 +28,9 @@ export default function DeanRequestDetailPage() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [showRejectError, setShowRejectError] = useState(false);
   const [actionDone, setActionDone] = useState(false);
+  // Approving can take a few seconds (the PDF is re-rendered server-side) —
+  // lock the buttons meanwhile so it doesn't look like the click did nothing.
+  const [submitting, setSubmitting] = useState<null | 'approve' | 'reject'>(null);
   const [showModal, setShowModal] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
@@ -88,7 +91,8 @@ export default function DeanRequestDetailPage() {
   };
 
   const handleApprove = async () => {
-    if (!req) return;
+    if (!req || submitting) return;
+    setSubmitting('approve');
     try {
       const res = await requestApi.updateStatus(req.id, 'DEAN_APPROVED', comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
       setReq(prev => prev ? { ...prev, status: 'DEAN_APPROVED', attachments: res.data.data.attachments } : prev);
@@ -97,16 +101,19 @@ export default function DeanRequestDetailPage() {
       toast.success('Request approved');
     } catch {
       toast.error('Failed to approve request');
+    } finally {
+      setSubmitting(null);
     }
   };
 
   const handleReject = async () => {
-    if (!req) return;
+    if (!req || submitting) return;
     if (!comment.trim()) {
       setShowRejectError(true);
       return;
     }
     setShowRejectError(false);
+    setSubmitting('reject');
     try {
       await requestApi.updateStatus(req.id, 'DEAN_REJECTED', comment);
       setReq(prev => prev ? { ...prev, status: 'DEAN_REJECTED' } : prev);
@@ -114,6 +121,8 @@ export default function DeanRequestDetailPage() {
       toast.success('Request rejected');
     } catch {
       toast.error('Failed to reject request');
+    } finally {
+      setSubmitting(null);
     }
   };
 
@@ -307,8 +316,8 @@ export default function DeanRequestDetailPage() {
               <div className="flex items-center gap-3 shrink-0">
                 {isActionable && (
                   <>
-                    <Button variant="danger"  label="Reject"  onClick={handleReject} />
-                    <Button variant="success" label="Approve" onClick={handleApprove} />
+                    <Button variant="danger"  label={submitting === 'reject' ? 'Processing…' : 'Reject'}  disabled={!!submitting} onClick={handleReject} />
+                    <Button variant="success" label={submitting === 'approve' ? 'Processing…' : 'Approve'} disabled={!!submitting} onClick={handleApprove} />
                   </>
                 )}
               </div>
