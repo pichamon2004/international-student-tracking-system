@@ -276,7 +276,8 @@ model HealthInsurance {
   coverageType String?
   startDate    DateTime
   expiryDate   DateTime
-  fileUrl      String?
+  fileUrl      String? // front of the insurance card
+  backFileUrl  String? // back of the card (optional)
   isCurrent    Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -359,7 +360,8 @@ model AcademicDocument {
   docType     String // Transcript, Degree Certificate, Enrollment Certificate, Other
   institution String
   issueDate   DateTime
-  fileUrl     String?
+  fileUrl     String? // first page — used as the thumbnail
+  pageUrls    String? @db.Text // JSON string[] of every page, in order (fileUrl = pageUrls[0])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

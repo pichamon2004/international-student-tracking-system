@@ -31,6 +31,7 @@ export const createHealthInsurance = async (
     policyNumber?: string;
     coverageType?: string;
     fileUrl?: string;
+    backFileUrl?: string;
   }
 ) => {
   if (!dto.provider || !dto.startDate || !dto.expiryDate) {
@@ -55,6 +56,7 @@ export const createHealthInsurance = async (
     startDate: start,
     expiryDate: expiry,
     fileUrl: dto.fileUrl,
+    backFileUrl: dto.backFileUrl,
   });
 
   _checkAndNotifyExpiry(studentId, expiry).catch(console.error);
@@ -69,7 +71,8 @@ export const updateHealthInsurance = async (
     provider?: string;
     policyNumber?: string;
     coverageType?: string;
-    fileUrl?: string;
+    fileUrl?: string | null;
+    backFileUrl?: string | null;
     isCurrent?: boolean;
     startDate?: string;
     expiryDate?: string;
@@ -89,6 +92,7 @@ export const updateHealthInsurance = async (
     policyNumber: dto.policyNumber,
     coverageType: dto.coverageType,
     fileUrl: dto.fileUrl,
+    backFileUrl: dto.backFileUrl,
     isCurrent: dto.isCurrent,
     startDate: dto.startDate ? new Date(dto.startDate) : undefined,
     expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,

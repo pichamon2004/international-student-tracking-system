@@ -10,6 +10,7 @@ export const createAcademicDocument = async (
   institution: string,
   issueDate: string,
   fileUrl?: string,
+  pageUrls?: string,
 ) => {
   if (!docType || !institution || !issueDate) {
     throw Object.assign(new Error('docType, institution, and issueDate are required'), { statusCode: 400 });
@@ -21,6 +22,7 @@ export const createAcademicDocument = async (
     institution,
     issueDate: new Date(issueDate),
     fileUrl,
+    pageUrls,
   };
 
   return academicDocumentRepository.createForStudent(dto);

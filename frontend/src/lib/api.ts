@@ -312,15 +312,27 @@ export interface ApiAcademicDocument {
   docType: string;
   institution: string;
   issueDate: string;
-  fileUrl: string | null;
+  fileUrl: string | null;   // first page (thumbnail)
+  pageUrls: string | null;  // JSON string[] of every page, in order
   createdAt: string;
   updatedAt: string;
+}
+
+/** Every page of an academic document, in order (older records only have fileUrl). */
+export function academicDocPages(doc: Pick<ApiAcademicDocument, 'fileUrl' | 'pageUrls'>): string[] {
+  if (doc.pageUrls) {
+    try {
+      const pages = JSON.parse(doc.pageUrls);
+      if (Array.isArray(pages) && pages.length > 0) return pages.filter((u): u is string => typeof u === 'string');
+    } catch { /* fall back to fileUrl */ }
+  }
+  return doc.fileUrl ? [doc.fileUrl] : [];
 }
 
 export const academicDocumentApi = {
   getAll: (studentId: number) =>
     api.get<{ success: boolean; data: ApiAcademicDocument[] }>(`/students/${studentId}/academic-documents`),
-  create: (studentId: number, data: { docType: string; institution: string; issueDate: string; fileUrl?: string }) =>
+  create: (studentId: number, data: { docType: string; institution: string; issueDate: string; fileUrl?: string; pageUrls?: string }) =>
     api.post<{ success: boolean; data: ApiAcademicDocument }>(`/students/${studentId}/academic-documents`, data),
   update: (studentId: number, docId: number, data: Partial<Omit<ApiAcademicDocument, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>>) =>
     api.put<{ success: boolean; data: ApiAcademicDocument }>(`/students/${studentId}/academic-documents/${docId}`, data),
@@ -441,7 +453,8 @@ export interface ApiHealthInsurance {
   coverageType: string | null;
   startDate: string;
   expiryDate: string;
-  fileUrl: string | null;
+  fileUrl: string | null;      // front of the insurance card
+  backFileUrl: string | null;  // back of the card (optional)
   isCurrent: boolean;
   createdAt: string;
   updatedAt: string;
@@ -550,7 +563,7 @@ export const healthInsuranceApi = {
     api.get<{ success: boolean; data: ApiHealthInsurance[] }>(`/students/${studentId}/health-insurance`),
   create: (studentId: number, data: {
     provider: string; startDate: string; expiryDate: string;
-    policyNumber?: string; coverageType?: string; fileUrl?: string;
+    policyNumber?: string; coverageType?: string; fileUrl?: string; backFileUrl?: string;
   }) => api.post<{ success: boolean; data: ApiHealthInsurance; changeRequest?: ApiChangeRequest }>(`/students/${studentId}/health-insurance`, data),
   update: (studentId: number, insuranceId: number, data: Partial<Omit<ApiHealthInsurance, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>>) =>
     api.put<{ success: boolean; data: ApiHealthInsurance; changeRequest?: ApiChangeRequest }>(`/students/${studentId}/health-insurance/${insuranceId}`, data),

@@ -23,8 +23,8 @@ export const createAcademicDocument = async (req: AuthRequest, res: Response): P
       return;
     }
   }
-  const { docType, institution, issueDate, fileUrl } = req.body;
-  const doc = await academicDocumentService.createAcademicDocument(studentId, docType, institution, issueDate, fileUrl);
+  const { docType, institution, issueDate, fileUrl, pageUrls } = req.body;
+  const doc = await academicDocumentService.createAcademicDocument(studentId, docType, institution, issueDate, fileUrl, pageUrls);
   res.status(201).json({ success: true, data: doc });
 };
 
@@ -40,12 +40,13 @@ export const updateAcademicDocument = async (req: AuthRequest, res: Response): P
       return;
     }
   }
-  const { docType, institution, issueDate, fileUrl } = req.body;
+  const { docType, institution, issueDate, fileUrl, pageUrls } = req.body;
   const doc = await academicDocumentService.updateAcademicDocument(docId, studentId, {
     docType,
     institution,
     issueDate: issueDate ? new Date(issueDate) : undefined,
     fileUrl,
+    pageUrls,
   });
   res.json({ success: true, data: doc });
 };

@@ -1,5 +1,6 @@
 import prisma from '../../utils/prisma';
 import * as repo from '../../repositories/changeRequest.repository';
+import * as healthInsuranceService from './healthInsurance.service';
 
 export const submitChange = async (
   studentId: number,
@@ -110,7 +111,10 @@ async function applyChange(cr: Awaited<ReturnType<typeof repo.findById>>) {
 
     case 'HEALTH_INSURANCE':
       if (cr.action === 'CREATE') {
-        await prisma.healthInsurance.create({ data: { ...(p as any), studentId: cr.studentId } });
+        // Same path as a direct create: retires the previous current policy
+        // (otherwise the student ends up with two "current" policies) and
+        // parses the date-only strings the form sends.
+        await healthInsuranceService.createHealthInsurance(cr.studentId, p as any);
       } else if (cr.action === 'UPDATE') {
         await prisma.healthInsurance.update({ where: { id: cr.entityId! }, data: p as any });
       } else {

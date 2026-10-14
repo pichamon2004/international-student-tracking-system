@@ -5,12 +5,10 @@ import { useEffect, useState } from 'react';
 import Barcode from 'react-barcode';
 import QRCode from 'react-qr-code';
 import { defaultProgress, UserProfileProgress } from '@/lib/progressStore';
-import { RiFileList3Line, RiHeartAdd2Line, RiGraduationCapLine, RiGroupLine } from 'react-icons/ri';
+import { RiFileList3Line, RiHeartAdd2Line, RiGraduationCapLine, RiGroupLine, RiMailLine, RiPhoneLine } from 'react-icons/ri';
 import { BsExclamation } from 'react-icons/bs';
 import { LuUserRound } from 'react-icons/lu';
 import { FaPassport } from 'react-icons/fa6';
-import { FaChalkboardTeacher } from 'react-icons/fa';
-import { LuSchool } from 'react-icons/lu';
 import { studentMeApi, studentApi, type ApiPassport, type ApiVisa, type ApiHealthInsurance } from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -105,6 +103,53 @@ function StudentCard({ studentId, idNo, name, faculty, degree, enrollmentDate, e
                         <label className='text-[8px] mt-0'>{studentId}</label>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// '—' is the placeholder used while data loads / when a field is missing
+const hasValue = (v: string) => !!v && v !== '—';
+
+function initials(name: string): string {
+    const words = name.replace(/^(Mr|Mrs|Ms|Miss|Dr|Prof|Assoc\. Prof|Asst\. Prof)\.?\s+/i, '').split(/\s+/).filter(Boolean);
+    return (words[0]?.[0] ?? '') + (words.length > 1 ? words[words.length - 1][0] : '');
+}
+
+function ContactRow({ role, name, phone, email }: { role: string; name: string; phone: string; email: string }) {
+    const known = hasValue(name);
+    return (
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3 min-w-0">
+            <div className="w-11 h-11 rounded-full bg-[#DEEBFF] text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                {known ? initials(name).toUpperCase() : '?'}
+            </div>
+            <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-primary">{role}</span>
+                <span className="text-sm font-semibold text-gray-800 truncate" title={known ? name : undefined}>
+                    {known ? name : 'Not assigned yet'}
+                </span>
+                {known && (
+                    <>
+                        <span className="text-xs text-gray-500 truncate" title={hasValue(email) ? email : undefined}>
+                            {hasValue(email) ? email : 'No email listed'}
+                        </span>
+                        <span className="text-xs text-gray-500 truncate">{hasValue(phone) ? phone : 'No phone listed'}</span>
+                    </>
+                )}
+            </div>
+            <div className="flex flex-col gap-1.5 shrink-0">
+                {hasValue(email) && (
+                    <a href={`mailto:${email}`} title={`Email ${name}`}
+                        className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition">
+                        <RiMailLine size={16} />
+                    </a>
+                )}
+                {hasValue(phone) && (
+                    <a href={`tel:${phone.replace(/\s+/g, '')}`} title={`Call ${name}`}
+                        className="w-9 h-9 rounded-lg border border-primary/40 text-primary flex items-center justify-center hover:bg-primary/5 transition">
+                        <RiPhoneLine size={16} />
+                    </a>
+                )}
             </div>
         </div>
     );
@@ -235,42 +280,16 @@ export default function StudentProfilePage() {
                     expectedGraduation={studentData.expectedGraduation}
                     photoUrl={studentData.photoUrl}
                 />
-                <div className="flex flex-col gap-4 flex-1">
+                {/* Contacts */}
+                <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4">
+                    <div className="flex items-center gap-2.5">
+                        <span className="w-1 h-5 rounded-full bg-primary" />
+                        <h2 className="text-lg font-semibold text-gray-800">Your contacts</h2>
+                    </div>
                     {[
-                        {
-                            Icon: LuSchool,
-                            title: 'Staff Of College Contact',
-                            name: studentData.staffName,
-                            phone: studentData.staffPhone,
-                            email: studentData.staffEmail,
-                        },
-                        {
-                            Icon: FaChalkboardTeacher,
-                            title: 'Advisor Contact',
-                            name: studentData.advisorName,
-                            phone: studentData.advisorPhone,
-                            email: studentData.advisorEmail,
-                        },
-                    ].map(({ Icon, title, name, phone, email }) => (
-                        <div key={title} className="bg-white rounded-2xl flex flex-col flex-1">
-                            <div className="flex items-center gap-3 bg-[#BDE6FF] px-4 py-2 2xl:py-4 rounded-t-2xl">
-                                <Icon className="text-primary text-2xl" />
-                                <span className="text-primary font-normal text-xl">{title}</span>
-                            </div>
-                            <div className='flex flex-1 items-center px-4 py-2'>
-                                <div className="text-sm 2xl:text-base text-primary flex flex-col gap-2 mr-5">
-                                    <p><span className="font-medium">Name :</span></p>
-                                    <p><span className="font-medium">Phone No. :</span></p>
-                                    <p><span className="font-medium">Email :</span></p>
-                                </div>
-                                <div className="text-sm 2xl:text-base text-primary flex flex-col gap-2">
-                                    <p>{name}</p>
-                                    <p>{phone}</p>
-                                    <p>{email}</p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                        { role: 'College staff', name: studentData.staffName,   phone: studentData.staffPhone,   email: studentData.staffEmail },
+                        { role: 'Advisor',       name: studentData.advisorName, phone: studentData.advisorPhone, email: studentData.advisorEmail },
+                    ].map(c => <ContactRow key={c.role} {...c} />)}
                 </div>
             </div>
 

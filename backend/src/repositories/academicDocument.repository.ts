@@ -6,13 +6,15 @@ export interface CreateAcademicDocumentDto {
   institution: string;
   issueDate:   Date;
   fileUrl?:    string;
+  pageUrls?:   string;
 }
 
 export interface UpdateAcademicDocumentDto {
   docType?:     string;
   institution?: string;
   issueDate?:   Date;
-  fileUrl?:     string;
+  fileUrl?:     string | null;
+  pageUrls?:    string | null;
 }
 
 // ── Queries ───────────────────────────────────────────────────────
@@ -36,6 +38,7 @@ export const createForStudent = (dto: CreateAcademicDocumentDto) =>
       institution: dto.institution,
       issueDate:   dto.issueDate,
       fileUrl:     dto.fileUrl,
+      pageUrls:    dto.pageUrls,
     },
   });
 
@@ -47,6 +50,7 @@ export const updateById = (id: number, dto: UpdateAcademicDocumentDto) =>
       institution: dto.institution,
       issueDate:   dto.issueDate,
       fileUrl:     dto.fileUrl,
+      pageUrls:    dto.pageUrls,
     },
   });
 

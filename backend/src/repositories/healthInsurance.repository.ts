@@ -8,13 +8,15 @@ export interface CreateHealthInsuranceDto {
   policyNumber?: string;
   coverageType?: string;
   fileUrl?:      string;
+  backFileUrl?:  string;
 }
 
 export interface UpdateHealthInsuranceDto {
   provider?:     string;
   policyNumber?: string;
   coverageType?: string;
-  fileUrl?:      string;
+  fileUrl?:      string | null;
+  backFileUrl?:  string | null;
   isCurrent?:    boolean;
   startDate?:    Date;
   expiryDate?:   Date;
@@ -52,6 +54,7 @@ export const create = (dto: CreateHealthInsuranceDto) =>
       policyNumber: dto.policyNumber,
       coverageType: dto.coverageType,
       fileUrl:      dto.fileUrl,
+      backFileUrl:  dto.backFileUrl,
       isCurrent:    true,
     },
   });
@@ -64,6 +67,7 @@ export const updateById = (id: number, dto: UpdateHealthInsuranceDto) =>
       policyNumber: dto.policyNumber,
       coverageType: dto.coverageType,
       fileUrl:      dto.fileUrl,
+      backFileUrl:  dto.backFileUrl,
       isCurrent:    dto.isCurrent,
       startDate:    dto.startDate,
       expiryDate:   dto.expiryDate,

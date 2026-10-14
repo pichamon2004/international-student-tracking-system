@@ -3,23 +3,89 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setProgressField } from '@/lib/progressStore';
-import { RiArrowLeftLine } from 'react-icons/ri';
-import { FiUpload } from 'react-icons/fi';
-import { studentMeApi, healthInsuranceApi } from '@/lib/api';
+import { RiArrowLeftLine, RiUploadLine, RiInformationLine, RiDeleteBinLine } from 'react-icons/ri';
+import { studentMeApi, healthInsuranceApi, type ApiHealthInsurance } from '@/lib/api';
 import toast from 'react-hot-toast';
+import CustomSelect from '@/components/ui/CustomSelect';
 import DateSelect from '@/components/ui/DateSelect';
+import { Field, Section, inputCls } from '@/components/profile/FormUI';
+import { fmtDate } from '@/components/profile/ProfileUI';
 
-const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-white focus:outline-none focus:border-primary';
-const labelCls = 'text-xs font-medium text-primary mb-1';
+const COVERAGE_TYPES = [
+  'Inpatient (IPD)',
+  'Inpatient + Outpatient (IPD/OPD)',
+  'Accident',
+  'Comprehensive',
+  'Other',
+];
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const MAX_FILE_MB = 5; // backend uploadImage limit (upload.middleware.ts)
+
+/* Card upload drop zone — click or drag a file in */
+function CardUpload({ preview, hint, onFile, onClear }: {
+  preview: string | null; hint: string; onFile: (file: File) => void; onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   return (
-    <div className="flex flex-col">
-      <label className={labelCls}>{label}</label>
-      {children}
+    <div className="flex flex-col gap-2">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => inputRef.current?.click()}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setDragOver(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) onFile(f);
+        }}
+        className={`aspect-[16/9] rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer transition ${
+          dragOver ? 'border-primary bg-primary/5' : 'border-primary/25 bg-[#F3F7FD] hover:border-primary/50'
+        }`}
+      >
+        {preview ? (
+          <img src={preview} alt="Insurance card" className="w-full h-full object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-2 text-center px-4">
+            <span className="w-9 h-9 rounded-lg bg-white text-primary flex items-center justify-center shadow-sm">
+              <RiUploadLine size={18} />
+            </span>
+            <span className="text-sm font-semibold text-primary">Click to upload or drag a file here</span>
+            <span className="text-[11px] text-gray-500">{hint}</span>
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) onFile(f);
+            e.target.value = ''; // allow picking the same file again after clearing
+          }}
+        />
+      </div>
+      {preview && (
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => inputRef.current?.click()}
+            className="flex-1 py-1.5 rounded-lg border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/5 transition">
+            Replace
+          </button>
+          <button type="button" onClick={onClear} title="Remove"
+            className="w-8 h-8 shrink-0 rounded-lg border border-red-200 text-red-500 flex items-center justify-center hover:bg-red-50 transition">
+            <RiDeleteBinLine size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+
+type Side = 'front' | 'back';
 
 function HealthInsuranceForm() {
   const router = useRouter();
@@ -27,12 +93,14 @@ function HealthInsuranceForm() {
   const id = searchParams.get('id');
   const isEdit = !!id;
 
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    provider: '', policyNo: '', coverage: '',
-    validFrom: '', validUntil: '',
-  });
+  const [form, setForm] = useState({ provider: '', policyNo: '', coverage: '', validFrom: '', validUntil: '' });
+  // Preview shown in each slot; `files` holds newly picked files, `cleared` marks removed ones
+  const [previews, setPreviews] = useState<Record<Side, string | null>>({ front: null, back: null });
+  const [files, setFiles] = useState<Record<Side, File | null>>({ front: null, back: null });
+  const [cleared, setCleared] = useState<Record<Side, boolean>>({ front: false, back: false });
+
+  const [currentPolicy, setCurrentPolicy] = useState<ApiHealthInsurance | null>(null);
+  const [visaExpiry, setVisaExpiry] = useState<string | null>(null);
   const [studentNumId, setStudentNumId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -40,86 +108,109 @@ function HealthInsuranceForm() {
     studentMeApi.get().then(res => {
       const s = res.data.data;
       setStudentNumId(s.id);
-      if (isEdit && id) {
-        return healthInsuranceApi.getAll(s.id).then(hRes => {
-          const ins = hRes.data.data.find(h => h.id === Number(id));
+      setVisaExpiry(s.visas?.[0]?.expiryDate ?? null);
+      return healthInsuranceApi.getAll(s.id).then(hRes => {
+        const all = hRes.data.data;
+        setCurrentPolicy(all.find(h => h.isCurrent) ?? null);
+        if (isEdit && id) {
+          const ins = all.find(h => h.id === Number(id));
           if (ins) {
             setForm({
-              provider:  ins.provider ?? '',
-              policyNo:  ins.policyNumber ?? '',
-              coverage:  ins.coverageType ?? '',
-              validFrom: ins.startDate ? ins.startDate.slice(0, 10) : '',
+              provider:   ins.provider ?? '',
+              policyNo:   ins.policyNumber ?? '',
+              coverage:   ins.coverageType ?? '',
+              validFrom:  ins.startDate ? ins.startDate.slice(0, 10) : '',
               validUntil: ins.expiryDate ? ins.expiryDate.slice(0, 10) : '',
             });
-            if (ins.fileUrl) setPreview(ins.fileUrl);
+            setPreviews({ front: ins.fileUrl ?? null, back: ins.backFileUrl ?? null });
           }
-        });
-      }
+        }
+      });
     }).catch(() => {});
   }, [isEdit, id]);
 
-  function set(key: keyof typeof form) {
-    return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const setVal = (key: keyof typeof form) => (v: string) => setForm(prev => ({ ...prev, [key]: v }));
+  const setText = (key: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, [key]: e.target.value }));
+
+  function pickFile(side: Side, file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload a JPG or PNG image');
+      return;
+    }
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      toast.error(`File is larger than ${MAX_FILE_MB} MB`);
+      return;
+    }
+    setFiles(prev => ({ ...prev, [side]: file }));
+    setPreviews(prev => ({ ...prev, [side]: URL.createObjectURL(file) }));
+    setCleared(prev => ({ ...prev, [side]: false }));
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) setPreview(URL.createObjectURL(file));
+  function clearFile(side: Side) {
+    setFiles(prev => ({ ...prev, [side]: null }));
+    setPreviews(prev => ({ ...prev, [side]: null }));
+    setCleared(prev => ({ ...prev, [side]: true }));
   }
 
   async function handleSave() {
     if (!studentNumId) return;
-    if (!form.provider || !form.validFrom || !form.validUntil) {
-      toast.error('Please fill in Provider, Start Date, and End Date');
+    if (!form.provider.trim() || !form.policyNo.trim() || !form.coverage || !form.validFrom || !form.validUntil) {
+      toast.error('Please fill in all required policy details');
+      return;
+    }
+    if (form.validUntil <= form.validFrom) {
+      toast.error('Coverage must end after it starts');
+      return;
+    }
+    if (!previews.front) {
+      toast.error('Please upload the front of your insurance card');
       return;
     }
     setSaving(true);
     try {
-      // Upload insurance image if a new file was selected
-      let fileUrl: string | undefined;
-      const file = fileRef.current?.files?.[0];
-      if (file) {
-        const { default: api } = await import('@/lib/api');
-        const formData = new FormData();
-        formData.append('image', file);
-        const uploadRes = await api.post(`/students/${studentNumId}/health-insurance/image`, formData, {
+      const { default: api } = await import('@/lib/api');
+      const upload = async (file: File | null): Promise<string | undefined> => {
+        if (!file) return undefined;
+        const fd = new FormData();
+        fd.append('image', file);
+        const res = await api.post(`/students/${studentNumId}/health-insurance/image`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        fileUrl = uploadRes.data.data.url;
+        return res.data.data.url as string;
+      };
+      const [frontUrl, backUrl] = await Promise.all([upload(files.front), upload(files.back)]);
+
+      const base = {
+        provider:     form.provider.trim(),
+        policyNumber: form.policyNo.trim(),
+        coverageType: form.coverage,
+        startDate:    form.validFrom,
+        expiryDate:   form.validUntil,
+      };
+
+      let res;
+      if (isEdit && id) {
+        res = await healthInsuranceApi.update(studentNumId, Number(id), {
+          ...base,
+          ...(frontUrl !== undefined && { fileUrl: frontUrl }),
+          ...(backUrl !== undefined ? { backFileUrl: backUrl } : cleared.back ? { backFileUrl: null } : {}),
+        });
+      } else {
+        res = await healthInsuranceApi.create(studentNumId, {
+          ...base,
+          ...(frontUrl !== undefined && { fileUrl: frontUrl }),
+          ...(backUrl !== undefined && { backFileUrl: backUrl }),
+        });
       }
 
-      if (isEdit && id) {
-        const res = await healthInsuranceApi.update(studentNumId, Number(id), {
-          provider:     form.provider,
-          policyNumber: form.policyNo || undefined,
-          coverageType: form.coverage || undefined,
-          startDate:    form.validFrom,
-          expiryDate:   form.validUntil,
-          ...(fileUrl !== undefined && { fileUrl }),
-        });
-        if (res.status === 202) {
-          toast.success('Change submitted — awaiting staff approval');
-          router.push('/student/profile/health-insurance');
-          return;
-        }
-      } else {
-        const res = await healthInsuranceApi.create(studentNumId, {
-          provider:     form.provider,
-          policyNumber: form.policyNo || undefined,
-          coverageType: form.coverage || undefined,
-          startDate:    form.validFrom,
-          expiryDate:   form.validUntil,
-          ...(fileUrl !== undefined && { fileUrl }),
-        });
-        if (res.status === 202) {
-          toast.success('Change submitted — awaiting staff approval');
-          router.push('/student/profile/health-insurance');
-          return;
-        }
+      if (res.status === 202) {
+        toast.success('Change submitted — awaiting staff approval');
+        router.push('/student/profile/health-insurance');
+        return;
       }
       setProgressField('healthInsuranceCompleted', true);
-      toast.success(isEdit ? 'Health insurance updated' : 'Health insurance added');
+      toast.success(isEdit ? 'Policy updated' : 'Policy added');
       router.back();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -129,72 +220,104 @@ function HealthInsuranceForm() {
     }
   }
 
+  // "Start on <current policy end> or earlier … end on or after your visa expiry"
+  const tipParts = [
+    !isEdit && currentPolicy && `start on ${fmtDate(currentPolicy.expiryDate)} or earlier so there is no gap in cover`,
+    visaExpiry && `end on or after your visa expiry date (${fmtDate(visaExpiry)})`,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col gap-6 flex-1">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-500 hover:bg-primary hover:text-white transition"
-        >
-          <RiArrowLeftLine size={18} />
-        </button>
-        <h1 className="text-2xl font-semibold text-primary">
-          {isEdit ? 'Edit Health Insurance' : 'Update My Health Insurance'}
-        </h1>
-      </div>
-
-      <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Insurance Company Name *">
-            <input value={form.provider} onChange={set('provider')} placeholder="e.g. Krungthai-AXA" className={inputCls} />
-          </Field>
-          <Field label="Policy No.">
-            <input value={form.policyNo} onChange={set('policyNo')} placeholder="Policy Number" className={inputCls} />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Coverage Amount (THB)">
-            <input value={form.coverage} onChange={set('coverage')} placeholder="e.g. 40,000" className={inputCls} />
-          </Field>
-          <Field label="Start Date *">
-            <DateSelect value={form.validFrom} onChange={(v) => setForm(p => ({ ...p, validFrom: v }))} />
-          </Field>
-          <Field label="End Date *">
-            <DateSelect value={form.validUntil} onChange={(v) => setForm(p => ({ ...p, validUntil: v }))} />
-          </Field>
-        </div>
-
-        <hr className="border-gray-100" />
-
-        {/* Upload */}
-        <div className="grid grid-cols-3">
-          <div
-            onClick={() => fileRef.current?.click()}
-            className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:border-primary/50 transition min-h-60 bg-gray-50 p-4 text-center"
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* The card keeps its size; only the sections scroll */}
+      <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-5 flex-1 min-h-0">
+        {/* Header */}
+        <div className="flex items-start gap-3 shrink-0">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#F3F7FD] text-primary hover:bg-primary hover:text-white transition shrink-0"
           >
-            {preview ? (
-              <img src={preview} alt="Insurance" className="w-full object-contain rounded-xl max-h-48" />
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-gray-400 select-none">
-                <FiUpload size={24} />
-                <p className="text-sm font-medium text-gray-500">Upload Insurance Card / Document Image</p>
-                <p className="text-xs">Drop file here or click to upload</p>
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+            <RiArrowLeftLine size={18} />
+          </button>
+          <div className="flex flex-col flex-1 min-w-0">
+            <h1 className="text-2xl font-semibold text-primary">{isEdit ? 'Edit policy' : 'Add new policy'}</h1>
+            <p className="text-xs text-gray-500">Health insurance</p>
           </div>
+          <p className="text-xs text-gray-500 pt-2 shrink-0"><span className="text-red-500">*</span> Required field</p>
         </div>
-      </div>
 
-      <div className="flex justify-end mt-2">
-        <button
-          disabled={saving}
-          onClick={handleSave}
-          className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4 -mr-2 pr-2">
+          {!isEdit && currentPolicy && (
+            <div className="flex items-start gap-2 rounded-xl bg-[#F3F7FD] px-4 py-3 text-xs text-gray-700">
+              <RiInformationLine size={15} className="text-primary shrink-0 mt-px" />
+              <span>
+                Once saved, this becomes your current policy. Your policy with <strong>{currentPolicy.provider}</strong>{' '}
+                (ends {fmtDate(currentPolicy.expiryDate)}) moves to Policy history.
+              </span>
+            </div>
+          )}
+
+          {/* 1 · Policy details */}
+          <Section n={1} title="Policy details" subtitle="Copy these from your insurance card or policy document.">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Field label="Insurance provider" required>
+                <input value={form.provider} onChange={setText('provider')} placeholder="e.g. company name on your card" className={inputCls} />
+              </Field>
+              <Field label="Policy number" required>
+                <input value={form.policyNo} onChange={setText('policyNo')} placeholder="As shown on the card" className={inputCls} />
+              </Field>
+              <Field label="Coverage type" required>
+                <CustomSelect
+                  value={form.coverage}
+                  onChange={setVal('coverage')}
+                  // keep older free-text values selectable
+                  options={form.coverage && !COVERAGE_TYPES.includes(form.coverage) ? [...COVERAGE_TYPES, form.coverage] : COVERAGE_TYPES}
+                  placeholder="Select coverage"
+                />
+              </Field>
+              <Field label="Coverage period" required className="sm:col-span-2">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <DateSelect value={form.validFrom} onChange={setVal('validFrom')} placeholder="From" />
+                  <span className="text-gray-400">–</span>
+                  <DateSelect value={form.validUntil} onChange={setVal('validUntil')} placeholder="Until" />
+                </div>
+                {tipParts.length > 0 && (
+                  <p className="text-[11px] text-gray-500">Tip: {tipParts.join(', and ')}.</p>
+                )}
+              </Field>
+            </div>
+          </Section>
+
+          {/* 2 · Insurance card */}
+          <Section n={2} title="Insurance card" required subtitle={`JPG or PNG image, up to ${MAX_FILE_MB} MB each. The name and dates must be readable.`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl">
+              <Field label="Front of card" required>
+                <CardUpload preview={previews.front} hint={`JPG or PNG · max ${MAX_FILE_MB} MB`}
+                  onFile={f => pickFile('front', f)} onClear={() => clearFile('front')} />
+              </Field>
+              <Field label="Back of card" optional>
+                <CardUpload preview={previews.back} hint="Useful if it lists the coverage or hotline"
+                  onFile={f => pickFile('back', f)} onClear={() => clearFile('back')} />
+              </Field>
+            </div>
+          </Section>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 pt-4 border-t border-gray-100 shrink-0">
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={saving}
+            onClick={handleSave}
+            className="bg-primary text-white text-sm font-semibold px-6 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save policy'}
+          </button>
+        </div>
       </div>
     </div>
   );

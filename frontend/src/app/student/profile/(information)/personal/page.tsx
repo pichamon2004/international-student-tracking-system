@@ -2,18 +2,45 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RiArrowLeftLine } from 'react-icons/ri';
+import { RiArrowLeftLine, RiPencilLine, RiGraduationCapLine, RiMailLine, RiPhoneLine } from 'react-icons/ri';
 import { studentMeApi, changeRequestApi, type ApiChangeRequest } from '@/lib/api';
 import PendingBanner from '@/components/PendingBanner';
 
-const labelCls = 'text-xs font-medium text-primary/70';
-const valueCls = 'text-sm font-medium text-gray-800';
-
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+/* Value tile — light-blue box with a small label above the value */
+function InfoTile({ label, value, className = '' }: { label: string; value: string | null | undefined; className?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className={labelCls}>{label}</span>
-      <span className={valueCls}>{value || '—'}</span>
+    <div className={`flex flex-col gap-0.5 rounded-xl bg-[#F3F7FD] px-3 py-2.5 min-w-0 ${className}`}>
+      <span className="text-[11px] font-medium text-primary/70">{label}</span>
+      <span className="text-sm font-medium text-gray-800 break-words">{value || '—'}</span>
+    </div>
+  );
+}
+
+/* Section card with the accent-bar heading */
+function SectionCard({ title, badge, children }: { title: string; badge?: string | null; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6 flex flex-col gap-4">
+      <div className="flex items-center gap-2.5">
+        <span className="w-1 h-5 rounded-full bg-primary" />
+        <h2 className="text-base font-semibold text-gray-800 flex-1">{title}</h2>
+        {badge && (
+          <span className="px-3 py-1 rounded-full bg-[#DEEBFF] text-primary text-[11px] font-semibold">{badge}</span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/* Icon + label/value row in the profile card */
+function SideRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="w-8 h-8 rounded-lg bg-[#F3F7FD] text-primary flex items-center justify-center shrink-0">{icon}</div>
+      <div className="flex flex-col min-w-0">
+        <span className="text-[11px] text-gray-500">{label}</span>
+        <span className="text-sm font-medium text-gray-800 break-all">{value || '—'}</span>
+      </div>
     </div>
   );
 }
@@ -63,21 +90,21 @@ export default function PersonalPage() {
   return (
     <div className="flex flex-col gap-4 flex-1">
       {/* Card */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col gap-6 flex-1">
+      <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-5 flex-1">
         {/* Header */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-100 text-gray-500 hover:bg-primary hover:text-white transition"
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-[#F3F7FD] text-primary hover:bg-primary hover:text-white transition"
           >
             <RiArrowLeftLine size={18} />
           </button>
           <h1 className="text-2xl font-semibold text-primary flex-1">Personal Information</h1>
           <button
             onClick={() => router.push('/student/profile/updatepersonal')}
-            className="bg-primary text-white text-sm font-semibold px-8 py-2.5 rounded-xl hover:bg-primary/90 transition"
+            className="inline-flex items-center gap-1.5 bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-xl hover:bg-primary/90 transition"
           >
-            Edit
+            <RiPencilLine size={15} /> Edit
           </button>
         </div>
         {pendingChange && (
@@ -89,51 +116,79 @@ export default function PersonalPage() {
           />
         )}
 
-        {/* Profile top */}
-        <div className="flex items-start gap-5">
-          <div className="w-24 h-24 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-400 overflow-hidden">
-            {s?.photoUrl ? (
-              <img src={s.photoUrl} alt={fullName || 'Profile'} className="w-full h-full object-cover" />
-            ) : (
-              fullName ? fullName.charAt(0).toUpperCase() : '?'
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5 items-start">
+          {/* Profile card */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-col items-center gap-4">
+            <div className="w-28 h-28 rounded-2xl border-2 border-primary p-1">
+              <div className="w-full h-full rounded-xl bg-[#DEEBFF] flex items-center justify-center text-2xl font-bold text-primary overflow-hidden">
+                {s?.photoUrl ? (
+                  <img src={s.photoUrl} alt={fullName || 'Profile'} className="w-full h-full object-cover" />
+                ) : (
+                  fullName ? fullName.charAt(0).toUpperCase() : '?'
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <p className="text-lg font-bold text-gray-800 leading-snug">{fullName || '—'}</p>
+              <p className="text-sm text-gray-500">Student</p>
+            </div>
+            {(s?.level || s?.program) && (
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {s?.level && <span className="px-2.5 py-1 rounded-full bg-[#DEEBFF] text-primary text-[11px] font-semibold">{s.level}</span>}
+                {s?.program && <span className="px-2.5 py-1 rounded-full bg-[#DEEBFF] text-primary text-[11px] font-semibold">{s.program}</span>}
+              </div>
             )}
+            <hr className="w-full border-gray-100" />
+            <div className="w-full flex flex-col gap-3">
+              <SideRow icon={<RiGraduationCapLine size={15} />} label="Faculty" value={s?.faculty} />
+              <SideRow icon={<RiMailLine size={15} />} label="Email" value={s?.email} />
+              <SideRow icon={<RiPhoneLine size={15} />} label="Phone" value={s?.phone} />
+            </div>
           </div>
-          <div className="flex flex-col gap-1 pt-1">
-            <p className="text-base font-semibold text-gray-900">{fullName || '—'}</p>
-            <p className="text-sm text-gray-500">{s?.faculty || '—'}</p>
-            <p className="text-sm text-gray-500">{s?.level || '—'}{s?.program ? ` — ${s.program}` : ''}</p>
-          </div>
-        </div>
 
-        {/* Personal Details */}
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-semibold text-gray-700">Personal Details</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <InfoRow label="Title" value={s?.titleEn} />
-            <InfoRow label="First Name" value={s?.firstNameEn} />
-            <InfoRow label="Middle Name" value={s?.middleNameEn} />
-            <InfoRow label="Last Name" value={s?.lastNameEn} />
-            <InfoRow label="Date of Birth" value={dob} />
-            <InfoRow label="Gender" value={s?.gender} />
-            <InfoRow label="Religion" value={s?.religion} />
-            <InfoRow label="Nationality" value={s?.nationality} />
-            <InfoRow label="Home Country" value={s?.homeCountry} />
-            <InfoRow label="Email" value={s?.email} />
-            <InfoRow label="Phone" value={s?.phone} />
-            <InfoRow label="Home Address" value={s?.homeAddress} />
-          </div>
-        </div>
+          {/* Detail sections */}
+          <div className="flex flex-col gap-5 min-w-0">
+            <SectionCard title="Personal Details">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <InfoTile label="Title" value={s?.titleEn} />
+                <InfoTile label="First Name" value={s?.firstNameEn} />
+                <InfoTile label="Middle Name" value={s?.middleNameEn} />
+                <InfoTile label="Last Name" value={s?.lastNameEn} />
+                <InfoTile label="Date of Birth" value={dob} />
+                <InfoTile label="Gender" value={s?.gender} />
+                <InfoTile label="Religion" value={s?.religion} />
+                <InfoTile label="Nationality" value={s?.nationality} />
+              </div>
+            </SectionCard>
 
-        <hr className="border-gray-100" />
+            <SectionCard title="Contact & Address">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <InfoTile label="Home Country" value={s?.homeCountry} />
+                <InfoTile label="Email" value={s?.email} />
+                <InfoTile label="Phone" value={s?.phone} />
+                <InfoTile label="Home Address" value={s?.homeAddress} />
+              </div>
+            </SectionCard>
 
-        {/* Emergency Contact */}
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-semibold text-gray-700">Emergency Contact</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <InfoRow label="Name" value={s?.emergencyContact} />
-            <InfoRow label="Email" value={s?.emergencyEmail} />
-            <InfoRow label="Phone" value={s?.emergencyPhone} />
-            <InfoRow label="Relationship" value={s?.emergencyRelation} />
+            <SectionCard title="Emergency Contact" badge={s?.emergencyRelation}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl border border-gray-100 px-4 py-3">
+                <div className="w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center text-base font-semibold shrink-0">
+                  {s?.emergencyContact ? s.emergencyContact.replace(/^(Mr|Mrs|Ms|Miss|Dr)\.?\s+/i, '').charAt(0).toUpperCase() : '?'}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 min-w-0">
+                  {[
+                    { label: 'Name', value: s?.emergencyContact },
+                    { label: 'Email', value: s?.emergencyEmail },
+                    { label: 'Phone', value: s?.emergencyPhone },
+                  ].map(f => (
+                    <div key={f.label} className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-[11px] font-medium text-primary/70">{f.label}</span>
+                      <span className="text-sm font-semibold text-gray-800 break-words">{f.value || '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
           </div>
         </div>
 
