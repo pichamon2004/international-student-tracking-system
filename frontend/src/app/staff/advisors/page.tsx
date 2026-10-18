@@ -15,6 +15,7 @@ const ADVISOR_COLUMNS = [
   { key: 'lastNameEn',  label: 'Last Name',     required: true,  example: 'Smith' },
   { key: 'nationality', label: 'Nationality',   required: false, example: 'American' },
   { key: 'phone',       label: 'Phone',         required: false, example: '0812345678' },
+  { key: 'position',    label: 'Administrative Position', required: false, example: 'Associate Dean for Academic Affairs' },
 ];
 
 const avatarColors = ['bg-blue-400', 'bg-green-400', 'bg-purple-400'];
@@ -70,6 +71,7 @@ export default function StaffAdvisorsPage() {
         lastNameEn: data.lastName,
         phone: data.tel || undefined,
         nationality: data.nationality || undefined,
+        position: data.position.trim() || undefined,
       });
       toast.success('Advisor account created successfully.');
       handleAddAdvisorSuccess();
@@ -137,7 +139,11 @@ export default function StaffAdvisorsPage() {
                 {/* Name + Faculty */}
                 <div>
                   <p className="font-semibold text-primary leading-snug">{fullName}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{advisor.position ?? '—'}</p>
+                  {advisor.position && (
+                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-secondary text-primary text-[11px] font-semibold">
+                      {advisor.position}
+                    </span>
+                  )}
                   {advisor.email && <p className="text-xs text-gray-400">{advisor.email}</p>}
                 </div>
 

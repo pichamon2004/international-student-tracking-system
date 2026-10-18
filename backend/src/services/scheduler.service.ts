@@ -11,7 +11,7 @@ async function checkVisaExpiry() {
   maxDate.setDate(maxDate.getDate() + Math.max(...ALERT_DAYS));
 
   const activeVisas = await prisma.visa.findMany({
-    where: { status: 'ACTIVE', expiryDate: { lte: maxDate } },
+    where: { status: 'ACTIVE', dependentId: null, expiryDate: { lte: maxDate } },
     include: {
       student: {
         select: {
@@ -90,7 +90,7 @@ async function checkPassportExpiry() {
   maxDate.setDate(maxDate.getDate() + Math.max(...ALERT_DAYS));
 
   const passports = await prisma.passport.findMany({
-    where: { isCurrent: true, expiryDate: { lte: maxDate } },
+    where: { isCurrent: true, dependentId: null, expiryDate: { lte: maxDate } },
     include: {
       student: { select: { id: true, userId: true, firstNameEn: true, lastNameEn: true } },
     },
@@ -137,40 +137,36 @@ async function checkHealthInsuranceExpiry() {
   console.log(`[Scheduler] Health insurance check done. ${insurances.length} insurance(s) checked.`);
 }
 
-async function checkDependentExpiry() {
+export async function checkDependentExpiry() {
   const today = new Date();
   const maxDate = new Date(today);
   maxDate.setDate(maxDate.getDate() + Math.max(...ALERT_DAYS));
 
-  const dependents = await prisma.dependent.findMany({
-    where: {
-      OR: [
-        { passportExpiry: { lte: maxDate, not: null } },
-        { visaExpiry: { lte: maxDate, not: null } },
-      ],
-    },
-    include: { student: { select: { userId: true } } },
-  });
+  // Dependents' passports and visas are rows in passports / visas held by the dependent
+  const holder = { select: { firstName: true, student: { select: { userId: true } } } } as const;
+  const [passports, visas] = await Promise.all([
+    prisma.passport.findMany({ where: { dependentId: { not: null }, isCurrent: true, expiryDate: { lte: maxDate } }, include: { dependent: holder } }),
+    prisma.visa.findMany({ where: { dependentId: { not: null }, status: 'ACTIVE', expiryDate: { lte: maxDate } }, include: { dependent: holder } }),
+  ]);
 
-  for (const dep of dependents) {
-    for (const { expiry, label } of [
-      { expiry: dep.passportExpiry, label: 'passport' },
-      { expiry: dep.visaExpiry, label: 'visa' },
-    ]) {
-      if (!expiry) continue;
-      const days = Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000);
-      if (!ALERT_DAYS.includes(days)) continue;
+  const items = [
+    ...passports.map(p => ({ dep: p.dependent, expiry: p.expiryDate, label: 'passport' })),
+    ...visas.map(v => ({ dep: v.dependent, expiry: v.expiryDate, label: 'visa' })),
+  ];
+  for (const { dep, expiry, label } of items) {
+    if (!dep) continue;
+    const days = Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000);
+    if (!ALERT_DAYS.includes(days)) continue;
 
-      await createNotifications([dep.student.userId], {
-        type: 'VISA_ALERT',
-        title: `Dependent ${label.charAt(0).toUpperCase() + label.slice(1)} Expiring in ${days} Day(s)`,
-        message: `${dep.firstName}'s ${label} expires on ${expiry.toDateString()}.`,
-        link: `/student/profile`,
-      });
-    }
+    await createNotifications([dep.student.userId], {
+      type: 'VISA_ALERT',
+      title: `Dependent ${label.charAt(0).toUpperCase() + label.slice(1)} Expiring in ${days} Day(s)`,
+      message: `${dep.firstName}'s ${label} expires on ${expiry.toDateString()}.`,
+      link: `/student/profile`,
+    });
   }
 
-  console.log(`[Scheduler] Dependent check done. ${dependents.length} dependent(s) checked.`);
+  console.log(`[Scheduler] Dependent check done. ${passports.length} passport(s), ${visas.length} visa(s) checked.`);
 }
 
 export function startScheduler() {

@@ -21,6 +21,7 @@ export interface NewAdvisorData {
   tel: string;
   email: string;
   nationality: string;
+  position: string;
   photoUrl?: string;
 }
 
@@ -37,6 +38,7 @@ export default function AddAdvisorModal({ onSave, onClose }: Props) {
   const [tel, setTel]                 = useState('');
   const [email, setEmail]             = useState('');
   const [nationality, setNationality] = useState(NATIONALITIES[0]);
+  const [position, setPosition]       = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -55,7 +57,7 @@ export default function AddAdvisorModal({ onSave, onClose }: Props) {
 
   const handleSubmit = () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim()) return;
-    onSave({ prefix, firstName, lastName, middleName, tel, email, nationality, photoUrl: photoPreview ?? undefined });
+    onSave({ prefix, firstName, lastName, middleName, tel, email, nationality, position, photoUrl: photoPreview ?? undefined });
   };
 
   const content = (
@@ -176,6 +178,19 @@ export default function AddAdvisorModal({ onSave, onClose }: Props) {
                   placeholder="email@kku.ac.th"
                   className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
+              </div>
+
+              {/* Administrative position */}
+              <div className="col-span-2 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-500">Administrative Position <span className="text-gray-300">(optional)</span></label>
+                <input
+                  type="text"
+                  value={position}
+                  onChange={e => setPosition(e.target.value)}
+                  placeholder="e.g. Associate Dean for Academic Affairs"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="text-[11px] text-gray-400">Executives can be chosen to sign for the Dean and can sign in as an executive.</p>
               </div>
 
             </div>

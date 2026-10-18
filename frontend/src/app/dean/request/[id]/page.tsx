@@ -6,8 +6,9 @@ import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
 import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine, RiDownloadLine, RiPenNibLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
+import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { needsSignatureToApprove } from '@/lib/signing';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -15,6 +16,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   FORWARDED_TO_DEAN: { label: 'Pending',   className: 'bg-purple-100 text-purple-700' },
   DEAN_APPROVED:     { label: 'Completed', className: 'bg-green-100 text-green-700' },
   DEAN_REJECTED:     { label: 'Rejected',  className: 'bg-red-100 text-red-600' },
+  CANCEL_REQUESTED:  { label: 'On hold',   className: 'bg-amber-100 text-amber-700' },
 };
 
 export default function DeanRequestDetailPage() {
@@ -33,6 +35,8 @@ export default function DeanRequestDetailPage() {
   const [submitting, setSubmitting] = useState<null | 'approve' | 'reject'>(null);
   const [showModal, setShowModal] = useState(false);
   const [showSignModal, setShowSignModal] = useState(false);
+  // Approve is waiting on the signing dialog (digital/manual templates)
+  const [signToApprove, setSignToApprove] = useState(false);
   const [genDoc, setGenDoc] = useState<ApiGeneratedDoc | null>(null);
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
   const previewContentRef = useRef<HTMLDivElement>(null);
@@ -80,6 +84,11 @@ export default function DeanRequestDetailPage() {
     } catch { return []; }
   })();
 
+  const signingMethod = req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital';
+  const mustSignToApprove = needsSignatureToApprove({
+    hasDoc: !!genDoc, signingMethod, requiredRoles: requiredSigRoles, signatures, myRole: 'dean',
+  });
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     setAttachedFiles(prev => [...prev, ...files]);
@@ -90,12 +99,17 @@ export default function DeanRequestDetailPage() {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (signed = false) => {
     if (!req || submitting) return;
+    // Sign first — the approval is recorded from the dialog's onSigned
+    if (!signed && mustSignToApprove) {
+      setSignToApprove(true);
+      return;
+    }
     setSubmitting('approve');
     try {
       const res = await requestApi.updateStatus(req.id, 'DEAN_APPROVED', comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
-      setReq(prev => prev ? { ...prev, status: 'DEAN_APPROVED', attachments: res.data.data.attachments } : prev);
+      setReq(prev => prev ? { ...prev, status: 'DEAN_APPROVED', attachments: res.data.data.attachments, attachmentFileIds: res.data.data.attachmentFileIds } : prev);
       loadGeneratedDoc(req.id);
       setActionDone(true);
       toast.success('Request approved');
@@ -152,7 +166,7 @@ export default function DeanRequestDetailPage() {
   const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
   const isPending = req.status === 'FORWARDED_TO_DEAN';
   // A pending cancellation from the student freezes the workflow until staff review it.
-  const cancelPending = req.cancellations?.[0]?.status === 'PENDING';
+  const cancelPending = req.status === 'CANCEL_REQUESTED';
   const isActionable = isPending && !cancelPending;
   const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
 
@@ -208,7 +222,8 @@ export default function DeanRequestDetailPage() {
             View Document
           </button>
 
-          {genDoc && !isApprovalSigning && !signatures.some(s => s.role === 'dean') && (
+          {/* While the request awaits this approver, signing happens through Approve */}
+          {genDoc && !isApprovalSigning && !isActionable && !signatures.some(s => s.role === 'dean') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -317,7 +332,7 @@ export default function DeanRequestDetailPage() {
                 {isActionable && (
                   <>
                     <Button variant="danger"  label={submitting === 'reject' ? 'Processing…' : 'Reject'}  disabled={!!submitting} onClick={handleReject} />
-                    <Button variant="success" label={submitting === 'approve' ? 'Processing…' : 'Approve'} disabled={!!submitting} onClick={handleApprove} />
+                    <Button variant="success" label={submitting === 'approve' ? 'Processing…' : mustSignToApprove ? 'Sign & Approve' : 'Approve'} disabled={!!submitting} onClick={() => handleApprove()} />
                   </>
                 )}
               </div>
@@ -326,16 +341,29 @@ export default function DeanRequestDetailPage() {
         </div>
       </div>
 
-      {showSignModal && genDoc && (
+      {(showSignModal || signToApprove) && genDoc && (
         <SignatureModal
           docId={genDoc.id}
           myRole="dean"
           signatures={signatures}
           requiredRoles={requiredSigRoles}
-          signingMethod={req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital'}
+          signingMethod={signingMethod}
           fileUrl={genDoc.signedFileUrl ?? genDoc.fileUrl}
-          onSigned={handleSigned}
-          onClose={() => setShowSignModal(false)}
+          purpose={signToApprove ? 'approve' : 'sign'}
+          onSigned={updated => {
+            handleSigned(updated);
+            if (signToApprove) {
+              setSignToApprove(false);
+              handleApprove(true);
+            }
+          }}
+          onClose={() => {
+            if (signToApprove) {
+              setSignToApprove(false);
+              toast('Approval cancelled — sign the document to approve');
+            }
+            setShowSignModal(false);
+          }}
         />
       )}
 
@@ -417,10 +445,7 @@ export default function DeanRequestDetailPage() {
         const handleDownload = async () => {
           try {
             if (genDoc) {
-              const url = genDoc.signedFileUrl ?? genDoc.fileUrl;
-              if (!url) return;
-              const res = await fetch(url);
-              const blob = await res.blob();
+              const blob = (await generatedDocApi.download(genDoc.id)).data;
               await saveBlob(blob, `${safeTitle}.pdf`);
               return;
             }
@@ -438,10 +463,10 @@ export default function DeanRequestDetailPage() {
               }
             }
             for (let i = 0; i < attachments.length; i++) {
-              const url = attachments[i];
-              const res = await fetch(url);
-              const blob = await res.blob();
-              const ext = url.split('.').pop()?.split('?')[0] || 'pdf';
+              const fileId = req.attachmentFileIds?.[i];
+              if (!fileId) continue;
+              const blob = (await fileApi.download(fileId)).data;
+              const ext = fileExtension(attachments[i]) || 'pdf';
               await saveBlob(blob, `${safeTitle}_attachment_${i + 1}.${ext}`);
             }
           } catch {
@@ -514,7 +539,7 @@ export default function DeanRequestDetailPage() {
                   <div className="bg-white shadow-md mx-auto p-6 flex flex-col gap-2" style={{ width: '210mm' }}>
                     <p className="text-xs font-semibold text-primary/60 uppercase tracking-wide">Attachments</p>
                     {attachments.map((url, i) => {
-                      const isImage = /\.(png|jpe?g|gif|webp)$/i.test(url);
+                      const isImage = isImageUrl(url);
                       return isImage
                         ? <img key={i} src={url} alt={`Attachment ${i + 1}`} className="max-w-full" />
                         : <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-primary underline"><RiFileTextLine size={14} /> Attachment {i + 1}</a>;

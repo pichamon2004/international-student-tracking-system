@@ -1,12 +1,16 @@
 import prisma from '../utils/prisma';
 import { DocumentType } from '@prisma/client';
+import { DOCUMENT_FILES, includeFiles } from '../services/domain/fileFields';
+
+// One file per document; the relation is the same for student and dependent documents
+export const WITH_FILES = includeFiles(DOCUMENT_FILES);
 
 export interface CreateDocumentDto {
   studentId?:   number;
   dependentId?: number;
   name:         string;
   description?: string;
-  fileUrl:      string;
+  fileId:       number;
   fileType:     string;
   fileSize:     number;
   uploadedBy:   number;
@@ -19,12 +23,14 @@ export const findByStudentId = (studentId: number) =>
   prisma.document.findMany({
     where:   { studentId },
     orderBy: { uploadedAt: 'desc' },
+    include: WITH_FILES,
   });
 
 export const findByDependentId = (dependentId: number) =>
   prisma.document.findMany({
     where:   { dependentId },
     orderBy: { uploadedAt: 'desc' },
+    include: WITH_FILES,
   });
 
 export const findById = (id: number) =>
@@ -39,12 +45,13 @@ export const create = (dto: CreateDocumentDto) =>
       dependentId:  dto.dependentId,
       name:         dto.name,
       description:  dto.description,
-      fileUrl:      dto.fileUrl,
+      fileId:       dto.fileId,
       fileType:     dto.fileType,
       fileSize:     dto.fileSize,
       uploadedBy:   dto.uploadedBy,
       documentType: dto.documentType,
     },
+    include: WITH_FILES,
   });
 
 export const removeById = (id: number) =>

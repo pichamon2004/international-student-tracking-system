@@ -71,7 +71,7 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
         emergencyRelation: req.body.emergencyRelation,
         dateOfBirth: req.body.dateOfBirth,
       };
-      const cr = await changeRequestService.submitChange(studentDbId, 'STUDENT_PROFILE', studentDbId, 'UPDATE', studentFields);
+      const cr = await changeRequestService.submitChange(studentDbId, 'STUDENT_PROFILE', studentDbId, 'UPDATE', studentFields, req.user);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
     }
@@ -87,7 +87,7 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
     dateOfBirth, enrollmentDate, expectedGraduation,
   } = req.body;
 
-  const dto: UpdateStudentDto = {
+  const dto = {
     titleEn, firstNameEn, middleNameEn, lastNameEn,
     studentId, gender, nationality, religion, homeCountry,
     email, phone, addressInThailand, homeAddress,
@@ -99,7 +99,7 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
     expectedGraduation: expectedGraduation ? new Date(expectedGraduation) : undefined,
   };
 
-  const student = await studentService.updateStudent(studentDbId, dto);
+  const student = await studentService.updateStudent(studentDbId, dto, req.user!);
   res.json({ success: true, data: student });
 };
 
@@ -110,7 +110,7 @@ export const deleteStudent = async (req: AuthRequest, res: Response): Promise<vo
 
 export const uploadStudentPhoto = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.file) { res.status(400).json({ success: false, message: 'No image file provided' }); return; }
-  const result = await studentService.uploadPhoto(parseInt(req.params.id), req.file);
+  const result = await studentService.uploadPhoto(parseInt(req.params.id), req.file, req.user!.userId);
   res.json({ success: true, data: result });
 };
 

@@ -1,22 +1,28 @@
 import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
+import { auditLog } from '../middleware/auditLog.middleware';
+import * as deanDelegationRepository from '../repositories/deanDelegation.repository';
 import {
   getSignatory,
-  getDelegation,
-  setDelegate,
-  toggleDelegation,
-  removeDelegation,
+  listDelegations,
+  createDelegation,
+  revokeDelegation,
   getDelegateUsers,
 } from '../controllers/deanDelegation.controller';
 
 const router = Router();
 
-router.get('/signatory',  authenticate,                    asyncHandler(getSignatory));
-router.get('/delegates',  authenticate, requireRole('DEAN'), asyncHandler(getDelegateUsers));
-router.get('/delegation', authenticate, requireRole('DEAN'), asyncHandler(getDelegation));
-router.put('/delegation', authenticate, requireRole('DEAN'), asyncHandler(setDelegate));
-router.patch('/delegation', authenticate, requireRole('DEAN'), asyncHandler(toggleDelegation));
-router.delete('/delegation', authenticate, requireRole('DEAN'), asyncHandler(removeDelegation));
+const fetchDelegationBefore = (req: { params: { id?: string } }) =>
+  deanDelegationRepository.findById(parseInt(req.params.id ?? '0'));
+
+// Delegation is managed by IR staff; anyone signed in can see who currently signs.
+router.get('/signatory',               authenticate,                       asyncHandler(getSignatory));
+router.get('/delegates',               authenticate, requireRole('STAFF'), asyncHandler(getDelegateUsers));
+router.get('/delegations',             authenticate, requireRole('STAFF'), asyncHandler(listDelegations));
+router.post('/delegations',            authenticate, requireRole('STAFF'),
+  auditLog({ entity: 'DeanDelegation' }), asyncHandler(createDelegation));
+router.post('/delegations/:id/revoke', authenticate, requireRole('STAFF'),
+  auditLog({ entity: 'DeanDelegation', action: 'REVOKE', fetchBefore: fetchDelegationBefore }), asyncHandler(revokeDelegation));
 
 export default router;

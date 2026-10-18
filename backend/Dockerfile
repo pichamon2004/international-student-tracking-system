@@ -20,4 +20,9 @@ RUN npm run build
 EXPOSE 4000
 
 # migrate → start (run seed manually once: docker compose exec backend npx prisma db seed)
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]
+# Deploy order (set -e: any failing step stops the container before the API starts):
+#   1. backfill-request-events + pre-push-migrations — move data out of legacy columns before db push drops them
+#   2. prisma db push                                 — create what Prisma knows about
+#   3. post-push-db-objects                           — add custom SQL objects (CHECK constraints) Prisma can't express
+#   4. verify-db-objects                              — prove those objects exist and the database enforces them
+CMD ["sh", "-c", "set -e; npx ts-node --transpile-only prisma/backfill-request-events.ts; npx ts-node --transpile-only prisma/pre-push-migrations.ts; npx prisma db push --accept-data-loss; npx ts-node --transpile-only prisma/post-push-db-objects.ts; npx ts-node --transpile-only prisma/verify-db-objects.ts; node dist/index.js"]

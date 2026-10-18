@@ -82,15 +82,18 @@ export const requestTypeApi = {
 
 // ── Requests ───────────────────────────────────────────────────
 
-export interface ApiRequestCancellation {
+// One row per action on a request — submit, edit, approve/reject/forward, cancel
+export interface ApiRequestEvent {
   id: number;
   requestId: number;
-  reason: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  reviewedBy: number | null;
-  reviewNote: string | null;
-  reviewedAt: string | null;
+  type: 'SUBMITTED' | 'EDITED' | 'STATUS_CHANGED';
+  actorId: number | null;
+  actorRole: string | null;   // STUDENT | STAFF | ADVISOR | DEAN | VICE_DEAN
+  fromStatus: string | null;
+  toStatus: string | null;
+  comment: string | null;
   createdAt: string;
+  actor?: { id: number; name: string } | null;
 }
 
 export interface ApiRequest {
@@ -101,9 +104,6 @@ export interface ApiRequest {
   description: string | null;
   formData: string | null;  // JSON string
   status: string;
-  advisorComment: string | null;
-  staffComment: string | null;
-  deanComment: string | null;
   createdAt: string;
   updatedAt: string;
   student?: {
@@ -113,6 +113,10 @@ export interface ApiRequest {
     program: string | null; faculty: string | null; level: string | null;
     nationality: string | null; homeCountry: string | null;
     passports?: { passportNumber: string; expiryDate: string }[];
+    advisor?: {
+      titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null;
+      phone: string | null; user?: { email: string } | null;
+    } | null;
   };
   requestType?: {
     id: number;
@@ -120,9 +124,35 @@ export interface ApiRequest {
     icon: string | null;
     documentTemplates?: { id: number; name: string; description: string | null; variables: string | null; body: string; signingMethod?: 'manual' | 'digital' | 'approval' }[];
   };
-  attachments?: string | null;  // JSON array of file URLs
-  cancellations?: ApiRequestCancellation[];  // newest first
+  attachments?: string | null;  // JSON array of file URLs (signed, short-lived)
+  attachmentFileIds?: number[]; // same order as attachments — download via fileApi.download
+  // Detail endpoint: full history, oldest first. List endpoint: only the latest event with a comment.
+  events?: ApiRequestEvent[];
 }
+
+// ── Request event helpers ─────────────────────────────────────────
+
+export const isCancelPending = (req: Pick<ApiRequest, 'status'>) => req.status === 'CANCEL_REQUESTED';
+
+const newestFirst = (events: ApiRequestEvent[] = []) =>
+  [...events].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id - a.id);
+
+// The event where the student asked to cancel (comment = their reason)
+export const latestCancelRequest = (req: Pick<ApiRequest, 'events'>) =>
+  newestFirst(req.events).find(e => e.toStatus === 'CANCEL_REQUESTED') ?? null;
+
+// The latest staff decision on a cancellation, if it was rejected
+export const latestCancelRejection = (req: Pick<ApiRequest, 'events'>) => {
+  const decision = newestFirst(req.events).find(e => e.fromStatus === 'CANCEL_REQUESTED');
+  return decision && decision.toStatus !== 'CANCELLED' ? decision : null;
+};
+
+// Comments from staff / advisor / dean, oldest first
+export const reviewerComments = (req: Pick<ApiRequest, 'events'>) =>
+  (req.events ?? []).filter(e => e.comment && e.actorRole !== 'STUDENT');
+
+export const latestComment = (req: Pick<ApiRequest, 'events'>) =>
+  newestFirst(req.events).find(e => e.comment)?.comment ?? null;
 
 export const requestApi = {
   getAll: (params?: { status?: string; studentId?: number }) =>
@@ -143,10 +173,10 @@ export const requestApi = {
     api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}`, data),
 
   requestCancel: (id: number, reason: string) =>
-    api.post<{ success: boolean; data: ApiRequestCancellation }>(`/requests/${id}/cancel`, { reason }),
+    api.post<{ success: boolean; data: ApiRequest }>(`/requests/${id}/cancel`, { reason }),
 
   reviewCancel: (id: number, approve: boolean, note?: string) =>
-    api.post<{ success: boolean; data: ApiRequestCancellation }>(`/requests/${id}/cancel/review`, { approve, note }),
+    api.post<{ success: boolean; data: ApiRequest }>(`/requests/${id}/cancel/review`, { approve, note }),
 
   updateStatus: (id: number, status: string, comment?: string, files?: File[]) => {
     if (files && files.length > 0) {
@@ -427,6 +457,7 @@ export interface ApiPassport {
 export interface ApiVisa {
   id: number;
   studentId: number;
+  passportId?: number | null; // the passport the visa is stamped in
   visaNumber: string | null;
   visaType: string;
   status: string;
@@ -532,13 +563,23 @@ export const studentMeApi = {
 
 // ── Passport API ───────────────────────────────────────────────
 
+type PassportInput = {
+  passportNumber: string; issuingCountry: string; issueDate: string; expiryDate: string;
+  placeOfIssue?: string; imageUrl?: string;
+};
+
 export const passportApi = {
-  get: (studentId: number) =>
-    api.get<{ success: boolean; data: ApiPassport }>(`/students/${studentId}/passport`),
-  upsert: (studentId: number, data: {
-    passportNumber: string; issuingCountry: string; issueDate: string; expiryDate: string;
-    placeOfIssue?: string; imageUrl?: string; isCurrent?: boolean;
-  }) => api.put<{ success: boolean; data: ApiPassport }>(`/students/${studentId}/passport`, data),
+  list: (studentId: number) =>
+    api.get<{ success: boolean; data: ApiPassport[] }>(`/students/${studentId}/passport`),
+  // Adds a new passport; the previous current one moves to history
+  create: (studentId: number, data: PassportInput) =>
+    api.post<{ success: boolean; data: ApiPassport }>(`/students/${studentId}/passport`, data),
+  update: (studentId: number, passportId: number, data: Partial<PassportInput>) =>
+    api.put<{ success: boolean; data: ApiPassport }>(`/students/${studentId}/passport/${passportId}`, data),
+  // Choose the current passport (true) or set this one inactive (false); 202 = sent for staff approval
+  setCurrent: (studentId: number, passportId: number, isCurrent: boolean) =>
+    api.put<{ success: boolean; data?: ApiPassport; changeRequest?: ApiChangeRequest }>(
+      `/students/${studentId}/passport/${passportId}/current`, { isCurrent }),
 };
 
 // ── Visa API ───────────────────────────────────────────────────
@@ -548,7 +589,7 @@ export const visaApi = {
     api.get<{ success: boolean; data: ApiVisa[] }>(`/students/${studentId}/visas`),
   create: (studentId: number, data: {
     visaType: string; issuingCountry: string; issueDate: string; expiryDate: string;
-    visaNumber?: string; issuingPlace?: string; entries?: string; remarks?: string; status?: string;
+    visaNumber?: string; issuingPlace?: string; entries?: string; remarks?: string; status?: string; passportId?: number;
   }) => api.post<{ success: boolean; data: ApiVisa }>(`/students/${studentId}/visas`, data),
   update: (studentId: number, visaId: number, data: Partial<Omit<ApiVisa, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>>) =>
     api.put<{ success: boolean; data: ApiVisa }>(`/students/${studentId}/visas/${visaId}`, data),
@@ -592,7 +633,7 @@ export const dependentApi = {
 export interface ApiDeanUser { id: number; name: string; }
 
 export const advisorApi = {
-  create: (data: { email: string; titleEn?: string; firstNameEn: string; lastNameEn: string; phone?: string; nationality?: string }) =>
+  create: (data: { email: string; titleEn?: string; firstNameEn: string; lastNameEn: string; phone?: string; nationality?: string; position?: string }) =>
     api.post<{ success: boolean; data: ApiAdvisor }>('/advisors', data),
   getMe: () =>
     api.get<{ success: boolean; data: ApiAdvisor }>('/advisors/me'),
@@ -613,6 +654,14 @@ export const advisorApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  // Staff setting another advisor's photo (needs ADVISOR_MANAGEMENT.edit)
+  uploadPhotoFor: (advisorId: number, file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    return api.post<{ success: boolean; data: { url: string } }>(`/advisors/${advisorId}/photo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const userApi = {
@@ -625,25 +674,43 @@ export const userApi = {
 export interface ApiDeanSignatory {
   id: number;
   name: string;
+  position: string | null;   // the delegate's administrative position, when delegated
+  endAt: string | null;      // when the current delegation ends (null = until revoked)
   isDelegated: boolean;
   deanName: string;
 }
 
+export type ApiDelegationStatus = 'ACTIVE' | 'SCHEDULED' | 'EXPIRED' | 'REVOKED';
+
+// One delegation period — the full history is kept
 export interface ApiDeanDelegation {
   id: number;
   deanId: number;
   delegateId: number;
-  isActive: boolean;
-  delegate: { id: number; name: string };
+  startAt: string;
+  endAt: string | null;
+  note: string | null;
+  status: ApiDelegationStatus;
+  createdAt: string;
+  revokedAt: string | null;
+  delegate: { id: number; name: string; position: string | null };
+  createdBy: { id: number; name: string };
+  revokedBy: { id: number; name: string } | null;
+}
+
+export interface ApiDelegateCandidate {
+  id: number;                // user id
+  name: string;
+  position: string | null;
 }
 
 export const deanApi = {
   getSignatory:     () => api.get<{ success: boolean; data: ApiDeanSignatory }>('/dean/signatory'),
-  getDelegation:    () => api.get<{ success: boolean; data: ApiDeanDelegation | null }>('/dean/delegation'),
-  setDelegate:      (delegateId: number) => api.put<{ success: boolean; data: ApiDeanDelegation }>('/dean/delegation', { delegateId }),
-  toggleDelegation: (isActive: boolean) => api.patch<{ success: boolean; data: ApiDeanDelegation }>('/dean/delegation', { isActive }),
-  removeDelegation: () => api.delete<{ success: boolean }>('/dean/delegation'),
-  getDelegateUsers: () => api.get<{ success: boolean; data: { id: number; name: string }[] }>('/dean/delegates'),
+  listDelegations:  () => api.get<{ success: boolean; data: ApiDeanDelegation[] }>('/dean/delegations'),
+  createDelegation: (data: { delegateId: number; startAt?: string; endAt?: string; note?: string }) =>
+    api.post<{ success: boolean; data: ApiDeanDelegation }>('/dean/delegations', data),
+  revokeDelegation: (id: number) => api.post<{ success: boolean; data: ApiDeanDelegation }>(`/dean/delegations/${id}/revoke`),
+  getDelegateUsers: () => api.get<{ success: boolean; data: ApiDelegateCandidate[] }>('/dean/delegates'),
 };
 
 // ── Change Requests ───────────────────────────────────────────────────────────
@@ -672,6 +739,11 @@ export const changeRequestApi = {
     api.post(`/change-requests/${id}/reject`, { reviewNote }),
   cancel: (id: number) =>
     api.delete(`/change-requests/${id}`),
+  // Every request still waiting for staff on this kind of record — new ones and edits/removals of existing ones
+  listPendingOfType: (entityType: string, studentId: number) =>
+    api.get<{ success: boolean; data: ApiChangeRequest[] }>(
+      `/change-requests/pending?entityType=${entityType}&studentId=${studentId}`,
+    ),
   getPendingForEntity: (entityType: string, entityId: number | null, studentId: number) =>
     api.get<{ success: boolean; data: ApiChangeRequest | null }>(
       `/change-requests/entity?entityType=${entityType}&entityId=${entityId ?? ''}&studentId=${studentId}`,
@@ -703,12 +775,36 @@ export interface ApiGeneratedDoc {
   createdAt:     string;
 }
 
+// Files are served as short-lived signed URLs; storage sends no CORS headers,
+// so anything that needs the bytes in the browser goes through the API.
+export const fileApi = {
+  download: (fileId: number) =>
+    api.get<Blob>(`/files/${fileId}/download`, { responseType: 'blob' }),
+  freshUrl: (fileId: number) =>
+    api.get<{ success: boolean; data: { url: string; mimeType: string } }>(`/files/${fileId}/url`),
+};
+
+/** A file URL's extension, read from its path — signed URLs carry a query string after it. */
+export function fileExtension(url: string): string {
+  try {
+    return new URL(url).pathname.split('.').pop()?.toLowerCase() ?? '';
+  } catch {
+    return url.split('?')[0].split('.').pop()?.toLowerCase() ?? '';
+  }
+}
+export const isPdfUrl = (url: string) => fileExtension(url) === 'pdf';
+export const isImageUrl = (url: string) => ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(fileExtension(url));
+
 export const generatedDocApi = {
   generate: (requestId: number, templateId: number, formData: Record<string, string>) =>
     api.post<{ success: boolean; data: ApiGeneratedDoc }>(`/requests/${requestId}/generate-pdf`, { templateId, formData }),
 
   getByRequest: (requestId: number) =>
     api.get<{ success: boolean; data: ApiGeneratedDoc[] }>(`/requests/${requestId}/generated-documents`),
+
+  // The PDF bytes via the API (the public storage URL can't be fetched cross-origin)
+  download: (docId: number) =>
+    api.get<Blob>(`/generated-documents/${docId}/download`, { responseType: 'blob' }),
 
   getById: (docId: number) =>
     api.get<{ success: boolean; data: ApiGeneratedDoc }>(`/generated-documents/${docId}`),

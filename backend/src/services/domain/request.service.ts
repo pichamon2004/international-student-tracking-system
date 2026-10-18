@@ -6,13 +6,31 @@ import * as studentRepository from '../../repositories/student.repository';
 import * as documentTemplateRepository from '../../repositories/documentTemplate.repository';
 import * as templateVariableRepository from '../../repositories/templateVariable.repository';
 import * as deanDelegationRepository from '../../repositories/deanDelegation.repository';
-import * as requestCancellationRepository from '../../repositories/requestCancellation.repository';
+import * as requestEventRepository from '../../repositories/requestEvent.repository';
 import * as generatedDocRepository from '../../repositories/generatedDoc.repository';
 import * as deanDelegationService from './deanDelegation.service';
 import * as generatedDocService from './generatedDoc.service';
 import { createNotification, createNotifications } from '../notification.service';
 import { sendEmail } from '../external/email.service';
-import { uploadToR2 } from '../external/r2.service';
+import * as fileService from './file.service';
+import { assertCanViewStudentRequests } from './requestAccess';
+
+type AttachmentRow = { fileId: number; file: { id: number; storageKey: string } };
+
+/**
+ * The attachments JSON the API has always returned, from request_attachments,
+ * oldest first — plus attachmentFileIds in the same order, for downloading through
+ * GET /files/:id/download (storage sends no CORS headers, so the browser can't fetch the URLs).
+ */
+export async function presentAttachments<T extends { attachmentFiles: AttachmentRow[] }>(row: T) {
+  const { attachmentFiles, ...rest } = row;
+  const urls = await Promise.all(attachmentFiles.map(a => fileService.urlFor(a.file)));
+  return {
+    ...rest,
+    attachments: urls.length ? JSON.stringify(urls) : null,
+    attachmentFileIds: attachmentFiles.map(a => a.fileId),
+  };
+}
 
 export const getRequests = async (
   query: { status?: string; studentId?: string; advisorId?: string },
@@ -34,14 +52,19 @@ export const getRequests = async (
     const advisor = await advisorRepository.findStudentIdsByUserId(userId);
     const myStudentIds = advisor?.students.map((s) => s.id) ?? [];
     advisorWhereClause = { studentId: { in: myStudentIds } };
+  } else if (userRole === 'STUDENT' && userId !== undefined) {
+    // A student only ever lists their own requests, whatever studentId the query asks for
+    const me = await studentRepository.findByUserId(userId);
+    advisorWhereClause = { studentId: me?.id ?? -1 };
   }
 
-  return requestRepository.findMany({
+  const requests = await requestRepository.findMany({
     ...(query.status    ? { status: query.status as RequestStatus }             : {}),
     ...(query.studentId ? { studentId: parseInt(query.studentId) }              : {}),
     ...(query.advisorId ? { student: { advisorId: parseInt(query.advisorId) } } : {}),
     ...advisorWhereClause,
   });
+  return Promise.all(requests.map(r => presentAttachments(r)));
 };
 
 export const getRequestById = async (
@@ -54,34 +77,14 @@ export const getRequestById = async (
     throw Object.assign(new Error('Request not found'), { statusCode: 404 });
   }
 
-  if (userRole === 'STUDENT' && userId !== undefined) {
-    const student = await studentRepository.findByUserId(userId);
-    if (!student || request.studentId !== student.id) {
-      throw Object.assign(new Error('Access denied'), { statusCode: 403 });
-    }
-  }
-
-  if (userRole === 'VICE_DEAN' && userId !== undefined) {
-    const activeDelegation = await deanDelegationRepository.findActiveByDelegateId(userId);
-    if (!activeDelegation) {
-      throw Object.assign(new Error('Access denied'), { statusCode: 403 });
-    }
-  }
-
-  if (userRole === 'ADVISOR' && userId !== undefined) {
-    const advisor = await advisorRepository.findStudentIdsByUserId(userId);
-    const myStudentIds = advisor?.students.map((s) => s.id) ?? [];
-    if (!myStudentIds.includes(request.studentId)) {
-      throw Object.assign(new Error('Access denied'), { statusCode: 403 });
-    }
-  }
+  await assertCanViewStudentRequests(request.studentId, userRole, userId);
 
   const documentTemplates = request.requestTypeId
     ? await documentTemplateRepository.findByRequestTypeId(request.requestTypeId)
     : [];
 
   return {
-    ...request,
+    ...(await presentAttachments(request)),
     requestType: request.requestType
       ? { ...request.requestType, documentTemplates }
       : null,
@@ -182,14 +185,27 @@ export const createRequest = async (
     await assertRequiredFields(parseInt(String(dto.requestTypeId)), dto.formData);
   }
 
-  return requestRepository.create({
-    studentId,
-    requestTypeId: dto.requestTypeId ? parseInt(String(dto.requestTypeId)) : null,
-    title: dto.title,
-    description: dto.description,
-    formData: dto.formData ? JSON.stringify(dto.formData) : null,
+  return prisma.$transaction(async (tx) => {
+    const request = await requestRepository.create({
+      studentId: studentId!,
+      requestTypeId: dto.requestTypeId ? parseInt(String(dto.requestTypeId)) : null,
+      title: dto.title,
+      description: dto.description,
+      formData: dto.formData ? JSON.stringify(dto.formData) : null,
+    }, tx);
+    await requestEventRepository.create({
+      requestId: request.id,
+      type: 'SUBMITTED',
+      actorId: userId,
+      actorRole: userRole ?? null,
+      toStatus: request.status,
+    }, tx);
+    return request;
   });
 };
+
+const cancellationPendingError = () =>
+  Object.assign(new Error('This request has a cancellation pending staff review'), { statusCode: 409 });
 
 export const updateRequestStatus = async (
   requestId: number,
@@ -202,52 +218,47 @@ export const updateRequestStatus = async (
   if (!existing) {
     throw Object.assign(new Error('Request not found'), { statusCode: 404 });
   }
-  if (existing.cancellations.length > 0) {
-    throw Object.assign(
-      new Error('This request has a cancellation pending staff review'),
-      { statusCode: 409 }
-    );
+  if (existing.status === 'CANCEL_REQUESTED') throw cancellationPendingError();
+
+  if (dto.status === 'DEAN_APPROVED' || dto.status === 'DEAN_REJECTED') {
+    await deanDelegationService.assertCanActAsDean(userId, userRole);
+    if (existing.status !== 'FORWARDED_TO_DEAN') {
+      throw Object.assign(new Error('This request is not awaiting the dean'), { statusCode: 409 });
+    }
   }
 
-  let attachmentsJson: string | undefined;
+  let attachedFileIds: number[] = [];
   if (files && files.length > 0) {
-    const urls = await Promise.all(
+    if (userId === undefined) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
+    attachedFileIds = await Promise.all(
       files.map((f) =>
-        uploadToR2(f.buffer, f.originalname, f.mimetype, 'request-attachments').then((r) => r.url)
+        fileService.store(f.buffer, {
+          originalName: f.originalname, purpose: 'REQUEST_ATTACHMENT', uploadedById: userId, ownerStudentId: existing.studentId,
+        }).then((r) => r.file.id)
       )
     );
-    attachmentsJson = JSON.stringify(urls);
   }
 
-  const attachmentsPatch = attachmentsJson !== undefined ? { attachments: attachmentsJson } : {};
-  const isAdvisor = userRole === 'ADVISOR';
-  const isDean = userRole === 'DEAN' || userRole === 'VICE_DEAN';
-
-  const updateData = isAdvisor
-    ? {
-        status: dto.status as RequestStatus,
-        advisorComment: dto.comment,
-        advisorAt: new Date(),
-        advisorId: userId,
-        ...attachmentsPatch,
-      }
-    : isDean
-    ? {
-        status: dto.status as RequestStatus,
-        deanComment: dto.comment,
-        deanAt: new Date(),
-        deanId: userId,
-        ...attachmentsPatch,
-      }
-    : {
-        status: dto.status as RequestStatus,
-        staffComment: dto.comment,
-        staffAt: new Date(),
-        staffId: userId,
-        ...attachmentsPatch,
-      };
-
-  const updated = await requestRepository.updateStatus(requestId, updateData);
+  const updated = await prisma.$transaction(async (tx) => {
+    const request = await requestRepository.updateStatus(requestId, {
+      status: dto.status as RequestStatus,
+    }, tx);
+    const event = await requestEventRepository.create({
+      requestId,
+      type: 'STATUS_CHANGED',
+      actorId: userId,
+      actorRole: userRole ?? null,
+      fromStatus: existing.status,
+      toStatus: request.status,
+      comment: dto.comment,
+    }, tx);
+    // Added alongside whatever earlier approvers attached — nothing is replaced
+    if (attachedFileIds.length) {
+      await requestRepository.addAttachments(requestId, event.id, attachedFileIds, userId!, tx);
+      return tx.request.findUniqueOrThrow({ where: { id: requestId }, include: { attachmentFiles: requestRepository.ATTACHMENT_FILES } });
+    }
+    return request;
+  });
 
   // Templates using the "approval" signing method get the approver's name
   // printed into their signature box as soon as they approve.
@@ -298,7 +309,7 @@ export const updateRequestStatus = async (
     }
   }
 
-  return updated;
+  return presentAttachments(updated);
 };
 
 // ── follow-up reminder ──────────────────────────────────────────────
@@ -314,7 +325,6 @@ export const followUp = async (requestId: number) => {
           advisor: { select: { userId: true, user: { select: { email: true } } } },
         },
       },
-      cancellations: { where: { status: 'PENDING' }, take: 1 },
     },
   });
   if (!request) {
@@ -330,7 +340,7 @@ export const followUp = async (requestId: number) => {
 
   // A pending cancellation freezes the workflow until staff decide on it,
   // so staff are the ones holding things up regardless of the status.
-  const cancellationPending = request.cancellations.length > 0;
+  const cancellationPending = request.status === 'CANCEL_REQUESTED';
 
   if (!cancellationPending && request.status === 'FORWARDED_TO_ADVISOR' && request.student.advisor?.userId) {
     recipients = [{ userId: request.student.advisor.userId, email: request.student.advisor.user?.email ?? null }];
@@ -340,7 +350,7 @@ export const followUp = async (requestId: number) => {
     const signatory = await deanDelegationService.getActiveSignatory();
     const deanUser = await prisma.user.findUnique({ where: { id: signatory.id }, select: { email: true } });
     recipients = [{ userId: signatory.id, email: deanUser?.email ?? null }];
-    roleLabel = signatory.isDelegated ? 'Vice Dean (delegate)' : 'Dean';
+    roleLabel = signatory.isDelegated ? `${signatory.position ?? 'Vice Dean'} (acting for the Dean)` : 'Dean';
     linkBase = '/dean/request';
   } else {
     // PENDING, STAFF_APPROVED, ADVISOR_APPROVED (awaiting staff to forward it) → whole staff pool
@@ -396,20 +406,19 @@ export const updateRequest = async (
       { statusCode: 409 }
     );
   }
-  if (existing.cancellations.length > 0) {
-    throw Object.assign(
-      new Error('This request has a cancellation pending staff review'),
-      { statusCode: 409 }
-    );
-  }
-
   if (existing.requestTypeId) {
     await assertRequiredFields(existing.requestTypeId, dto.formData);
   }
 
-  const updated = await requestRepository.updateContent(requestId, {
-    description: dto.description,
-    formData: dto.formData ? JSON.stringify(dto.formData) : null,
+  const updated = await prisma.$transaction(async (tx) => {
+    const request = await requestRepository.updateContent(requestId, {
+      description: dto.description,
+      formData: dto.formData ? JSON.stringify(dto.formData) : null,
+    }, tx);
+    await requestEventRepository.create({
+      requestId, type: 'EDITED', actorId: userId, actorRole: 'STUDENT',
+    }, tx);
+    return request;
   });
 
   // Any generated PDF (and the signatures on it) was built from the old form
@@ -428,17 +437,29 @@ export const requestCancel = async (requestId: number, reason: string, userId?: 
 
   const existing = await findOwnRequest(requestId, userId);
 
-  if (!OPEN_STATUSES.includes(existing.status)) {
-    throw Object.assign(new Error('This request is already closed'), { statusCode: 409 });
-  }
-  if (existing.cancellations.length > 0) {
+  if (existing.status === 'CANCEL_REQUESTED') {
     throw Object.assign(
       new Error('A cancellation request is already pending for this request'),
       { statusCode: 409 }
     );
   }
+  if (!OPEN_STATUSES.includes(existing.status)) {
+    throw Object.assign(new Error('This request is already closed'), { statusCode: 409 });
+  }
 
-  const cancellation = await requestCancellationRepository.create(requestId, reason.trim());
+  // The event's fromStatus remembers where to resume if staff reject it
+  await prisma.$transaction(async (tx) => {
+    await requestRepository.updateStatus(requestId, { status: 'CANCEL_REQUESTED' }, tx);
+    await requestEventRepository.create({
+      requestId,
+      type: 'STATUS_CHANGED',
+      actorId: userId,
+      actorRole: 'STUDENT',
+      fromStatus: existing.status,
+      toStatus: 'CANCEL_REQUESTED',
+      comment: reason,
+    }, tx);
+  });
 
   const studentName =
     [existing.student.firstNameEn, existing.student.lastNameEn].filter(Boolean).join(' ') || 'A student';
@@ -467,7 +488,8 @@ export const requestCancel = async (requestId: number, reason: string, userId?: 
     })
     .catch(console.error);
 
-  return cancellation;
+  const after = await requestRepository.findById(requestId);
+  return after && presentAttachments(after);
 };
 
 export const reviewCancel = async (
@@ -483,14 +505,25 @@ export const reviewCancel = async (
   if (!existing) {
     throw Object.assign(new Error('Request not found'), { statusCode: 404 });
   }
-  const pending = existing.cancellations[0];
-  if (!pending) {
+  if (existing.status !== 'CANCEL_REQUESTED') {
     throw Object.assign(new Error('No pending cancellation for this request'), { statusCode: 404 });
   }
 
-  const result = await requestCancellationRepository.review(
-    pending.id, requestId, dto.approve, staffUserId, dto.note
-  );
+  await prisma.$transaction(async (tx) => {
+    // Rejected → resume from the status the request had before the student asked
+    const cancelEvent = await requestEventRepository.findLatestCancelRequest(requestId, tx);
+    const nextStatus: RequestStatus = dto.approve ? 'CANCELLED' : (cancelEvent?.fromStatus ?? 'PENDING');
+    await requestRepository.updateStatus(requestId, { status: nextStatus }, tx);
+    await requestEventRepository.create({
+      requestId,
+      type: 'STATUS_CHANGED',
+      actorId: staffUserId,
+      actorRole: 'STAFF',
+      fromStatus: 'CANCEL_REQUESTED',
+      toStatus: nextStatus,
+      comment: dto.note,
+    }, tx);
+  });
 
   const label = dto.approve ? 'approved' : 'rejected';
   createNotification({
@@ -515,5 +548,6 @@ export const reviewCancel = async (
     ).catch(console.error);
   }
 
-  return result;
+  const after = await requestRepository.findById(requestId);
+  return after && presentAttachments(after);
 };

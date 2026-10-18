@@ -5,20 +5,37 @@ import { useEffect, useState } from 'react';
 import Barcode from 'react-barcode';
 import QRCode from 'react-qr-code';
 import { defaultProgress, UserProfileProgress } from '@/lib/progressStore';
-import { RiFileList3Line, RiHeartAdd2Line, RiGraduationCapLine, RiGroupLine, RiMailLine, RiPhoneLine } from 'react-icons/ri';
+import { RiMailLine, RiPhoneLine } from 'react-icons/ri';
 import { BsExclamation } from 'react-icons/bs';
-import { LuUserRound } from 'react-icons/lu';
-import { FaPassport } from 'react-icons/fa6';
+import {
+    LuUserRound, LuBookUser, LuFileText, LuHeartPulse, LuGraduationCap, LuUsers,
+    LuTriangleAlert, LuExternalLink, LuArrowRight,
+} from 'react-icons/lu';
+import type { IconType } from 'react-icons';
 import { studentMeApi, studentApi, type ApiPassport, type ApiVisa, type ApiHealthInsurance } from '@/lib/api';
 import toast from 'react-hot-toast';
 
-const profileCards = [
-    { label: 'Personal Information', href: '/student/profile/personal', Icon: LuUserRound },
-    { label: 'Passport', href: '/student/profile/passport', Icon: FaPassport },
-    { label: 'Visa', href: '/student/profile/visa', Icon: RiFileList3Line },
-    { label: 'Health Insurance', href: '/student/profile/health-insurance', Icon: RiHeartAdd2Line },
-    { label: 'Academic Record', href: '/student/profile/academic', Icon: RiGraduationCapLine },
-    { label: 'Dependent', href: '/student/profile/dependent', Icon: RiGroupLine },
+const INTERSERVICE_URL = 'https://interservice.kku.ac.th';
+
+type ProfileCard = { label: string; description: string; href: string; Icon: IconType };
+
+const profileSections: { title: string; cards: ProfileCard[] }[] = [
+    {
+        title: 'Identity & travel documents',
+        cards: [
+            { label: 'Personal Information', description: 'Name, contact details and address', href: '/student/profile/personal', Icon: LuUserRound },
+            { label: 'Passport', description: 'Passport number, issue and expiry dates', href: '/student/profile/passport', Icon: LuBookUser },
+            { label: 'Visa', description: 'Visa type, validity and extensions', href: '/student/profile/visa', Icon: LuFileText },
+        ],
+    },
+    {
+        title: 'Study & family',
+        cards: [
+            { label: 'Health Insurance', description: 'Policy, provider and coverage period', href: '/student/profile/health-insurance', Icon: LuHeartPulse },
+            { label: 'Academic Record', description: 'Program, enrollment status and grades', href: '/student/profile/academic', Icon: LuGraduationCap },
+            { label: 'Dependent', description: 'Family members staying with you', href: '/student/profile/dependent', Icon: LuUsers },
+        ],
+    },
 ];
 
 const todoItems: { label: string; href: string; progressKey: keyof UserProfileProgress }[] = [
@@ -119,7 +136,7 @@ function initials(name: string): string {
 function ContactRow({ role, name, phone, email }: { role: string; name: string; phone: string; email: string }) {
     const known = hasValue(name);
     return (
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 p-3 min-w-0">
+        <div className="flex-1 flex items-center gap-3 rounded-xl border border-gray-100 p-3 min-w-0">
             <div className="w-11 h-11 rounded-full bg-[#DEEBFF] text-primary flex items-center justify-center text-sm font-bold shrink-0">
                 {known ? initials(name).toUpperCase() : '?'}
             </div>
@@ -200,7 +217,7 @@ export default function StudentProfilePage() {
         studentMeApi.get().then(res => {
             const s = res.data.data;
             const fullName = [s.titleEn, s.firstNameEn, s.middleNameEn, s.lastNameEn].filter(Boolean).join(' ');
-            const passport = (s.passports as ApiPassport[])?.[0];
+            const passport = (s.passports as ApiPassport[])?.find(p => p.isCurrent);
             const adv = s.advisor;
             const advisorName = adv
                 ? [adv.titleEn, adv.firstNameEn, adv.lastNameEn].filter(Boolean).join(' ')
@@ -281,7 +298,7 @@ export default function StudentProfilePage() {
                     photoUrl={studentData.photoUrl}
                 />
                 {/* Contacts */}
-                <div className="bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4">
+                <div className="flex-1 bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4">
                     <div className="flex items-center gap-2.5">
                         <span className="w-1 h-5 rounded-full bg-primary" />
                         <h2 className="text-lg font-semibold text-gray-800">Your contacts</h2>
@@ -294,34 +311,57 @@ export default function StudentProfilePage() {
             </div>
 
             {/* Right: To-do List or Profile Cards */}
-            <div className="bg-white rounded-2xl shadow-sm px-8 pt-6 py-8 flex flex-col gap-6 col-span-full md:col-span-3">
+            <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-5 col-span-full md:col-span-3">
                 {!showTodo ? (
                     <>
-                        <div>
-                            <h2 className="text-2xl font-semibold text-primary">Welcome <span className="font-semibold text-black ml-2">{studentData.firstName || 'Student'}</span></h2>
-                            <div className='flex py-10 items-start justify-center'>
-                                <BsExclamation className='text-[#EE4F4F] text-5xl' />
-                                <p className="text-xl 2xl:text-2xl text-primary mt-2 text-center">
-                                    Please keep your information updated in Interservice<br />at interservice.kku.ac.th
-                                </p>
-                                <BsExclamation className='text-[#EE4F4F] text-5xl' />
+                        <h2 className="text-2xl font-bold text-gray-900">
+                            Welcome back, <span className="text-primary">{studentData.firstName || 'Student'}</span>
+                        </h2>
+
+                        {/* Interservice reminder */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                            <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                                <LuTriangleAlert size={18} />
                             </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-amber-900">Keep your information up to date in Interservice</p>
+                                <p className="text-xs text-amber-900/80 mt-0.5">Make sure your details at interservice.kku.ac.th match your current documents.</p>
+                            </div>
+                            <a
+                                href={INTERSERVICE_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-white text-sm font-semibold px-4 py-2 hover:bg-primary/90 transition shrink-0"
+                            >
+                                Open Interservice <LuExternalLink size={16} />
+                            </a>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 md:gap-6 flex-1">
-                            {profileCards.map(({ label, href, Icon }) => (
-                                <button
-                                    key={label}
-                                    onClick={() => router.push(href)}
-                                    className="flex flex-col items-center gap-3 border border-gray-200 rounded-2xl p-4 hover:border-primary/50 hover:shadow-sm transition"
-                                >
-                                    <div className='flex-1 flex items-center justify-center'>
-                                        <Icon className="text-primary text-5xl 2xl:text-7xl" />
-                                    </div>
-                                    <div className='h-[30px]'>
-                                        <span className="text-sm 2xl:text-base text-primary font-medium text-center">{label}</span>
-                                    </div>
-                                </button>
-                            ))}
+
+                        {/* Sections stretch to fill the remaining height of the panel */}
+                        <div className="flex-1 flex flex-col gap-5 min-h-0">
+                        {profileSections.map(section => (
+                            <section key={section.title} className="flex-1 flex flex-col gap-3">
+                                <h3 className="text-base font-semibold text-gray-900">{section.title}</h3>
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    {section.cards.map(({ label, description, href, Icon }) => (
+                                        <button
+                                            key={label}
+                                            onClick={() => router.push(href)}
+                                            className="group flex flex-col items-start text-left gap-1.5 rounded-xl border border-primary/15 bg-[#F3F7FD] p-4 hover:border-primary/50 hover:shadow-sm transition"
+                                        >
+                                            <div className="w-10 h-10 rounded-lg bg-secondary text-primary flex items-center justify-center transition group-hover:bg-primary group-hover:text-white">
+                                                <Icon size={20} />
+                                            </div>
+                                            <span className="text-base font-semibold text-primary mt-1">{label}</span>
+                                            <span className="text-xs text-gray-600 flex-1">{description}</span>
+                                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary mt-1">
+                                                View details <LuArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        ))}
                         </div>
                     </>
                 ) : (

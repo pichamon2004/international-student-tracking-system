@@ -1,20 +1,27 @@
 import prisma from '../utils/prisma';
+import { GENERATED_DOC_FILES, includeFiles } from '../services/domain/fileFields';
 
 export interface CreateGeneratedDocDto {
   templateId:  number;
   studentId:   number;
   generatedBy: number;
-  fileUrl:     string;
+  fileId:      number;
   requestId?:  number;
   formData?:   string;
 }
+
+const FILE_REF = { select: { id: true, storageKey: true, mimeType: true } } as const;
+// The PDFs; presented as fileUrl / signedFileUrl by the service
+export const WITH_FILES = includeFiles(GENERATED_DOC_FILES);
+// A signature's image (digital) or evidence PDF (manual); presented as imageUrl
+export const SIGNATURE_FILES = { imageFile: FILE_REF, evidenceFile: FILE_REF } as const;
 
 // ── Queries ───────────────────────────────────────────────────────
 
 export const findByStudentId = (studentId: number) =>
   prisma.generatedDocument.findMany({
     where:   { studentId },
-    include: { template: { select: { id: true, name: true } } },
+    include: { template: { select: { id: true, name: true } }, ...WITH_FILES },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -24,14 +31,14 @@ export const countByTemplateId = (templateId: number) =>
 export const findByRequestId = (requestId: number) =>
   prisma.generatedDocument.findMany({
     where:   { requestId },
-    include: { template: { select: { id: true, name: true } } },
+    include: { template: { select: { id: true, name: true } }, ...WITH_FILES },
     orderBy: { createdAt: 'desc' },
   });
 
 export const findById = (id: number) =>
   prisma.generatedDocument.findUnique({
     where:   { id },
-    include: { template: { select: { id: true, name: true, body: true, variables: true, signingMethod: true } } },
+    include: { template: { select: { id: true, name: true, body: true, variables: true, signingMethod: true } }, ...WITH_FILES },
   });
 
 export const findByIdWithSignatures = (id: number) =>
@@ -39,12 +46,17 @@ export const findByIdWithSignatures = (id: number) =>
     where:   { id },
     include: {
       template:   { select: { id: true, name: true, body: true, variables: true, signingMethod: true } },
-      signatures: true,
+      signatures: { include: SIGNATURE_FILES },
+      ...WITH_FILES,
     },
   });
 
 export const findSignaturesByDocId = (docId: number) =>
-  prisma.docSignature.findMany({ where: { docId } });
+  prisma.docSignature.findMany({ where: { docId }, include: SIGNATURE_FILES });
+
+/** Whether some signer's manual turn is evidenced by this file — such a file must never be retired. */
+export const isSignatureEvidence = async (fileId: number) =>
+  (await prisma.docSignature.count({ where: { evidenceFileId: fileId } })) > 0;
 
 // ── Mutations ─────────────────────────────────────────────────────
 
@@ -54,35 +66,42 @@ export const create = (dto: CreateGeneratedDocDto) =>
       templateId:  dto.templateId,
       studentId:   dto.studentId,
       generatedBy: dto.generatedBy,
-      fileUrl:     dto.fileUrl,
+      fileId:      dto.fileId,
       requestId:   dto.requestId,
       formData:    dto.formData,
     },
+    include: WITH_FILES,
   });
 
-export const updateSignedFile = (id: number, signedFileUrl: string, signedBy: string) =>
+export const updateSignedFile = (id: number, signedFileId: number, signedBy: string) =>
   prisma.generatedDocument.update({
     where: { id },
-    data:  { signedFileUrl, signedBy, signedAt: new Date(), signingMode: 'manual' },
+    data:  { signedFileId, signedBy, signedAt: new Date(), signingMode: 'manual' },
+    include: WITH_FILES,
   });
 
-export const updateFinalizedPdf = (id: number, signedFileUrl: string, signingMode: string) =>
+export const updateFinalizedPdf = (id: number, signedFileId: number, signingMode: string) =>
   prisma.generatedDocument.update({
     where: { id },
-    data:  { signedFileUrl, signedAt: new Date(), signingMode },
+    data:  { signedFileId, signedAt: new Date(), signingMode },
+    include: WITH_FILES,
   });
 
+// One row per role; signing again replaces the previous mark. "approval" rows carry no file.
 export const upsertSignature = (data: {
-  docId:        number;
-  role:         string;
-  signerUserId: number;
-  imageUrl:     string;
-}) =>
-  prisma.docSignature.upsert({
+  docId:           number;
+  role:            string;
+  signerUserId:    number;
+  imageFileId?:    number | null;
+  evidenceFileId?: number | null;
+}) => {
+  const files = { imageFileId: data.imageFileId ?? null, evidenceFileId: data.evidenceFileId ?? null };
+  return prisma.docSignature.upsert({
     where:  { docId_role: { docId: data.docId, role: data.role } },
-    create: data,
-    update: { imageUrl: data.imageUrl, signerUserId: data.signerUserId, signedAt: new Date() },
+    create: { docId: data.docId, role: data.role, signerUserId: data.signerUserId, ...files },
+    update: { signerUserId: data.signerUserId, signedAt: new Date(), ...files },
   });
+};
 
 // Signatures go with their document (onDelete: Cascade on DocSignature).
 export const deleteByRequestId = (requestId: number) =>

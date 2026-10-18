@@ -1,30 +1,73 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 
-export const findByDeanId = (deanId: number) =>
-  prisma.deanDelegation.findUnique({
-    where: { deanId },
-    include: { delegate: { select: { id: true, name: true } } },
+const USER_NAME = { select: { id: true, name: true } } as const;
+
+const DELEGATION_INCLUDE = {
+  delegate:  USER_NAME,
+  createdBy: USER_NAME,
+  revokedBy: USER_NAME,
+} as const;
+
+// A delegation is in effect while it hasn't been revoked and `at` falls inside its period
+const inEffectAt = (at: Date): Prisma.DeanDelegationWhereInput => ({
+  revokedAt: null,
+  startAt:   { lte: at },
+  OR:        [{ endAt: null }, { endAt: { gt: at } }],
+});
+
+export const findCurrent = (deanId: number, at: Date = new Date()) =>
+  prisma.deanDelegation.findFirst({
+    where:   { deanId, ...inEffectAt(at) },
+    include: DELEGATION_INCLUDE,
+    orderBy: { startAt: 'desc' },
   });
 
-export const upsert = (deanId: number, delegateId: number) =>
-  prisma.deanDelegation.upsert({
-    where: { deanId },
-    update: { delegateId, isActive: true },
-    create: { deanId, delegateId, isActive: true },
-    include: { delegate: { select: { id: true, name: true } } },
+// Is this user signing for a dean right now? Used to gate what a VICE_DEAN can see and do.
+export const findActiveByDelegateId = (delegateId: number, at: Date = new Date()) =>
+  prisma.deanDelegation.findFirst({ where: { delegateId, ...inEffectAt(at) } });
+
+// Non-revoked delegations of this dean whose period overlaps [startAt, endAt)
+export const findOverlapping = (deanId: number, startAt: Date, endAt: Date | null) =>
+  prisma.deanDelegation.findFirst({
+    where: {
+      deanId,
+      revokedAt: null,
+      OR: [{ endAt: null }, { endAt: { gt: startAt } }],
+      ...(endAt ? { startAt: { lt: endAt } } : {}),
+    },
   });
 
-export const toggle = (deanId: number, isActive: boolean) =>
+export const findById = (id: number) =>
+  prisma.deanDelegation.findUnique({ where: { id }, include: DELEGATION_INCLUDE });
+
+export const listByDean = (deanId: number, take = 20) =>
+  prisma.deanDelegation.findMany({
+    where:   { deanId },
+    include: DELEGATION_INCLUDE,
+    orderBy: { startAt: 'desc' },
+    take,
+  });
+
+export const create = (data: {
+  deanId: number; delegateId: number; startAt: Date; endAt: Date | null;
+  note: string | null; createdById: number;
+}) =>
+  prisma.deanDelegation.create({ data, include: DELEGATION_INCLUDE });
+
+export const revoke = (id: number, revokedById: number) =>
   prisma.deanDelegation.update({
-    where: { deanId },
-    data: { isActive },
-    include: { delegate: { select: { id: true, name: true } } },
+    where:   { id },
+    data:    { revokedAt: new Date(), revokedById },
+    include: DELEGATION_INCLUDE,
   });
 
-export const remove = (deanId: number) =>
-  prisma.deanDelegation.delete({ where: { deanId } });
-
-// Is this user currently the active delegate for any dean? Used to gate what
-// a VICE_DEAN can see — they only get dean-level access while delegated.
-export const findActiveByDelegateId = (delegateId: number) =>
-  prisma.deanDelegation.findFirst({ where: { delegateId, isActive: true } });
+// Revoke everything still in effect or scheduled for this delegate — used when an
+// advisor loses their administrative position and can no longer sign for the dean.
+export const revokeOpenByDelegateId = (delegateId: number, revokedById?: number) => {
+  const now = new Date();
+  return prisma.deanDelegation.updateMany({
+    where: { delegateId, revokedAt: null, OR: [{ endAt: null }, { endAt: { gt: now } }] },
+    data:  { revokedAt: now, revokedById: revokedById ?? null },
+  });
+};

@@ -22,6 +22,9 @@ interface Props {
   requiredRoles: string[];
   signingMethod?: 'manual' | 'digital' | 'approval';
   fileUrl?:    string | null;
+  // 'approve': signing is the last step of approving — the page records the
+  // approval in onSigned, and closes the dialog itself (onClose = cancelled)
+  purpose?:    'sign' | 'approve';
   onSigned:    (updated: ApiDocSignature[]) => void;
   onClose:     () => void;
 }
@@ -42,9 +45,11 @@ export default function SignatureModal({
   requiredRoles,
   signingMethod = 'digital',
   fileUrl,
+  purpose = 'sign',
   onSigned,
   onClose,
 }: Props) {
+  const forApproval = purpose === 'approve';
   const [digitalTab, setDigitalTab] = useState<DigitalTab>('draw');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -63,7 +68,7 @@ export default function SignatureModal({
       await generatedDocApi.addDigitalSignature(docId, myRole, dataUrl);
       const res = await generatedDocApi.getSignatures(docId);
       onSigned(res.data.data);
-      onClose();
+      if (!forApproval) onClose();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Failed to save signature');
@@ -99,7 +104,7 @@ export default function SignatureModal({
       await generatedDocApi.uploadSignedPdf(docId, file, myRole);
       const res = await generatedDocApi.getSignatures(docId);
       onSigned(res.data.data);
-      onClose();
+      if (!forApproval) onClose();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Failed to upload file');
@@ -119,7 +124,7 @@ export default function SignatureModal({
       >
         {/* Header */}
         <div className="bg-primary flex items-center justify-between px-6 py-4 rounded-t-2xl shrink-0">
-          <h2 className="text-sm font-semibold text-white">Sign Document</h2>
+          <h2 className="text-sm font-semibold text-white">{forApproval ? 'Sign to approve' : 'Sign Document'}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition"
@@ -129,6 +134,14 @@ export default function SignatureModal({
         </div>
 
         <div className="overflow-y-auto flex flex-col gap-5 p-6">
+          {forApproval && (
+            <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-primary">
+              {signingMethod === 'manual'
+                ? 'Your approval is recorded after you upload the signed PDF.'
+                : 'Your approval is recorded after you sign.'}
+            </div>
+          )}
+
           {/* Signature status row */}
           {requiredRoles.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -196,7 +209,9 @@ export default function SignatureModal({
               >
                 <RiUploadCloud2Line size={32} className="text-gray-400" />
                 <div className="text-center">
-                  <p className="text-sm font-medium text-gray-600">Drop the signed PDF here or click to browse</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    {forApproval ? 'Upload & approve: drop the signed PDF here or click to browse' : 'Drop the signed PDF here or click to browse'}
+                  </p>
                   <p className="text-xs text-gray-400 mt-0.5">Only .pdf files accepted</p>
                 </div>
                 {loading && <p className="text-xs text-primary font-medium">Uploading…</p>}
@@ -241,7 +256,7 @@ export default function SignatureModal({
                       Saving…
                     </div>
                   ) : (
-                    <SignaturePad onConfirm={handleDigitalConfirm} />
+                    <SignaturePad onConfirm={handleDigitalConfirm} confirmLabel={forApproval ? 'Sign & Approve' : undefined} />
                   )}
                 </div>
               )}

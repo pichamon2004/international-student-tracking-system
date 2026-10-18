@@ -6,12 +6,13 @@ import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserSta
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
-import { requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
+import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, latestCancelRequest, reviewerComments, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { needsSignatureToApprove } from '@/lib/signing';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
+type RequestStatus = 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED' | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN' | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED' | 'CANCEL_REQUESTED';
 
 // Statuses where the request has finished its workflow — no further staff/advisor/dean action pending.
 const TERMINAL_STATUSES: RequestStatus[] = ['DEAN_APPROVED', 'ADVISOR_REJECTED', 'STAFF_REJECTED', 'DEAN_REJECTED', 'CANCELLED'];
@@ -27,6 +28,7 @@ const statusLabelConfig: Record<string, { label: string; className: string }> = 
   DEAN_APPROVED:        { label: 'Completed',             className: 'bg-green-100 text-green-700' },
   DEAN_REJECTED:        { label: 'Dean Rejected',         className: 'bg-red-100 text-red-600' },
   CANCELLED:            { label: 'Cancelled',             className: 'bg-gray-100 text-gray-500' },
+  CANCEL_REQUESTED:     { label: 'Cancellation Requested', className: 'bg-amber-100 text-amber-700' },
 };
 
 export default function StaffRequestDetailPage() {
@@ -48,6 +50,8 @@ export default function StaffRequestDetailPage() {
   const [signatures, setSignatures] = useState<ApiDocSignature[]>([]);
   const [cancelNote, setCancelNote] = useState('');
   const [reviewingCancel, setReviewingCancel] = useState(false);
+  // Approve is waiting on the signing dialog (digital/manual templates)
+  const [signToApprove, setSignToApprove] = useState(false);
 
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
@@ -66,17 +70,22 @@ export default function StaffRequestDetailPage() {
   // re-rendered server-side), so the action buttons are locked meanwhile.
   const [submittingStatus, setSubmittingStatus] = useState<string | null>(null);
 
-  async function updateStatus(status: string, requireComment = false) {
+  async function updateStatus(status: string, requireComment = false, signed = false) {
     if (!req || submittingStatus) return;
     if (requireComment && !comment.trim()) {
       setShowRejectError(true);
       return;
     }
     setShowRejectError(false);
+    // Sign first — the approval is recorded from the dialog's onSigned
+    if (status === 'STAFF_APPROVED' && !signed && mustSignToApprove) {
+      setSignToApprove(true);
+      return;
+    }
     setSubmittingStatus(status);
     try {
       const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
-      setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments } : prev);
+      setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments, attachmentFileIds: res.data.data.attachmentFileIds } : prev);
       if (status === 'STAFF_APPROVED') loadGeneratedDoc(req.id);
       setAttachedFiles([]);
       setComment('');
@@ -94,12 +103,9 @@ export default function StaffRequestDetailPage() {
     setReviewingCancel(true);
     try {
       const res = await requestApi.reviewCancel(req.id, approve, cancelNote.trim() || undefined);
+      // Keep the loaded document templates; take the new status and history
       const reviewed = res.data.data;
-      setReq(prev => prev ? {
-        ...prev,
-        status: approve ? 'CANCELLED' : prev.status,
-        cancellations: (prev.cancellations ?? []).map(c => c.id === reviewed.id ? reviewed : c),
-      } : prev);
+      setReq(prev => prev ? { ...prev, status: reviewed.status, events: reviewed.events } : prev);
       setCancelNote('');
       toast.success(approve ? 'Cancellation approved' : 'Cancellation rejected');
     } catch (err: unknown) {
@@ -155,6 +161,11 @@ export default function StaffRequestDetailPage() {
     } catch { return []; }
   })();
 
+  const signingMethod = req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital';
+  const mustSignToApprove = needsSignatureToApprove({
+    hasDoc: !!genDoc, signingMethod, requiredRoles: requiredSigRoles, signatures, myRole: 'ir_staff',
+  });
+
   async function handleFollowUp() {
     if (!req) return;
     setFollowingUp(true);
@@ -191,7 +202,7 @@ export default function StaffRequestDetailPage() {
   const statusCfg = statusLabelConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
   const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
   const advisorName = '—'; // advisor info not in request response directly
-  const pendingCancel = req.cancellations?.[0]?.status === 'PENDING' ? req.cancellations[0] : null;
+  const pendingCancel = req.status === 'CANCEL_REQUESTED' ? latestCancelRequest(req) : null;
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
@@ -277,8 +288,8 @@ export default function StaffRequestDetailPage() {
             </button>
           )}
 
-          {/* Sign Document Button */}
-          {genDoc && !isApprovalSigning && !signatures.some(s => s.role === 'ir_staff') && (
+          {/* Sign Document Button — while the request awaits staff approval, signing happens through Approve */}
+          {genDoc && !isApprovalSigning && req.status !== 'PENDING' && !signatures.some(s => s.role === 'ir_staff') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -300,7 +311,7 @@ export default function StaffRequestDetailPage() {
               <p className="text-xs text-amber-700/80">
                 Submitted on {new Date(pendingCancel.createdAt).toLocaleDateString('en-GB')}
               </p>
-              <p className="text-sm text-gray-700 bg-white rounded-xl px-3 py-2 border border-amber-100">{pendingCancel.reason}</p>
+              <p className="text-sm text-gray-700 bg-white rounded-xl px-3 py-2 border border-amber-100">{pendingCancel.comment}</p>
               <textarea
                 value={cancelNote}
                 onChange={e => setCancelNote(e.target.value)}
@@ -363,7 +374,7 @@ export default function StaffRequestDetailPage() {
 
               {req.status === 'PENDING' && (
                 <>
-                  <Button variant="primary" label={submittingStatus === 'STAFF_APPROVED' ? 'Processing…' : 'Approve'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_APPROVED')} />
+                  <Button variant="primary" label={submittingStatus === 'STAFF_APPROVED' ? 'Processing…' : mustSignToApprove ? 'Sign & Approve' : 'Approve'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_APPROVED')} />
                   <Button variant="danger"  label={submittingStatus === 'STAFF_REJECTED' ? 'Processing…' : 'Reject'} disabled={!!submittingStatus} onClick={() => updateStatus('STAFF_REJECTED', true)} />
                 </>
               )}
@@ -397,24 +408,17 @@ export default function StaffRequestDetailPage() {
                 <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.description}</span>
               </div>
             )}
-            {req.advisorComment && (
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-400 uppercase">Advisor Comment</span>
-                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.advisorComment}</span>
+            {reviewerComments(req).map(e => (
+              <div key={e.id} className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-400 uppercase">
+                  {(e.actorRole ?? '').replace('_', ' ')} Comment
+                  <span className="normal-case font-normal">
+                    {e.actor?.name ? ` · ${e.actor.name}` : ''} · {new Date(e.createdAt).toLocaleDateString('en-GB')}
+                  </span>
+                </span>
+                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{e.comment}</span>
               </div>
-            )}
-            {req.staffComment && (
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-400 uppercase">Staff Comment</span>
-                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.staffComment}</span>
-              </div>
-            )}
-            {req.deanComment && (
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-gray-400 uppercase">Dean Comment</span>
-                <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-3">{req.deanComment}</span>
-              </div>
-            )}
+            ))}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-xs font-semibold text-gray-400 uppercase">Student</span>
@@ -470,16 +474,29 @@ export default function StaffRequestDetailPage() {
       </div>
 
       {/* Signature Modal */}
-      {showSignModal && genDoc && (
+      {(showSignModal || signToApprove) && genDoc && (
         <SignatureModal
           docId={genDoc.id}
           myRole="ir_staff"
           signatures={signatures}
           requiredRoles={requiredSigRoles}
-          signingMethod={req?.requestType?.documentTemplates?.[0]?.signingMethod ?? 'digital'}
+          signingMethod={signingMethod}
           fileUrl={genDoc.signedFileUrl ?? genDoc.fileUrl}
-          onSigned={handleSigned}
-          onClose={() => setShowSignModal(false)}
+          purpose={signToApprove ? 'approve' : 'sign'}
+          onSigned={updated => {
+            handleSigned(updated);
+            if (signToApprove) {
+              setSignToApprove(false);
+              updateStatus('STAFF_APPROVED', false, true);
+            }
+          }}
+          onClose={() => {
+            if (signToApprove) {
+              setSignToApprove(false);
+              toast('Approval cancelled — sign the document to approve');
+            }
+            setShowSignModal(false);
+          }}
         />
       )}
 
@@ -571,17 +588,14 @@ export default function StaffRequestDetailPage() {
         const handleDownload = async () => {
           try {
             if (genDoc) {
-              const url = genDoc.signedFileUrl ?? genDoc.fileUrl;
-              if (!url) return;
-              const res = await fetch(url);
-              const blob = await res.blob();
+              const blob = (await generatedDocApi.download(genDoc.id)).data;
               await saveBlob(blob, `${safeTitle}.pdf`);
             } else if (attachments.length > 0) {
               for (let i = 0; i < attachments.length; i++) {
-                const url = attachments[i];
-                const res = await fetch(url);
-                const blob = await res.blob();
-                const ext = url.split('.').pop()?.split('?')[0] || 'pdf';
+                const fileId = req.attachmentFileIds?.[i];
+                if (!fileId) continue;
+                const blob = (await fileApi.download(fileId)).data;
+                const ext = fileExtension(attachments[i]) || 'pdf';
                 await saveBlob(blob, `${safeTitle}_${i + 1}.${ext}`);
               }
             } else {
@@ -640,8 +654,8 @@ export default function StaffRequestDetailPage() {
                   </div>
                 ) : attachments.length > 0 ? (
                   attachments.map((url, i) => {
-                    const isPdf = /\.pdf$/i.test(url) || url.includes('application/pdf');
-                    const isImage = /\.(png|jpe?g|gif|webp)$/i.test(url);
+                    const isPdf = isPdfUrl(url);
+                    const isImage = isImageUrl(url);
                     if (isPdf) {
                       return (
                         <div key={i} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>

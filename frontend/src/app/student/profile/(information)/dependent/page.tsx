@@ -131,10 +131,10 @@ export default function DependentPage() {
   const [toRemove, setToRemove] = useState<ApiDependent | null>(null);
   const [removing, setRemoving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<ApiChangeRequest[]>([]);
 
   const loadPending = (sid: number) =>
-    changeRequestApi.getPendingForEntity('DEPENDENT', null, sid).then(r => setPendingChange(r.data.data)).catch(() => {});
+    changeRequestApi.listPendingOfType('DEPENDENT', sid).then(r => setPendingChanges(r.data.data)).catch(() => {});
 
   useEffect(() => {
     studentMeApi.get()
@@ -192,13 +192,19 @@ export default function DependentPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5 -mr-2 pr-2">
-          {pendingChange && (
-            <PendingBanner
-              pending={pendingChange}
-              fieldLabels={{ firstName: 'First Name', lastName: 'Last Name', relationship: 'Relationship', nationality: 'Nationality', dateOfBirth: 'Date of Birth', gender: 'Gender', email: 'Email', phone: 'Phone No.' }}
-              onCancel={() => setPendingChange(null)}
-            />
-          )}
+          {pendingChanges.map(cr => {
+            const record = dependents.find(r => r.id === cr.entityId);
+            return (
+              <PendingBanner
+                key={cr.id}
+                pending={cr}
+                subject={cr.action === 'CREATE' ? 'new record' : record ? `${record.firstName} ${record.lastName}` : undefined}
+                currentData={record as unknown as Record<string, unknown> | undefined}
+                fieldLabels={{ firstName: 'First Name', lastName: 'Last Name', relationship: 'Relationship', nationality: 'Nationality', dateOfBirth: 'Date of Birth', gender: 'Gender', email: 'Email', phone: 'Phone No.', passportNumber: 'Passport No.', passportExpiry: 'Passport Expiry', visaType: 'Visa Type', visaExpiry: 'Visa Expiry', passportImageUrl: 'Passport Image', visaImageUrl: 'Visa Image', arrivalImageUrl: 'Arrival Stamp', departedImageUrl: 'Departure Stamp' }}
+                onCancel={() => setPendingChanges(prev => prev.filter(p => p.id !== cr.id))}
+              />
+            );
+          })}
 
           <div className="rounded-2xl border border-gray-100 p-4 sm:p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">

@@ -23,6 +23,6 @@ export const uploadDocument = async (req: AuthRequest, res: Response): Promise<v
 };
 
 export const deleteDocument = async (req: AuthRequest, res: Response): Promise<void> => {
-  await documentService.deleteDocument(parseInt(req.params.docId));
+  await documentService.deleteDocument(parseInt(req.params.docId), parseInt(req.params.id));
   res.json({ success: true, message: 'Document deleted successfully' });
 };

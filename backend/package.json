@@ -14,6 +14,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:backfill-events": "ts-node --transpile-only prisma/backfill-request-events.ts",
+    "prisma:pre-push": "ts-node --transpile-only prisma/pre-push-migrations.ts",
+    "test:file-policy": "node --require ts-node/register/transpile-only --test src/services/domain/filePolicy.test.ts",
+    "db:post-push": "ts-node --transpile-only prisma/post-push-db-objects.ts",
+    "db:verify": "ts-node --transpile-only prisma/verify-db-objects.ts",
+    "files:stray": "ts-node --transpile-only prisma/find-stray-objects.ts",
     "prisma:reset": "prisma migrate reset --force && ts-node prisma/seed.ts"
   },
   "dependencies": {

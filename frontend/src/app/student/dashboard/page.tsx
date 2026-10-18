@@ -64,6 +64,7 @@ const STATUS_DETAIL: Record<string, string> = {
   ADVISOR_REJECTED:      'Rejected by Advisor',
   DEAN_REJECTED:         'Rejected by Dean',
   CANCELLED:             'Cancelled',
+  CANCEL_REQUESTED:      'Cancellation requested — waiting for staff',
 };
 
 function statusDetail(status: string): string {

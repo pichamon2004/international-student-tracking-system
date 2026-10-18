@@ -48,12 +48,13 @@ enum RequestStatus {
   DEAN_APPROVED
   DEAN_REJECTED
   CANCELLED
+  CANCEL_REQUESTED // student asked to cancel; waiting for staff to decide
 }
 
-enum CancellationStatus {
-  PENDING
-  APPROVED
-  REJECTED
+enum RequestEventType {
+  SUBMITTED
+  EDITED
+  STATUS_CHANGED
 }
 
 enum DocumentType {
@@ -87,28 +88,35 @@ enum NotificationType {
 // ─────────────────────────────────────────────────────
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String?
-  googleId  String?  @unique
-  name      String
-  phone     String?
-  image     String?
-  role      String? // legacy field — ใช้ระหว่าง migration เท่านั้น จะ drop หลัง migrate เสร็จ
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  password    String?
+  googleId    String?  @unique
+  name        String
+  phone       String?
+  image       String? // external avatar (Google sign-in); an uploaded photo is imageFileId
+  imageFileId Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  student                  Student?
-  advisor                  Advisor?
-  auditLogs                AuditLog[]
-  notifications            Notification[]
-  userRoles                UserRole[]
-  deanDelegationAsDean     DeanDelegation?       @relation("DeanDelegation_dean")
-  deanDelegationAsDelegate DeanDelegation[]      @relation("DeanDelegation_delegate")
-  changeRequestsReviewed   ChangeRequest[]       @relation("ChangeRequest_reviewer")
-  cancellationsReviewed    RequestCancellation[] @relation("RequestCancellation_reviewer")
+  student                    Student?
+  advisor                    Advisor?
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  userRoles                  UserRole[]
+  deanDelegationsAsDean      DeanDelegation[]    @relation("DeanDelegation_dean")
+  deanDelegationsAsDelegate  DeanDelegation[]    @relation("DeanDelegation_delegate")
+  deanDelegationsCreated     DeanDelegation[]    @relation("DeanDelegation_createdBy")
+  deanDelegationsRevoked     DeanDelegation[]    @relation("DeanDelegation_revokedBy")
+  filesUploaded              File[]              @relation("FileUploadedBy")
+  filesOwned                 File[]              @relation("FileOwnerUser")
+  changeRequestsReviewed     ChangeRequest[]     @relation("ChangeRequest_reviewer")
+  requestEvents              RequestEvent[]      @relation("RequestEvent_actor")
+  requestAttachmentsUploaded RequestAttachment[] @relation("RequestAttachmentUploader")
+  imageFile                  File?               @relation("UserImage", fields: [imageFileId], references: [id], onDelete: Restrict)
 
+  @@index([imageFileId])
   @@map("users")
 }
 
@@ -156,7 +164,7 @@ model Student {
   scholarship        String?
   advisorId          Int?
 
-  photoUrl String?
+  photoFileId Int?
 
   registrationStatus RegistrationStatus @default(PENDING_APPROVAL)
   registrationStep   Int                @default(0)
@@ -178,7 +186,10 @@ model Student {
   generatedDocuments GeneratedDocument[]
   academicDocuments  AcademicDocument[]
   changeRequests     ChangeRequest[]
+  files              File[]              @relation("FileOwnerStudent")
+  photoFile          File?               @relation("StudentPhoto", fields: [photoFileId], references: [id], onDelete: Restrict)
 
+  @@index([photoFileId])
   @@map("students")
 }
 
@@ -194,19 +205,24 @@ model Advisor {
   lastNameEn  String?
   nationality String?
   phone       String?
+  // Administrative position (e.g. "Associate Dean for Academic Affairs").
+  // Set → the advisor also holds the VICE_DEAN role and can be picked to sign for the dean.
+  position    String?
 
-  workPermitNumber  String?
-  workPermitIssue   DateTime?
-  workPermitExpiry  DateTime?
-  workPermitFileUrl String?
+  workPermitNumber String?
+  workPermitIssue  DateTime?
+  workPermitExpiry DateTime?
+  workPermitFileId Int?
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id])
-  students Student[]
+  user           User      @relation(fields: [userId], references: [id])
+  students       Student[]
+  workPermitFile File?     @relation("AdvisorWorkPermit", fields: [workPermitFileId], references: [id], onDelete: Restrict)
 
+  @@index([workPermitFileId])
   @@map("advisors")
 }
 
@@ -214,24 +230,35 @@ model Advisor {
 // PASSPORT
 // ─────────────────────────────────────────────────────
 
+// Held by the student (dependentId null) or by one of the student's dependents.
+// studentId is always the account the record belongs to; the composite FK on
+// (dependentId, studentId) makes the database refuse a dependent of another student.
 model Passport {
-  id             Int      @id @default(autoincrement())
-  studentId      Int      @unique
+  id             Int       @id @default(autoincrement())
+  studentId      Int
+  dependentId    Int?
   passportNumber String
-  issuingCountry String
-  issueDate      DateTime
+  issuingCountry String? // required for students by the backend; the dependent form doesn't ask
+  issueDate      DateTime? // same
   expiryDate     DateTime
   placeOfIssue   String?
   mrzLine1       String?
   mrzLine2       String?
-  imageUrl       String?
-  isVerified     Boolean  @default(false)
-  isCurrent      Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  imageFileId    Int?
+  isVerified     Boolean   @default(false)
+  isCurrent      Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dependent Dependent? @relation(fields: [dependentId, studentId], references: [id, studentId], onDelete: Cascade, map: "passports_dependent_holder_fkey")
+  imageFile File?      @relation("PassportImage", fields: [imageFileId], references: [id], onDelete: Restrict)
+  visas     Visa[]
 
+  @@unique([id, studentId], map: "passports_id_studentId_key") // target of visas' (passportId, studentId) FK
+  @@index([studentId])
+  @@index([dependentId, studentId])
+  @@index([imageFileId])
   @@map("passports")
 }
 
@@ -239,28 +266,45 @@ model Passport {
 // VISA
 // ─────────────────────────────────────────────────────
 
+// Holder as for Passport. passportId is the passport the visa is in: the composite
+// FK keeps it inside the same account; that it is the same person's (student vs
+// which dependent) is checked by the backend under a row lock.
 model Visa {
-  id               Int        @id @default(autoincrement())
-  studentId        Int
-  visaNumber       String?
-  visaType         String
-  status           VisaStatus @default(ACTIVE)
-  issuingCountry   String
-  issuingPlace     String?
-  issueDate        DateTime
-  expiryDate       DateTime
-  entries          String?
-  remarks          String?    @db.Text
-  imageUrl         String?
-  arrivalImageUrl  String?
-  departedImageUrl String?
-  passportImageUrl String?
-  isCurrent        Boolean    @default(true)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id                   Int        @id @default(autoincrement())
+  studentId            Int
+  dependentId          Int?
+  passportId           Int?
+  visaNumber           String?
+  visaType             String
+  status               VisaStatus @default(ACTIVE)
+  issuingCountry       String? // required for students by the backend; the dependent form doesn't ask
+  issuingPlace         String?
+  issueDate            DateTime? // same
+  expiryDate           DateTime
+  entries              String?
+  remarks              String?    @db.Text
+  imageFileId          Int?
+  arrivalStampFileId   Int?
+  departureStampFileId Int?
+  passportPageFileId   Int?
+  isCurrent            Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student            Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  dependent          Dependent? @relation(fields: [dependentId, studentId], references: [id, studentId], onDelete: Cascade, map: "visas_dependent_holder_fkey")
+  passport           Passport?  @relation(fields: [passportId, studentId], references: [id, studentId], onDelete: Restrict, map: "visas_passport_same_account_fkey")
+  imageFile          File?      @relation("VisaImage", fields: [imageFileId], references: [id], onDelete: Restrict)
+  arrivalStampFile   File?      @relation("VisaArrivalStamp", fields: [arrivalStampFileId], references: [id], onDelete: Restrict)
+  departureStampFile File?      @relation("VisaDepartureStamp", fields: [departureStampFileId], references: [id], onDelete: Restrict)
+  passportPageFile   File?      @relation("VisaPassportPage", fields: [passportPageFileId], references: [id], onDelete: Restrict)
 
+  @@index([imageFileId])
+  @@index([arrivalStampFileId])
+  @@index([departureStampFileId])
+  @@index([passportPageFileId])
+  @@index([dependentId, studentId])
+  @@index([passportId, studentId])
   @@map("visas")
 }
 
@@ -269,21 +313,25 @@ model Visa {
 // ─────────────────────────────────────────────────────
 
 model HealthInsurance {
-  id           Int      @id @default(autoincrement())
-  studentId    Int
-  provider     String
-  policyNumber String?
-  coverageType String?
-  startDate    DateTime
-  expiryDate   DateTime
-  fileUrl      String? // front of the insurance card
-  backFileUrl  String? // back of the card (optional)
-  isCurrent    Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id              Int      @id @default(autoincrement())
+  studentId       Int
+  provider        String
+  policyNumber    String?
+  coverageType    String?
+  startDate       DateTime
+  expiryDate      DateTime
+  cardFrontFileId Int? // front of the insurance card
+  cardBackFileId  Int? // back of the card (optional)
+  isCurrent       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student       Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cardFrontFile File?   @relation("InsuranceCardFront", fields: [cardFrontFileId], references: [id], onDelete: Restrict)
+  cardBackFile  File?   @relation("InsuranceCardBack", fields: [cardBackFileId], references: [id], onDelete: Restrict)
 
+  @@index([cardFrontFileId])
+  @@index([cardBackFileId])
   @@map("health_insurances")
 }
 
@@ -306,22 +354,15 @@ model Dependent {
   gender      Gender
   nationality String
 
-  passportNumber   String?
-  passportExpiry   DateTime?
-  passportImageUrl String?
-  visaType         String?
-  visaExpiry       DateTime?
-  visaImageUrl     String?
-  arrivalImageUrl  String?
-  departedImageUrl String?
-  visaStatus       VisaStatus @default(ACTIVE)
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   student   Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
   documents Document[]
+  passports Passport[] // current one has isCurrent
+  visas     Visa[]
 
+  @@unique([id, studentId], map: "dependents_id_studentId_key") // target of the holder FKs
   @@map("dependents")
 }
 
@@ -336,7 +377,7 @@ model Document {
   documentType DocumentType @default(OTHER)
   name         String
   description  String?
-  fileUrl      String
+  fileId       Int?
   fileType     String
   fileSize     Int
   uploadedBy   Int
@@ -346,7 +387,9 @@ model Document {
 
   student   Student?   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   dependent Dependent? @relation(fields: [dependentId], references: [id], onDelete: Cascade)
+  file      File?      @relation("DocumentFile", fields: [fileId], references: [id], onDelete: Restrict)
 
+  @@index([fileId])
   @@map("documents")
 }
 
@@ -360,15 +403,28 @@ model AcademicDocument {
   docType     String // Transcript, Degree Certificate, Enrollment Certificate, Other
   institution String
   issueDate   DateTime
-  fileUrl     String? // first page — used as the thumbnail
-  pageUrls    String? @db.Text // JSON string[] of every page, in order (fileUrl = pageUrls[0])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  student Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  pages   AcademicDocumentPage[] // in order; page 0 is the thumbnail
 
   @@map("academic_documents")
+}
+
+model AcademicDocumentPage {
+  id     Int @id @default(autoincrement())
+  docId  Int
+  pageNo Int // 0-based
+  fileId Int
+
+  doc  AcademicDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+  file File             @relation("AcademicDocumentPageFile", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@unique([docId, pageNo])
+  @@index([fileId])
+  @@map("academic_document_pages")
 }
 
 // ─────────────────────────────────────────────────────
@@ -430,54 +486,61 @@ model Request {
   description   String?       @db.Text
   formData      String?       @db.LongText // JSON — values student filled in
   status        RequestStatus @default(PENDING)
-  attachments   String?       @db.Text // JSON array of file URLs
-
-  // Advisor review
-  advisorId      Int?
-  advisorComment String?   @db.Text
-  advisorAt      DateTime?
-
-  // Staff review
-  staffId      Int?
-  staffComment String?   @db.Text
-  staffAt      DateTime?
-
-  // Dean review
-  deanId      Int?
-  deanComment String?   @db.Text
-  deanAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student       Student               @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  requestType   RequestType?          @relation(fields: [requestTypeId], references: [id])
-  cancellations RequestCancellation[]
+  student         Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  requestType     RequestType?        @relation(fields: [requestTypeId], references: [id])
+  events          RequestEvent[] // who did what and when (approvals, comments, cancellation)
+  attachmentFiles RequestAttachment[]
 
   @@map("requests")
+}
+
+// Append-only history of a request — one row per action, never updated.
+model RequestEvent {
+  id         Int              @id @default(autoincrement())
+  requestId  Int
+  type       RequestEventType
+  actorId    Int? // users.id
+  actorRole  String? // STUDENT | STAFF | ADVISOR | DEAN | VICE_DEAN
+  fromStatus RequestStatus?
+  toStatus   RequestStatus?
+  comment    String?          @db.Text // comment / cancellation reason / review note
+  createdAt  DateTime         @default(now())
+
+  request     Request             @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor       User?               @relation("RequestEvent_actor", fields: [actorId], references: [id])
+  attachments RequestAttachment[]
+
+  @@index([requestId, createdAt])
+  @@map("request_events")
+}
+
+// A file attached to a request, usually by an approver together with a status
+// change. Accumulates — a later approver's files never replace earlier ones.
+model RequestAttachment {
+  id           Int      @id @default(autoincrement())
+  requestId    Int
+  eventId      Int? // the status change it came with; null for files migrated from the old JSON column
+  fileId       Int
+  uploadedById Int?
+  createdAt    DateTime @default(now())
+
+  request    Request       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  event      RequestEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  file       File          @relation("RequestAttachmentFile", fields: [fileId], references: [id], onDelete: Restrict)
+  uploadedBy User?         @relation("RequestAttachmentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, fileId])
+  @@index([fileId])
+  @@map("request_attachments")
 }
 
 // ─────────────────────────────────────────────────────
 // REQUEST CANCELLATION  (student asks, staff approves)
 // ─────────────────────────────────────────────────────
-
-model RequestCancellation {
-  id         Int                @id @default(autoincrement())
-  requestId  Int
-  reason     String             @db.Text
-  status     CancellationStatus @default(PENDING)
-  reviewedBy Int?
-  reviewNote String?            @db.Text
-  reviewedAt DateTime?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-
-  request  Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  reviewer User?   @relation("RequestCancellation_reviewer", fields: [reviewedBy], references: [id])
-
-  @@index([requestId, status])
-  @@map("request_cancellations")
-}
 
 // ─────────────────────────────────────────────────────
 // GENERATED DOCUMENT
@@ -490,13 +553,13 @@ model GeneratedDocument {
   generatedBy Int
   requestId   Int?
 
-  fileUrl       String?
-  signedFileUrl String?
-  signedBy      String?
-  signedAt      DateTime?
-  signingMode   String?
-  sigCoords     String?   @db.Text // legacy: PDFKit x/y coords, unused since the Puppeteer HTML renderer
-  formData      String?   @db.Text // JSON snapshot of the data used to generate this doc — re-merged with
+  fileId       Int? // the generated PDF
+  signedFileId Int? // the hand-signed upload (manual) or the re-rendered signed PDF (digital/approval)
+  signedBy     String?
+  signedAt     DateTime?
+  signingMode  String?
+  sigCoords    String?   @db.Text // legacy: PDFKit x/y coords, unused since the Puppeteer HTML renderer
+  formData     String?   @db.Text // JSON snapshot of the data used to generate this doc — re-merged with
   // the template body on every signature so the PDF stays pixel-identical
   // to the live preview instead of drifting from a flat pre-rendered file
 
@@ -506,21 +569,30 @@ model GeneratedDocument {
   template   DocumentTemplate @relation(fields: [templateId], references: [id])
   student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
   signatures DocSignature[]
+  file       File?            @relation("GeneratedDocFile", fields: [fileId], references: [id], onDelete: Restrict)
+  signedFile File?            @relation("GeneratedDocSignedFile", fields: [signedFileId], references: [id], onDelete: Restrict)
 
+  @@index([fileId])
+  @@index([signedFileId])
   @@map("generated_documents")
 }
 
 model DocSignature {
-  id           Int      @id @default(autoincrement())
-  docId        Int
-  role         String
-  signerUserId Int
-  imageUrl     String
-  signedAt     DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  docId          Int
+  role           String
+  signerUserId   Int
+  imageFileId    Int? // digital: the signer's signature image
+  evidenceFileId Int? // manual: the signed PDF this signer uploaded
+  signedAt       DateTime @default(now())
 
-  doc GeneratedDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+  doc          GeneratedDocument @relation(fields: [docId], references: [id], onDelete: Cascade)
+  imageFile    File?             @relation("DocSignatureImage", fields: [imageFileId], references: [id], onDelete: Restrict)
+  evidenceFile File?             @relation("DocSignatureEvidence", fields: [evidenceFileId], references: [id], onDelete: Restrict)
 
   @@unique([docId, role])
+  @@index([imageFileId])
+  @@index([evidenceFileId])
   @@map("doc_signatures")
 }
 
@@ -616,17 +688,27 @@ model Notification {
 // DEAN DELEGATION
 // ─────────────────────────────────────────────────────
 
+// One row per delegation period (history is kept). A delegation is in effect while
+// revokedAt IS NULL AND startAt <= now AND (endAt IS NULL OR endAt > now).
 model DeanDelegation {
-  id         Int      @id @default(autoincrement())
-  deanId     Int      @unique
-  delegateId Int
-  isActive   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          Int       @id @default(autoincrement())
+  deanId      Int
+  delegateId  Int
+  startAt     DateTime
+  endAt       DateTime? // null = until revoked
+  note        String?   @db.Text
+  createdById Int // IR staff who set it up
+  revokedAt   DateTime?
+  revokedById Int?
+  createdAt   DateTime  @default(now())
 
-  dean     User @relation("DeanDelegation_dean", fields: [deanId], references: [id])
-  delegate User @relation("DeanDelegation_delegate", fields: [delegateId], references: [id])
+  dean      User  @relation("DeanDelegation_dean", fields: [deanId], references: [id])
+  delegate  User  @relation("DeanDelegation_delegate", fields: [delegateId], references: [id])
+  createdBy User  @relation("DeanDelegation_createdBy", fields: [createdById], references: [id])
+  revokedBy User? @relation("DeanDelegation_revokedBy", fields: [revokedById], references: [id])
 
+  @@index([deanId, startAt])
+  @@index([delegateId])
   @@map("dean_delegations")
 }
 
@@ -739,4 +821,82 @@ model ChangeRequest {
   reviewer User?   @relation("ChangeRequest_reviewer", fields: [reviewedBy], references: [id])
 
   @@map("change_requests")
+}
+
+// ─────────────────────────────────────────────────────
+// FILES — one row per object in the bucket. The meaning of a file lives on the
+// business relation that points at it (e.g. visas.arrivalStampFileId); access is
+// decided from that relation, never from this table alone.
+// ─────────────────────────────────────────────────────
+
+enum FilePurpose {
+  PASSPORT_IMAGE
+  VISA_IMAGE
+  VISA_ARRIVAL_STAMP
+  VISA_DEPARTURE_STAMP
+  VISA_PASSPORT_PAGE
+  INSURANCE_CARD
+  ACADEMIC_DOCUMENT_PAGE
+  DEPENDENT_PASSPORT_IMAGE
+  DEPENDENT_VISA_IMAGE
+  DEPENDENT_ARRIVAL_STAMP
+  DEPENDENT_DEPARTURE_STAMP
+  DEPENDENT_DOCUMENT
+  STUDENT_PHOTO
+  USER_PHOTO
+  WORK_PERMIT
+  GENERAL_DOCUMENT
+  REQUEST_ATTACHMENT
+  GENERATED_PDF
+  SIGNED_PDF
+  SIGNATURE
+}
+
+model File {
+  id             Int         @id @default(autoincrement())
+  storageKey     String      @unique // key inside the bucket, never a URL
+  originalName   String?
+  mimeType       String // detected from content
+  sizeBytes      Int
+  checksum       String? // sha256 hex
+  uploadedById   Int? // null only for migrated legacy files with no known uploader
+  purpose        FilePurpose // set by the upload endpoint, checked by claim()
+  ownerStudentId Int? // scope of a student's personal files — not an access rule
+  ownerUserId    Int? // scope of user-owned files, e.g. a signer's signature
+  legacyUnowned  Boolean     @default(false) // migrated file whose owner could not be determined
+  uploadedAt     DateTime    @default(now())
+  deletedAt      DateTime?
+  // reserved for the orphan-cleanup job (later step)
+  purgeMarkedAt  DateTime?
+  purgedAt       DateTime?
+  purgeError     String?     @db.Text
+  purgeAttempts  Int         @default(0)
+
+  uploadedBy   User?    @relation("FileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  ownerStudent Student? @relation("FileOwnerStudent", fields: [ownerStudentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ownerUser    User?    @relation("FileOwnerUser", fields: [ownerUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // onUpdate must not CASCADE: MySQL refuses CHECK constraints (files_owner_scope_chk) on columns with a referential action
+
+  insuranceCardFronts   HealthInsurance[]      @relation("InsuranceCardFront")
+  insuranceCardBacks    HealthInsurance[]      @relation("InsuranceCardBack")
+  academicDocumentPages AcademicDocumentPage[] @relation("AcademicDocumentPageFile")
+  userImages            User[]                 @relation("UserImage")
+  studentPhotos         Student[]              @relation("StudentPhoto")
+  advisorWorkPermits    Advisor[]              @relation("AdvisorWorkPermit")
+  passportImages        Passport[]             @relation("PassportImage")
+  visaImages            Visa[]                 @relation("VisaImage")
+  visaArrivalStamps     Visa[]                 @relation("VisaArrivalStamp")
+  visaDepartureStamps   Visa[]                 @relation("VisaDepartureStamp")
+  visaPassportPages     Visa[]                 @relation("VisaPassportPage")
+  documents             Document[]             @relation("DocumentFile")
+  generatedDocs         GeneratedDocument[]    @relation("GeneratedDocFile")
+  generatedDocsSigned   GeneratedDocument[]    @relation("GeneratedDocSignedFile")
+  docSignatureImages    DocSignature[]         @relation("DocSignatureImage")
+  docSignatureEvidence  DocSignature[]         @relation("DocSignatureEvidence")
+  requestAttachments    RequestAttachment[]    @relation("RequestAttachmentFile")
+
+  @@index([ownerStudentId])
+  @@index([ownerUserId])
+  @@index([uploadedAt])
+  @@map("files")
 }

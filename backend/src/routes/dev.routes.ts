@@ -13,17 +13,26 @@ function requireDevKey(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-const STAFF_SELECT = { id: true, email: true, name: true, role: true, isActive: true, createdAt: true } as const;
+const STAFF_SELECT = {
+  id: true, email: true, name: true, isActive: true, createdAt: true,
+  userRoles: { select: { role: { select: { code: true } } } },
+} as const;
+
+// Roles live in user_roles; flatten them to codes for the dev page
+const withRoles = <T extends { userRoles: { role: { code: string } }[] }>({ userRoles, ...user }: T) =>
+  ({ ...user, roles: userRoles.map(ur => ur.role.code) });
+
+const IS_STAFF = { userRoles: { some: { role: { code: 'STAFF' } } } } as const;
 
 // GET /api/dev/staff — list all STAFF users
 router.get('/staff', requireDevKey, async (_req, res) => {
   try {
     const users = await prisma.user.findMany({
-      where: { role: 'STAFF' },
+      where: IS_STAFF,
       select: STAFF_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    res.json({ success: true, data: users });
+    res.json({ success: true, data: users.map(withRoles) });
   } catch {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
@@ -37,11 +46,16 @@ router.post('/staff', requireDevKey, async (req, res) => {
       res.status(400).json({ success: false, message: 'email and name are required' });
       return;
     }
+    const staffRole = await prisma.role.findUnique({ where: { code: 'STAFF' } });
+    if (!staffRole) {
+      res.status(500).json({ success: false, message: 'STAFF role missing — run the seed first' });
+      return;
+    }
     const user = await prisma.user.create({
-      data: { email, name, role: 'STAFF', isActive: true },
+      data: { email, name, isActive: true, userRoles: { create: { roleId: staffRole.id } } },
       select: STAFF_SELECT,
     });
-    res.status(201).json({ success: true, data: user });
+    res.status(201).json({ success: true, data: withRoles(user) });
   } catch (error: unknown) {
     if ((error as { code?: string }).code === 'P2002') {
       res.status(400).json({ success: false, message: 'Email already exists' });
@@ -63,7 +77,7 @@ router.put('/staff/:id', requireDevKey, async (req, res) => {
       data,
       select: STAFF_SELECT,
     });
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: withRoles(user) });
   } catch {
     res.status(500).json({ success: false, message: 'Internal server error' });
   }

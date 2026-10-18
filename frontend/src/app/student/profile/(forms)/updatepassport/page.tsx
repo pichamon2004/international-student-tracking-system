@@ -93,7 +93,8 @@ function PassportForm() {
         birthDate:   s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : '',
       }));
 
-      const passport = s.passports?.[0];
+      // Edit loads the selected passport; add starts from an empty passport form
+      const passport = isEdit ? s.passports?.find(p => p.id === Number(id)) : undefined;
       if (passport) {
         setForm(prev => ({
           ...prev,
@@ -101,6 +102,7 @@ function PassportForm() {
           country:     passport.issuingCountry ?? prev.country,
           dateOfIssue: passport.issueDate ? passport.issueDate.slice(0, 10) : '',
           expiryDate:  passport.expiryDate ? passport.expiryDate.slice(0, 10) : '',
+          placeOfBirth: passport.placeOfIssue ?? '',
         }));
         if (passport.imageUrl?.startsWith('http')) setPreview(passport.imageUrl);
       }
@@ -204,15 +206,17 @@ function PassportForm() {
         }
       }
 
-      const res = await passportApi.upsert(studentNumId, {
+      const payload = {
         passportNumber: form.passportNo,
         issuingCountry: form.country,
         issueDate:      form.dateOfIssue,
         expiryDate:     form.expiryDate,
         placeOfIssue:   form.placeOfBirth || undefined,
-        isCurrent:      true,
         imageUrl,
-      });
+      };
+      const res = isEdit
+        ? await passportApi.update(studentNumId, Number(id), payload)
+        : await passportApi.create(studentNumId, payload);
       if (res.status === 202) {
         toast.success('Change submitted — awaiting staff approval');
       } else {

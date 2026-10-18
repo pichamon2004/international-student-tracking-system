@@ -5,6 +5,13 @@ export const findPending = (studentId: number, entityType: string, entityId: num
     where: { studentId, entityType, entityId: entityId ?? null, status: 'PENDING' },
   });
 
+/** Every request still waiting for review on one kind of record (any record of it, new or existing). */
+export const findPendingOfType = (studentId: number, entityType: string) =>
+  prisma.changeRequest.findMany({
+    where:   { studentId, entityType, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+  });
+
 export const create = (data: {
   studentId: number;
   entityType: string;

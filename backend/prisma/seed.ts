@@ -39,7 +39,8 @@ const ROLES = [
   { code: 'ADVISOR', name: 'อาจารย์ที่ปรึกษา',   description: 'ดูนักศึกษา และอนุมัติคำร้อง' },
   { code: 'STAFF',   name: 'เจ้าหน้าที่',         description: 'จัดการนักศึกษา คำร้อง เอกสาร และผู้ใช้งาน' },
   { code: 'ADMIN',   name: 'ผู้ดูแลระบบ',          description: 'กำหนด Role และ Permission ในระบบ' },
-  { code: 'DEAN',    name: 'คณบดี / รองคณบดี',    description: 'อนุมัติคำร้องในระดับคณบดี' },
+  { code: 'DEAN',    name: 'คณบดี',               description: 'อนุมัติคำร้องในระดับคณบดี' },
+  { code: 'VICE_DEAN', name: 'อาจารย์บริหาร (ผู้รับมอบอำนาจ)', description: 'อนุมัติคำร้องแทนคณบดี เฉพาะช่วงที่ได้รับมอบอำนาจ' },
 ];
 
 // ─────────────────────────────────────────────────────
@@ -161,7 +162,8 @@ async function main() {
 
     } else if (role.code === 'ADMIN') {
       targetPermissions = allPermissions.filter(p => ADMIN_PERMISSIONS.has(p.code));
-    } else if (role.code === 'DEAN') {
+    } else if (role.code === 'DEAN' || role.code === 'VICE_DEAN') {
+      // VICE_DEAN acts for the dean while delegated, so it needs the same access
       targetPermissions = allPermissions.filter(p => DEAN_PERMISSIONS.has(p.code));
     }
 
@@ -197,27 +199,7 @@ async function main() {
     console.log('  ✅ Admin user: pichamonisme@gmail.com (Google login)');
   }
 
-  // 6. migrate User.role (String) → UserRole records
-  console.log('🔄 Migrating User.role → UserRole...');
-  const users = await prisma.user.findMany({ where: { role: { not: null } } });
-  let migrated = 0;
-
-  for (const user of users) {
-    if (!user.role) continue;
-    const roleRecord = await prisma.role.findUnique({ where: { code: user.role } });
-    if (!roleRecord) continue;
-
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: user.id, roleId: roleRecord.id } },
-      update: {},
-      create: { userId: user.id, roleId: roleRecord.id },
-    });
-    migrated++;
-  }
-
-  console.log(`  ✅ Migrated ${migrated} users`);
-
-  // 7. Seed template variables
+  // 6. Seed template variables
   console.log('🔤 Seeding template variables...');
   const DEFAULT_VARIABLES = [
     { key: 'student_name',     label: 'Student Name' },

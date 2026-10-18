@@ -116,7 +116,7 @@ export default function StudentDetailPage() {
 
   const name = [student.titleEn, student.firstNameEn, student.lastNameEn].filter(Boolean).join(' ') || '—';
   const initials = name.split(' ').filter(w => /^[A-Z]/i.test(w)).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-  const currentPassport = student.passports?.find(p => p.isCurrent) ?? student.passports?.[0] ?? null;
+  const currentPassport = student.passports?.find(p => p.isCurrent) ?? null; // the student may have set none current
   const currentVisa = allVisas.find(v => v.isCurrent) ?? allVisas[0] ?? null;
   const currentInsurance = allInsurances.find(i => i.isCurrent) ?? allInsurances[0] ?? null;
   const visaBadge = getVisaBadge(allVisas);

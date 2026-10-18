@@ -56,12 +56,12 @@ export default function AcademicPage() {
   const [loading, setLoading] = useState(true);
   const [toDelete, setToDelete] = useState<ApiAcademicDocument | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<ApiChangeRequest[]>([]);
   // Every page of the document being viewed (images shown inline, PDFs embedded)
   const [previewPages, setPreviewPages] = useState<string[] | null>(null);
 
   const loadPending = (sid: number) =>
-    changeRequestApi.getPendingForEntity('ACADEMIC_DOCUMENT', null, sid).then(r => setPendingChange(r.data.data)).catch(() => {});
+    changeRequestApi.listPendingOfType('ACADEMIC_DOCUMENT', sid).then(r => setPendingChanges(r.data.data)).catch(() => {});
 
   useEffect(() => {
     studentMeApi.get().then(res => {
@@ -147,13 +147,19 @@ export default function AcademicPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5 -mr-2 pr-2">
-          {pendingChange && (
-            <PendingBanner
-              pending={pendingChange}
-              fieldLabels={{ docType: 'Document Type', institution: 'Institution', issueDate: 'Issue Date' }}
-              onCancel={() => setPendingChange(null)}
-            />
-          )}
+          {pendingChanges.map(cr => {
+            const record = docs.find(r => r.id === cr.entityId);
+            return (
+              <PendingBanner
+                key={cr.id}
+                pending={cr}
+                subject={cr.action === 'CREATE' ? 'new record' : record ? `${record.docType} — ${record.institution}` : undefined}
+                currentData={record as unknown as Record<string, unknown> | undefined}
+                fieldLabels={{ docType: 'Document Type', institution: 'Institution', issueDate: 'Issue Date', fileUrl: 'Document', pageUrls: 'Pages' }}
+                onCancel={() => setPendingChanges(prev => prev.filter(p => p.id !== cr.id))}
+              />
+            );
+          })}
 
           <div className="rounded-2xl border border-gray-100 p-4 sm:p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">

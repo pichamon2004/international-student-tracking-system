@@ -5,9 +5,10 @@ import { RiDeleteBack2Line } from 'react-icons/ri';
 
 interface Props {
   onConfirm: (dataUrl: string) => void;
+  confirmLabel?: string;
 }
 
-export default function SignaturePad({ onConfirm }: Props) {
+export default function SignaturePad({ onConfirm, confirmLabel = 'Confirm Signature' }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -104,7 +105,7 @@ export default function SignaturePad({ onConfirm }: Props) {
           disabled={isEmpty}
           className="px-4 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Confirm Signature
+          {confirmLabel}
         </button>
       </div>
     </div>

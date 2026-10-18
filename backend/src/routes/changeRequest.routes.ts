@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/errorHandler.middleware';
 import {
-  listPending, getOne, approve, reject, cancel, getPendingForEntity,
+  listPending, getOne, approve, reject, cancel, getPendingForEntity, listPendingOfType,
 } from '../controllers/changeRequest.controller';
 
 const router = Router();
 
 router.get('/entity',        authenticate, asyncHandler(getPendingForEntity));
+router.get('/pending',       authenticate, asyncHandler(listPendingOfType));
 router.get('/',              authenticate, requireRole('STAFF'), asyncHandler(listPending));
 router.get('/:id',           authenticate, asyncHandler(getOne));
 router.post('/:id/approve',  authenticate, requireRole('STAFF'), asyncHandler(approve));

@@ -1092,7 +1092,7 @@ export default function NewRequestFormPage({ params, searchParams }: { params: {
     requestApi.getById(editId)
       .then(res => {
         const r = res.data.data;
-        const pendingCancel = r.cancellations?.[0]?.status === 'PENDING';
+        const pendingCancel = r.status === 'CANCEL_REQUESTED';
         if (r.status !== 'PENDING' || pendingCancel) {
           setEditError('This request can no longer be edited.');
           return;
@@ -1154,7 +1154,7 @@ export default function NewRequestFormPage({ params, searchParams }: { params: {
           fundingType: '',
           advisorName,
           visaExpiry,
-          passportNumber: s.passports?.[0]?.passportNumber ?? '',
+          passportNumber: s.passports?.find(p => p.isCurrent)?.passportNumber ?? '',
         });
       } catch (e) {
         console.error('Failed to load data:', e);

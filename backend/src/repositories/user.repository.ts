@@ -2,7 +2,6 @@ import prisma from '../utils/prisma';
 
 export interface UpdateUserDto {
   name?: string;
-  role?: string;
   isActive?: boolean;
 }
 
@@ -30,7 +29,7 @@ export const findByEmail = (email: string) =>
 export const findById = (id: number) =>
   prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, role: true, isActive: true },
+    select: { id: true, email: true, isActive: true },
   });
 
 export const findByIdFull = (id: number) =>
@@ -40,7 +39,7 @@ export const findByIdWithProfile = (id: number) =>
   prisma.user.findUnique({
     where: { id },
     select: {
-      id: true, email: true, name: true, role: true, createdAt: true,
+      id: true, email: true, name: true, createdAt: true,
       student: { select: { firstNameEn: true, lastNameEn: true, titleEn: true } },
       advisor: { select: { firstNameEn: true, lastNameEn: true, titleEn: true } },
     },
@@ -60,15 +59,16 @@ export const create = (data: { email: string; password?: string; name: string })
 export const update = (id: number, dto: UpdateUserDto) =>
   prisma.user.update({
     where: { id },
-    data: { name: dto.name, role: dto.role, isActive: dto.isActive },
-    select: { id: true, email: true, name: true, role: true, isActive: true },
+    data: { name: dto.name, isActive: dto.isActive },
+    select: { id: true, email: true, name: true, isActive: true },
   });
 
 export const updatePassword = (id: number, hashedPassword: string) =>
   prisma.user.update({ where: { id }, data: { password: hashedPassword } });
 
-export const updateImage = (id: number, image: string) =>
-  prisma.user.update({ where: { id }, data: { image } });
+// An uploaded photo; users.image (the external sign-in avatar) is left as the fallback
+export const updateImageFile = (id: number, imageFileId: number) =>
+  prisma.user.update({ where: { id }, data: { imageFileId } });
 
 export const linkGoogleAccount = (id: number, googleId: string, image: string) =>
   prisma.user.update({ where: { id }, data: { googleId, image } });

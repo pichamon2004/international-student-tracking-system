@@ -7,7 +7,7 @@ export interface CreateAdvisorDto {
   lastNameEn:   string;
   phone?:       string;
   nationality?: string;
-
+  position?:    string | null;
 }
 
 export interface UpdateAdvisorDto {
@@ -16,12 +16,15 @@ export interface UpdateAdvisorDto {
   lastNameEn?:        string;
   phone?:             string;
   nationality?:       string;
+  position?:          string | null;
   isActive?:          boolean;
   workPermitNumber?:  string;
   workPermitIssue?:   Date;
   workPermitExpiry?:  Date;
-  workPermitFileUrl?: string;
+  workPermitFileId?:  number | null;
 }
+
+const FILE_REF = { select: { id: true, storageKey: true } } as const;
 
 const STUDENT_SELECT = {
   id: true, studentId: true, titleEn: true,
@@ -42,8 +45,9 @@ export const findById = (id: number) =>
   prisma.advisor.findUnique({
     where:   { id },
     include: {
-      students: { select: { ...STUDENT_SELECT, email: true } },
-      user:     { select: { email: true } },
+      students:       { select: { ...STUDENT_SELECT, email: true } },
+      user:           { select: { email: true, image: true, imageFile: FILE_REF } },
+      workPermitFile: FILE_REF,
     },
   });
 
@@ -52,7 +56,8 @@ export const findByUserId = (userId: number) =>
   prisma.advisor.findUnique({
     where:   { userId },
     include: {
-      user:     { select: { email: true, image: true } },
+      user:     { select: { email: true, image: true, imageFile: FILE_REF } },
+      workPermitFile: FILE_REF,
       students: { select: { ...STUDENT_SELECT, homeCountry: true } },
     },
   });
@@ -75,7 +80,7 @@ export const createWithUser = (dto: CreateAdvisorDto) =>
   prisma.$transaction(async (tx) => {
     const name = [dto.titleEn, dto.firstNameEn, dto.lastNameEn].filter(Boolean).join(' ');
     const user = await tx.user.create({
-      data: { email: dto.email, name, role: 'ADVISOR', isActive: true },
+      data: { email: dto.email, name, isActive: true },
     });
     const role = await tx.role.findUnique({ where: { code: 'ADVISOR' } });
     if (role) await tx.userRole.create({ data: { userId: user.id, roleId: role.id } });
@@ -87,7 +92,7 @@ export const createWithUser = (dto: CreateAdvisorDto) =>
         lastNameEn:  dto.lastNameEn,
         phone:       dto.phone       ?? null,
         nationality: dto.nationality ?? null,
-
+        position:    dto.position    ?? null,
       },
       include: { _count: { select: { students: true } }, user: { select: { email: true } } },
     });
@@ -105,7 +110,7 @@ export const updateByUserId = (userId: number, dto: UpdateAdvisorDto) =>
       workPermitNumber:  dto.workPermitNumber,
       workPermitIssue:   dto.workPermitIssue,
       workPermitExpiry:  dto.workPermitExpiry,
-      workPermitFileUrl: dto.workPermitFileUrl,
+      workPermitFileId:  dto.workPermitFileId,
     },
   });
 
@@ -118,10 +123,25 @@ export const updateById = (id: number, dto: UpdateAdvisorDto) =>
       lastNameEn:        dto.lastNameEn,
       phone:             dto.phone,
       nationality:       dto.nationality,
+      position:          dto.position,
       isActive:          dto.isActive,
       workPermitNumber:  dto.workPermitNumber,
       workPermitIssue:   dto.workPermitIssue,
       workPermitExpiry:  dto.workPermitExpiry,
-      workPermitFileUrl: dto.workPermitFileUrl,
+      workPermitFileId:  dto.workPermitFileId,
     },
+  });
+
+// Advisors with an administrative position — the people staff can pick to sign for the dean
+export const findExecutives = () =>
+  prisma.advisor.findMany({
+    where:   { isActive: true, position: { not: null }, NOT: { position: '' }, user: { isActive: true } },
+    select:  { userId: true, position: true, user: { select: { name: true } } },
+    orderBy: { firstNameEn: 'asc' },
+  });
+
+export const findExecutiveByUserId = (userId: number) =>
+  prisma.advisor.findFirst({
+    where:  { userId, isActive: true, position: { not: null }, NOT: { position: '' } },
+    select: { userId: true, position: true },
   });

@@ -7,12 +7,20 @@ import { ApiChangeRequest, changeRequestApi } from '@/lib/api';
 
 interface Props {
   pending: ApiChangeRequest;
+  subject?: string;          // which record this is about, when a page lists several
   currentData?: Record<string, unknown>;
   fieldLabels?: Record<string, string>;
   onCancel?: () => void;
 }
 
-export default function PendingBanner({ pending, currentData, fieldLabels, onCancel }: Props) {
+// Uploaded files arrive as (signed) URLs or JSON lists of them — not worth printing
+function displayValue(v: unknown): string {
+  const s = String(v ?? '');
+  if (/^https?:\/\//.test(s) || /^\["https?:\/\//.test(s)) return 'new file';
+  return s;
+}
+
+export default function PendingBanner({ pending, subject, currentData, fieldLabels, onCancel }: Props) {
   const [cancelling, setCancelling] = useState(false);
 
   const handleCancel = async () => {
@@ -38,7 +46,9 @@ export default function PendingBanner({ pending, currentData, fieldLabels, onCan
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 text-amber-700">
           <RiTimeLine size={18} className="shrink-0 mt-0.5" />
-          <span className="font-semibold text-sm">Pending Staff Approval</span>
+          <span className="font-semibold text-sm">
+            Pending Staff Approval{subject && <span className="font-normal text-amber-600"> · {subject}</span>}
+          </span>
         </div>
         <button
           onClick={handleCancel}
@@ -74,11 +84,11 @@ export default function PendingBanner({ pending, currentData, fieldLabels, onCan
                   <span className="font-medium">{label}:</span>{' '}
                   {oldVal !== undefined && oldVal !== null && String(oldVal) !== '' ? (
                     <>
-                      <span className="line-through text-amber-500">{String(oldVal)}</span>
+                      <span className="line-through text-amber-500">{displayValue(oldVal)}</span>
                       {' → '}
                     </>
                   ) : null}
-                  <span className="font-semibold">{String(newVal)}</span>
+                  <span className="font-semibold">{displayValue(newVal)}</span>
                 </li>
               );
             })}

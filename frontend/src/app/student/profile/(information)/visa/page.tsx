@@ -62,7 +62,7 @@ export default function VisaPage() {
   const [visas, setVisas] = useState<ApiVisa[]>([]);
   const [studentId, setStudentId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<ApiChangeRequest[]>([]);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
 
@@ -71,7 +71,7 @@ export default function VisaPage() {
       .then(res => {
         const s = res.data.data;
         setStudentId(s.id);
-        changeRequestApi.getPendingForEntity('VISA', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
+        changeRequestApi.listPendingOfType('VISA', s.id).then(r => setPendingChanges(r.data.data)).catch(() => {});
         return visaApi.getAll(s.id);
       })
       .then(res => setVisas(res.data.data))
@@ -101,7 +101,7 @@ export default function VisaPage() {
       // visa stays until then, so show the pending banner instead of hiding it.
       if (res.status === 202) {
         toast.success('Removal submitted — awaiting staff approval');
-        changeRequestApi.getPendingForEntity('VISA', null, studentId).then(r => setPendingChange(r.data.data)).catch(() => {});
+        changeRequestApi.listPendingOfType('VISA', studentId).then(r => setPendingChanges(r.data.data)).catch(() => {});
         return;
       }
       setVisas(prev => prev.filter(v => v.id !== current.id));
@@ -135,13 +135,19 @@ export default function VisaPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5 -mr-2 pr-2">
-        {pendingChange && (
-          <PendingBanner
-            pending={pendingChange}
-            fieldLabels={{ visaType: 'Visa Type', issuingCountry: 'Issuing Country', issueDate: 'Issue Date', expiryDate: 'Expiry Date', entries: 'Entries', remarks: 'Remarks' }}
-            onCancel={() => setPendingChange(null)}
-          />
-        )}
+        {pendingChanges.map(cr => {
+            const record = visas.find(r => r.id === cr.entityId);
+            return (
+              <PendingBanner
+                key={cr.id}
+                pending={cr}
+                subject={cr.action === 'CREATE' ? 'new record' : record ? `${record.visaType} visa` : undefined}
+                currentData={record as unknown as Record<string, unknown> | undefined}
+                fieldLabels={{ visaNumber: 'Visa No.', visaType: 'Visa Type', issuingCountry: 'Issuing Country', issuingPlace: 'Issuing Place', issueDate: 'Issue Date', expiryDate: 'Expiry Date', entries: 'Entries', remarks: 'Remarks', imageUrl: 'Visa Image', arrivalImageUrl: 'Arrival Stamp', departedImageUrl: 'Departure Stamp', passportImageUrl: 'Passport Page' }}
+                onCancel={() => setPendingChanges(prev => prev.filter(p => p.id !== cr.id))}
+              />
+            );
+          })}
 
         {loading ? (
           <div className="animate-pulse flex flex-col gap-5">

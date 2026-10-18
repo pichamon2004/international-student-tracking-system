@@ -6,6 +6,8 @@ import Button from '@/components/ui/Button';
 import { RiSearchLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
 import { requestApi, type ApiRequest } from '@/lib/api';
+import Pagination from '@/components/ui/Pagination';
+import { useFitPageSize, usePaged } from '@/lib/useFitPageSize';
 import toast from 'react-hot-toast';
 
 type RequestStatus =
@@ -18,7 +20,8 @@ type RequestStatus =
   | 'DEAN_APPROVED'
   | 'STAFF_REJECTED'
   | 'DEAN_REJECTED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'CANCEL_REQUESTED';
 
 const DONE_STATUSES: RequestStatus[] = ['DEAN_APPROVED', 'STAFF_REJECTED', 'DEAN_REJECTED', 'CANCELLED'];
 const isDone = (s: string) => DONE_STATUSES.includes(s as RequestStatus);
@@ -34,6 +37,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   STAFF_REJECTED:       { label: 'Rejected',              className: 'bg-red-100 text-red-600' },
   DEAN_REJECTED:        { label: 'Dean Rejected',         className: 'bg-red-100 text-red-600' },
   CANCELLED:            { label: 'Cancelled',             className: 'bg-gray-100 text-gray-500' },
+  CANCEL_REQUESTED:     { label: 'Cancellation Requested', className: 'bg-amber-100 text-amber-700' },
 };
 
 const STATUS_FILTERS = ['All', 'Active', 'Done'] as const;
@@ -72,6 +76,10 @@ export default function StaffRequestPage() {
     return matchSearch && matchFilter;
   });
 
+  // As many rows as fit on screen; the rest go to the next pages
+  const { ref: tableRef, pageSize } = useFitPageSize<HTMLDivElement>();
+  const { page, setPage, totalPages, visible } = usePaged(filtered, pageSize, `${search}|${filter}`);
+
   async function updateStatus(id: number, status: string, comment?: string) {
     try {
       await requestApi.updateStatus(id, status, comment);
@@ -83,7 +91,7 @@ export default function StaffRequestPage() {
   }
 
   return (
-    <div className="bg-white w-full flex-1 rounded-2xl shadow-sm p-6 flex flex-col gap-5">
+    <div className="bg-white w-full flex-1 rounded-2xl shadow-sm p-6 flex flex-col gap-5 min-h-0">
       <p className="text-2xl font-semibold text-primary">Request Management</p>
 
       {/* Toolbar */}
@@ -115,8 +123,8 @@ export default function StaffRequestPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table — fills the remaining height; pages instead of scrolling */}
+      <div ref={tableRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
         <table className="w-full text-sm border-t">
           <thead>
             <tr className="border-b">
@@ -140,14 +148,14 @@ export default function StaffRequestPage() {
               <tr>
                 <td colSpan={5} className="py-10 text-center text-gray-400 text-sm">No requests found</td>
               </tr>
-            ) : filtered.map(req => {
+            ) : visible.map(req => {
               const cfg = statusConfig[req.status] ?? { label: req.status, className: 'bg-gray-100 text-gray-500' };
               const studentName = [req.student?.firstNameEn, req.student?.lastNameEn].filter(Boolean).join(' ') || '—';
               const docType = req.requestType?.name ?? req.title;
               const submittedDate = new Date(req.createdAt).toLocaleDateString('en-GB');
-              const cancelPending = req.cancellations?.[0]?.status === 'PENDING';
+              const cancelPending = req.status === 'CANCEL_REQUESTED';
               return (
-                <tr key={req.id} className="border-b last:border-none hover:bg-gray-50 transition">
+                <tr key={req.id} data-row className="border-b last:border-none hover:bg-gray-50 transition">
                   <td className="py-3 px-4 text-primary font-medium">{studentName}</td>
                   <td className="py-3 px-4 text-primary">{docType}</td>
                   <td className="py-3 px-4 text-primary">{submittedDate}</td>
@@ -155,11 +163,6 @@ export default function StaffRequestPage() {
                     <span className={clsx('px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap', cfg.className)}>
                       {cfg.label}
                     </span>
-                    {cancelPending && (
-                      <span className="ml-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap bg-amber-100 text-amber-700">
-                        Cancellation Requested
-                      </span>
-                    )}
                   </td>
                   <td className="py-3 px-4 w-px whitespace-nowrap">
                     <div className="flex items-center justify-center gap-2">
@@ -209,6 +212,10 @@ export default function StaffRequestPage() {
           </tbody>
         </table>
       </div>
+
+      {!loading && (
+        <Pagination page={page} totalPages={totalPages} totalItems={filtered.length} pageSize={pageSize} onChange={setPage} />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/errorHandler.middleware';
 import { uploadImage } from '../middleware/upload.middleware';
 import {
   getAdvisors, getDeans, getAdvisorById, getMyProfile,
-  createAdvisor, updateMyProfile, updateAdvisorById, uploadPhoto, importAdvisors,
+  createAdvisor, updateMyProfile, updateAdvisorById, uploadPhoto, uploadPhotoForAdvisor, importAdvisors,
 } from '../controllers/advisor.controller';
 
 const router = Router();
@@ -21,5 +21,6 @@ router.post('/',       authenticate, requirePermission('ADVISOR_MANAGEMENT.creat
 router.post('/import', authenticate, requirePermission('ADVISOR_MANAGEMENT.create'), asyncHandler(importAdvisors));
 router.get('/:id',     authenticate, requirePermission('ADVISOR_MANAGEMENT.view'),   asyncHandler(getAdvisorById));
 router.put('/:id',     authenticate, requirePermission('ADVISOR_MANAGEMENT.edit'),   asyncHandler(updateAdvisorById));
+router.post('/:id/photo', authenticate, requirePermission('ADVISOR_MANAGEMENT.edit'), uploadImage.single('image'), asyncHandler(uploadPhotoForAdvisor));
 
 export default router;

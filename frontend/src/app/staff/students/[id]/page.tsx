@@ -702,7 +702,7 @@ export default function StaffStudentDetailPage() {
     : (student.email ?? '??').slice(0, 2).toUpperCase();
 
   const visaStatus = getVisaStatus(allVisas);
-  const currentPassport = student.passports?.find(p => p.isCurrent) ?? student.passports?.[0] ?? null;
+  const currentPassport = student.passports?.find(p => p.isCurrent) ?? null; // the student may have set none current
   const currentVisa = allVisas.find(v => v.isCurrent) ?? allVisas[0] ?? null;
   const currentInsurance = allInsurances.find(i => i.isCurrent) ?? allInsurances[0] ?? null;
 

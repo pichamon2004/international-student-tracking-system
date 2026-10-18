@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../types';
-import { uploadToR2 } from '../services/external/r2.service';
+import * as fileService from '../services/domain/file.service';
 import * as academicDocumentService from '../services/domain/academicDocument.service';
 import * as changeRequestService from '../services/domain/changeRequest.service';
 import prisma from '../utils/prisma';
@@ -18,13 +18,13 @@ export const createAcademicDocument = async (req: AuthRequest, res: Response): P
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
     if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
-      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', null, 'CREATE', req.body);
+      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', null, 'CREATE', req.body, req.user);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
     }
   }
   const { docType, institution, issueDate, fileUrl, pageUrls } = req.body;
-  const doc = await academicDocumentService.createAcademicDocument(studentId, docType, institution, issueDate, fileUrl, pageUrls);
+  const doc = await academicDocumentService.createAcademicDocument(studentId, { docType, institution, issueDate, fileUrl, pageUrls }, req.user!);
   res.status(201).json({ success: true, data: doc });
 };
 
@@ -35,7 +35,7 @@ export const updateAcademicDocument = async (req: AuthRequest, res: Response): P
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
     if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
-      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'UPDATE', req.body);
+      const cr = await changeRequestService.submitChange(studentId, 'ACADEMIC_DOCUMENT', docId, 'UPDATE', req.body, req.user);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
     }
@@ -47,7 +47,7 @@ export const updateAcademicDocument = async (req: AuthRequest, res: Response): P
     issueDate: issueDate ? new Date(issueDate) : undefined,
     fileUrl,
     pageUrls,
-  });
+  }, req.user!);
   res.json({ success: true, data: doc });
 };
 
@@ -57,8 +57,11 @@ export const uploadAcademicDocumentImage = async (req: AuthRequest, res: Respons
     res.status(400).json({ success: false, message: 'No file provided' });
     return;
   }
-  const { url } = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype, 'academic-docs');
-  res.json({ success: true, data: { url } });
+  const { url, file } = await fileService.store(req.file.buffer, {
+    originalName: req.file.originalname, purpose: 'ACADEMIC_DOCUMENT_PAGE',
+    uploadedById: req.user!.userId, ownerStudentId: parseInt(req.params.id),
+  });
+  res.json({ success: true, data: { url, fileId: file.id } });
 };
 
 /* DELETE /api/students/:id/academic-documents/:docId */

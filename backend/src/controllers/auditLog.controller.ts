@@ -25,3 +25,9 @@ export const getAuditLogById = async (req: AuthRequest, res: Response): Promise<
   const log = await auditLogService.getAuditLogById(parseInt(req.params.id));
   res.json({ success: true, data: log });
 };
+
+// GET /api/audit-logs/:id/file?url=… — open a file a snapshot refers to
+export const getSnapshotFile = async (req: AuthRequest, res: Response): Promise<void> => {
+  const data = await auditLogService.getSnapshotFileUrl(parseInt(req.params.id), String(req.query.url ?? ''));
+  res.json({ success: true, data });
+};

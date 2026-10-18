@@ -24,9 +24,9 @@ export const getMyProfile = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 export const createAdvisor = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { email, titleEn, firstNameEn, lastNameEn, phone, nationality } = req.body;
+  const { email, titleEn, firstNameEn, lastNameEn, phone, nationality, position } = req.body;
   const advisor = await advisorService.createAdvisor({
-    email, titleEn, firstNameEn, lastNameEn, phone, nationality,
+    email, titleEn, firstNameEn, lastNameEn, phone, nationality, position,
   });
   res.status(201).json({ success: true, data: advisor });
 };
@@ -50,18 +50,20 @@ export const updateMyProfile = async (req: AuthRequest, res: Response): Promise<
 
 export const updateAdvisorById = async (req: AuthRequest, res: Response): Promise<void> => {
   const {
-    titleEn, firstNameEn, lastNameEn, phone, nationality,
+    titleEn, firstNameEn, lastNameEn, phone, nationality, position,
     isActive, workPermitNumber, workPermitIssue, workPermitExpiry, workPermitFileUrl,
   } = req.body;
 
-  const dto: UpdateAdvisorDto = {
-    titleEn, firstNameEn, lastNameEn, phone, nationality,
+  // Only staff set the administrative position (it grants the VICE_DEAN role),
+  // so updateMyProfile above deliberately leaves it out.
+  const dto = {
+    titleEn, firstNameEn, lastNameEn, phone, nationality, position,
     isActive, workPermitNumber, workPermitFileUrl,
     workPermitIssue:  workPermitIssue  ? new Date(workPermitIssue)  : undefined,
     workPermitExpiry: workPermitExpiry ? new Date(workPermitExpiry) : undefined,
   };
 
-  const advisor = await advisorService.updateAdvisorById(parseInt(req.params.id), dto);
+  const advisor = await advisorService.updateAdvisorById(parseInt(req.params.id), dto, req.user!);
   res.json({ success: true, data: advisor });
 };
 
@@ -74,6 +76,16 @@ export const uploadPhoto = async (req: AuthRequest, res: Response): Promise<void
   res.json({ success: true, data: result });
 };
 
+// POST /api/advisors/:id/photo — staff upload for an advisor
+export const uploadPhotoForAdvisor = async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.file) {
+    res.status(400).json({ success: false, message: 'No image file provided' });
+    return;
+  }
+  const result = await advisorService.uploadPhotoForAdvisor(parseInt(req.params.id), req.file, req.user!.userId);
+  res.json({ success: true, data: result });
+};
+
 export const importAdvisors = async (req: AuthRequest, res: Response): Promise<void> => {
   const { rows } = req.body as {
     rows: {
@@ -83,6 +95,7 @@ export const importAdvisors = async (req: AuthRequest, res: Response): Promise<v
       lastNameEn: string;
       nationality?: string;
       phone?: string;
+      position?: string;
     }[];
   };
 
@@ -100,6 +113,7 @@ export const importAdvisors = async (req: AuthRequest, res: Response): Promise<v
         lastNameEn: row.lastNameEn,
         nationality: row.nationality,
         phone: row.phone,
+        position: row.position,
       })
     )
   );

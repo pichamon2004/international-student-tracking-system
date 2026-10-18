@@ -25,20 +25,22 @@ export const generatePdf = async (req: AuthRequest, res: Response): Promise<void
 
 // GET /api/requests/:id/generated-documents
 export const getGeneratedDocs = async (req: AuthRequest, res: Response): Promise<void> => {
-  const docs = await generatedDocService.getGeneratedDocs(parseInt(req.params.id));
+  const docs = await generatedDocService.getGeneratedDocs(parseInt(req.params.id), req.user?.activeRole, req.user?.userId);
   res.json({ success: true, data: docs });
 };
 
 // GET /api/generated-documents/:docId
 export const getGeneratedDocById = async (req: AuthRequest, res: Response): Promise<void> => {
-  const doc = await generatedDocService.getGeneratedDocById(parseInt(req.params.docId));
+  const doc = await generatedDocService.getGeneratedDocById(parseInt(req.params.docId), req.user?.activeRole, req.user?.userId);
   res.json({ success: true, data: doc });
 };
 
 // GET /api/generated-documents/:docId/download
 export const downloadGeneratedDoc = async (req: AuthRequest, res: Response): Promise<void> => {
-  const doc = await generatedDocService.getGeneratedDocForDownload(parseInt(req.params.docId));
-  res.redirect(doc.fileUrl);
+  const { buffer } = await generatedDocService.getGeneratedDocForDownload(parseInt(req.params.docId), req.user?.activeRole, req.user?.userId);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="document-${req.params.docId}.pdf"`);
+  res.send(buffer);
 };
 
 // POST /api/generated-documents/:docId/upload-signed
@@ -61,7 +63,7 @@ export const uploadSignedDoc = [upload.single('file'), uploadSignedDocHandler];
 
 // GET /api/generated-documents/:docId/signatures
 export const getSignaturesHandler = async (req: AuthRequest, res: Response): Promise<void> => {
-  const sigs = await generatedDocService.getSignatures(parseInt(req.params.docId));
+  const sigs = await generatedDocService.getSignatures(parseInt(req.params.docId), req.user?.activeRole, req.user?.userId);
   res.json({ success: true, data: sigs });
 };
 
@@ -76,13 +78,14 @@ export const addSignatureHandler = async (req: AuthRequest, res: Response): Prom
     parseInt(req.params.docId),
     role,
     imageDataUrl,
-    req.user!.userId
+    req.user!.userId,
+    req.user?.activeRole
   );
   res.status(201).json({ success: true, data: result });
 };
 
 // POST /api/generated-documents/:docId/finalize
 export const finalizeHandler = async (req: AuthRequest, res: Response): Promise<void> => {
-  const updated = await generatedDocService.embedAndFinalize(parseInt(req.params.docId));
+  const updated = await generatedDocService.embedAndFinalize(parseInt(req.params.docId), req.user!.userId);
   res.json({ success: true, data: updated });
 };

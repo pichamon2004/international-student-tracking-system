@@ -6,13 +6,15 @@ interface AuditOptions {
   entity: string;
   getEntityId?: (req: AuthRequest) => number | undefined;
   fetchBefore?: (req: AuthRequest) => Promise<unknown>;
+  // Overrides the action derived from the HTTP method (e.g. 'REVOKE' for a POST /:id/revoke)
+  action?: string;
 }
 
 export const auditLog = (opts: AuditOptions) =>
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     // Capture before state for mutations that modify / remove existing data
     let beforeData: unknown = null;
-    if (opts.fetchBefore && ['PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase())) {
+    if (opts.fetchBefore && (opts.action || ['PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase()))) {
       try { beforeData = await opts.fetchBefore(req); } catch { /* ignore */ }
     }
 
@@ -26,18 +28,20 @@ export const auditLog = (opts: AuditOptions) =>
         if (!req.user) return;
         if (res.statusCode >= 400) return; // skip failed requests
 
-        const entityId = opts.getEntityId
-          ? opts.getEntityId(req)
-          : parseInt(req.params.id || req.params.depId || '0') || undefined;
-
-        const method = req.method.toUpperCase();
-        const action =
-          method === 'POST'                        ? 'CREATE' :
-          method === 'PUT' || method === 'PATCH'   ? 'UPDATE' :
-          method === 'DELETE'                      ? 'DELETE' : method;
-
         // Strip the {success, data} API wrapper — store only the entity data
         const afterData = responseBody?.data ?? responseBody;
+
+        // Creates have no id in the URL — fall back to the id of what was created
+        const entityId = (opts.getEntityId
+          ? opts.getEntityId(req)
+          : parseInt(req.params.id || req.params.depId || '0') || undefined)
+          ?? (typeof afterData?.id === 'number' ? afterData.id : undefined);
+
+        const method = req.method.toUpperCase();
+        const action = opts.action ??
+          (method === 'POST'                       ? 'CREATE' :
+          method === 'PUT' || method === 'PATCH'   ? 'UPDATE' :
+          method === 'DELETE'                      ? 'DELETE' : method);
 
         await prisma.auditLog.create({
           data: {

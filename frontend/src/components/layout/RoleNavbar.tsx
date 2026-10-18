@@ -43,6 +43,7 @@ const navConfig: Record<string, NavItem[]> = {
     { href: '/advisor/dashboard', label: 'Dashboard', icon: AiFillPieChart },
     { href: '/advisor/request', label: 'Request Management', icon: TbClipboardList },
     { href: '/advisor/students', label: 'Student Management', icon: BsPeopleFill },
+    { href: '/advisor/profile', label: 'Profile', icon: RiUser3Line },
   ],
   dean: [
     { href: '/dean/dashboard', label: 'Dashboard',          icon: AiFillPieChart },
@@ -128,7 +129,7 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
     }
   }, [token, user, fetchMe]);
 
-  const ROLE_LABELS: Record<string, string> = { VICE_DEAN: 'Vice Dean' };
+  const ROLE_LABELS: Record<string, string> = { VICE_DEAN: 'Executive' };
 
   const displayName = user?.name ?? '';
   const displayRole = activeRole

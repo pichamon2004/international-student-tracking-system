@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import * as healthInsuranceService from '../services/domain/healthInsurance.service';
 import * as changeRequestService from '../services/domain/changeRequest.service';
-import { uploadToR2 } from '../services/external/r2.service';
+import * as fileService from '../services/domain/file.service';
 import prisma from '../utils/prisma';
 
 // GET /api/students/:id/health-insurance
@@ -17,12 +17,12 @@ export const createHealthInsurance = async (req: AuthRequest, res: Response): Pr
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
     if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
-      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', null, 'CREATE', req.body);
+      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', null, 'CREATE', req.body, req.user);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
     }
   }
-  const insurance = await healthInsuranceService.createHealthInsurance(studentId, req.body);
+  const insurance = await healthInsuranceService.createHealthInsurance(studentId, req.body, req.user!);
   res.status(201).json({ success: true, data: insurance });
 };
 
@@ -33,12 +33,12 @@ export const updateHealthInsurance = async (req: AuthRequest, res: Response): Pr
   if (req.user?.activeRole === 'STUDENT') {
     const currentStudent = await prisma.student.findUnique({ where: { id: studentId } });
     if (currentStudent?.registrationStatus === 'ACTIVE' && currentStudent.registrationStep === 2) {
-      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'UPDATE', req.body);
+      const cr = await changeRequestService.submitChange(studentId, 'HEALTH_INSURANCE', insuranceId, 'UPDATE', req.body, req.user);
       res.status(202).json({ success: true, changeRequest: cr });
       return;
     }
   }
-  const updated = await healthInsuranceService.updateHealthInsurance(insuranceId, studentId, req.body);
+  const updated = await healthInsuranceService.updateHealthInsurance(insuranceId, studentId, req.body, req.user!);
   res.json({ success: true, data: updated });
 };
 
@@ -64,6 +64,9 @@ export const uploadHealthInsuranceImage = async (req: AuthRequest, res: Response
     res.status(400).json({ success: false, message: 'No image file provided' });
     return;
   }
-  const { url } = await uploadToR2(req.file.buffer, req.file.originalname, req.file.mimetype, 'health-insurance');
-  res.json({ success: true, data: { url } });
+  const { url, file } = await fileService.store(req.file.buffer, {
+    originalName: req.file.originalname, purpose: 'INSURANCE_CARD',
+    uploadedById: req.user!.userId, ownerStudentId: parseInt(req.params.id),
+  });
+  res.json({ success: true, data: { url, fileId: file.id } });
 };

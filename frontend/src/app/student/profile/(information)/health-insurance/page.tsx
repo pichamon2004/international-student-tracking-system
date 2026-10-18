@@ -13,13 +13,13 @@ export default function HealthInsurancePage() {
   const router = useRouter();
   const [insurances, setInsurances] = useState<ApiHealthInsurance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<ApiChangeRequest[]>([]);
 
   useEffect(() => {
     studentMeApi.get()
       .then(res => {
         const s = res.data.data;
-        changeRequestApi.getPendingForEntity('HEALTH_INSURANCE', null, s.id).then(r => setPendingChange(r.data.data)).catch(() => {});
+        changeRequestApi.listPendingOfType('HEALTH_INSURANCE', s.id).then(r => setPendingChanges(r.data.data)).catch(() => {});
         return healthInsuranceApi.getAll(s.id);
       })
       .then(res => setInsurances(res.data.data))
@@ -57,13 +57,19 @@ export default function HealthInsurancePage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5 -mr-2 pr-2">
-          {pendingChange && (
-            <PendingBanner
-              pending={pendingChange}
-              fieldLabels={{ provider: 'Provider', policyNumber: 'Policy Number', coverageType: 'Coverage Type', startDate: 'Start Date', expiryDate: 'Expiry Date' }}
-              onCancel={() => setPendingChange(null)}
-            />
-          )}
+          {pendingChanges.map(cr => {
+            const record = insurances.find(r => r.id === cr.entityId);
+            return (
+              <PendingBanner
+                key={cr.id}
+                pending={cr}
+                subject={cr.action === 'CREATE' ? 'new record' : record ? record.provider : undefined}
+                currentData={record as unknown as Record<string, unknown> | undefined}
+                fieldLabels={{ provider: 'Provider', policyNumber: 'Policy Number', coverageType: 'Coverage Type', startDate: 'Start Date', expiryDate: 'Expiry Date', fileUrl: 'Card (front)', backFileUrl: 'Card (back)' }}
+                onCancel={() => setPendingChanges(prev => prev.filter(p => p.id !== cr.id))}
+              />
+            );
+          })}
 
           {loading ? (
             <div className="animate-pulse flex flex-col gap-5">

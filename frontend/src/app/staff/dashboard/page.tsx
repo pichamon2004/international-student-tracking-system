@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { RiUser3Line } from 'react-icons/ri';
 import StudentWorldMap from '@/components/ui/StudentWorldMap';
+import SigningAuthorityCard from '@/components/SigningAuthorityCard';
 import { BsFillPersonFill } from 'react-icons/bs';
 import { IoDocumentText } from 'react-icons/io5';
 import { FaIdCard, FaPassport } from 'react-icons/fa6';
@@ -197,6 +198,9 @@ export default function StaffDashboardPage() {
         </div>
 
       </div>
+
+      {/* Who signs for the Dean — managed by IR staff */}
+      <SigningAuthorityCard />
     </div>
   );
 }

@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { RiArrowLeftLine, RiAddLine, RiPencilLine, RiImageLine, RiDownloadLine } from 'react-icons/ri';
-import { studentMeApi, changeRequestApi, type ApiPassport, type ApiChangeRequest } from '@/lib/api';
+import { RiArrowLeftLine, RiAddLine, RiPencilLine, RiImageLine, RiDownloadLine, RiCheckLine, RiCloseCircleLine } from 'react-icons/ri';
+import toast from 'react-hot-toast';
+import { studentMeApi, changeRequestApi, passportApi, type ApiPassport, type ApiChangeRequest } from '@/lib/api';
 import PendingBanner from '@/components/PendingBanner';
 import {
   InfoTile, SectionTitle, ValidityBar, fmtDate, expiryStatus, EXPIRY_STYLE, FIRST_REMINDER_DAYS,
@@ -13,24 +14,50 @@ export default function PassportPage() {
   const router = useRouter();
   const [passports, setPassports] = useState<ApiPassport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pendingChange, setPendingChange] = useState<ApiChangeRequest | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<ApiChangeRequest[]>([]);
+  const [studentId, setStudentId] = useState<number | null>(null);
+  const [switching, setSwitching] = useState<number | null>(null);
 
-  useEffect(() => {
-    studentMeApi.get()
-      .then(res => {
-        const s = res.data.data;
-        setPassports(s.passports);
-        return s.id;
-      })
-      .then(sid => changeRequestApi.getPendingForEntity('PASSPORT', null, sid).then(r => setPendingChange(r.data.data)).catch(() => {}))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const load = () => studentMeApi.get()
+    .then(async res => {
+      const s = res.data.data;
+      setStudentId(s.id);
+      setPassports(s.passports);
+      // Every pending passport request: new passports, edits, and current/inactive switches
+      try {
+        setPendingChanges((await changeRequestApi.listPendingOfType('PASSPORT', s.id)).data.data);
+      } catch { /* banner is optional */ }
+    })
+    .catch(() => {})
+    .finally(() => setLoading(false));
 
-  const current = passports.find(p => p.isCurrent) ?? passports[0] ?? null;
-  const history = passports
+  useEffect(() => { load(); }, []);
+
+  // Only a passport marked current is shown as current — none is picked automatically
+  const current = passports.find(p => p.isCurrent) ?? null;
+  const others = passports
     .filter(p => p !== current)
     .sort((a, b) => new Date(b.expiryDate).getTime() - new Date(a.expiryDate).getTime());
+
+  const setCurrent = async (passport: ApiPassport, isCurrent: boolean) => {
+    if (!studentId) return;
+    setSwitching(passport.id);
+    try {
+      const res = await passportApi.setCurrent(studentId, passport.id, isCurrent);
+      if (res.status === 202 && res.data.changeRequest) {
+        setPendingChanges(prev => [...prev, res.data.changeRequest!]);
+        toast.success('Sent to staff for approval');
+      } else {
+        toast.success(isCurrent ? 'Current passport updated' : 'Passport set inactive');
+        await load();
+      }
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(msg ?? 'Could not change the current passport');
+    } finally {
+      setSwitching(null);
+    }
+  };
 
   const status = current ? expiryStatus(current.expiryDate) : null;
   const style = status ? EXPIRY_STYLE[status] : null;
@@ -54,13 +81,19 @@ export default function PassportPage() {
           </button>
         </div>
 
-        {pendingChange && (
-          <PendingBanner
-            pending={pendingChange}
-            fieldLabels={{ passportNumber: 'Passport No.', issuingCountry: 'Issuing Country', issueDate: 'Date of Issue', expiryDate: 'Expiry Date', placeOfIssue: 'Place of Issue' }}
-            onCancel={() => setPendingChange(null)}
-          />
-        )}
+        {pendingChanges.map(cr => {
+            const record = passports.find(r => r.id === cr.entityId);
+            return (
+              <PendingBanner
+                key={cr.id}
+                pending={cr}
+                subject={cr.action === 'CREATE' ? 'new record' : record ? `Passport ${record.passportNumber}` : undefined}
+                currentData={record as unknown as Record<string, unknown> | undefined}
+                fieldLabels={{ passportNumber: 'Passport No.', issuingCountry: 'Issuing Country', issueDate: 'Date of Issue', expiryDate: 'Expiry Date', placeOfIssue: 'Place of Issue', isCurrent: 'Current passport', imageUrl: 'Passport Image' }}
+                onCancel={() => setPendingChanges(prev => prev.filter(p => p.id !== cr.id))}
+              />
+            );
+          })}
 
         {loading ? (
           <div className="animate-pulse flex flex-col gap-5">
@@ -80,12 +113,21 @@ export default function PassportPage() {
                   </SectionTitle>
                 </div>
                 {current && (
-                  <button
-                    onClick={() => router.push(`/student/profile/updatepassport?id=${current.id}`)}
-                    className="inline-flex items-center gap-1.5 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-primary/90 transition"
-                  >
-                    <RiPencilLine size={15} /> Edit
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrent(current, false)}
+                      disabled={switching !== null || pendingChanges.length > 0}
+                      className="inline-flex items-center gap-1.5 border border-gray-300 text-gray-600 text-sm font-semibold px-4 py-2 rounded-xl hover:bg-gray-50 transition disabled:opacity-40"
+                    >
+                      <RiCloseCircleLine size={15} /> Set inactive
+                    </button>
+                    <button
+                      onClick={() => router.push(`/student/profile/updatepassport?id=${current.id}`)}
+                      className="inline-flex items-center gap-1.5 bg-primary text-white text-sm font-semibold px-5 py-2 rounded-xl hover:bg-primary/90 transition"
+                    >
+                      <RiPencilLine size={15} /> Edit
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -132,6 +174,11 @@ export default function PassportPage() {
                     />
                   </div>
                 </div>
+              ) : passports.length > 0 ? (
+                <div className="flex flex-col items-center gap-1 py-8 text-center">
+                  <p className="text-sm font-semibold text-gray-700">No current passport selected</p>
+                  <p className="text-xs text-gray-500">Choose the passport you are using now from the list below.</p>
+                </div>
               ) : (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
                   <p className="text-sm font-semibold text-gray-700">No passport added yet</p>
@@ -148,20 +195,20 @@ export default function PassportPage() {
             {/* History */}
             <div className="rounded-2xl border border-gray-100 p-5 sm:p-6 flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <SectionTitle title="Passport history" />
-                <p className="text-xs text-gray-500">Previous passports are kept for your records</p>
+                <SectionTitle title="Other passports" />
+                <p className="text-xs text-gray-500">Set the one you are using now as current</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {['Passport No.', 'Issuing Country', 'Date of Issue', 'Expiry Date', 'Status'].map(h => (
+                      {['Passport No.', 'Issuing Country', 'Date of Issue', 'Expiry Date', 'Status', ''].map(h => (
                         <th key={h} className="text-left py-2 px-2 text-xs font-semibold text-primary/70">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {history.length > 0 ? history.map(p => {
+                    {others.length > 0 ? others.map(p => {
                       const st = EXPIRY_STYLE[expiryStatus(p.expiryDate)];
                       return (
                         <tr key={p.id} className="border-b border-gray-50 last:border-none">
@@ -172,13 +219,22 @@ export default function PassportPage() {
                           <td className="py-2.5 px-2">
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${st.badge}`}>{st.label}</span>
                           </td>
+                          <td className="py-2.5 px-2 text-right">
+                            <button
+                              onClick={() => setCurrent(p, true)}
+                              disabled={switching !== null || pendingChanges.length > 0}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/40 px-3 py-1.5 rounded-lg hover:bg-primary/5 transition disabled:opacity-40"
+                            >
+                              <RiCheckLine size={13} /> {switching === p.id ? 'Saving…' : 'Set as current'}
+                            </button>
+                          </td>
                         </tr>
                       );
                     }) : (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center">
-                          <p className="text-sm font-semibold text-gray-700">No previous passports</p>
-                          <p className="text-xs text-gray-500 mt-0.5">When you add a new passport, this one will move here.</p>
+                        <td colSpan={6} className="py-6 text-center">
+                          <p className="text-sm font-semibold text-gray-700">No other passports</p>
+                          <p className="text-xs text-gray-500 mt-0.5">When you add a new passport, it becomes current and this one moves here.</p>
                         </td>
                       </tr>
                     )}

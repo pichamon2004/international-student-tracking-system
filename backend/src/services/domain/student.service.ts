@@ -1,7 +1,13 @@
 import * as studentRepository from '../../repositories/student.repository';
 import * as advisorRepository from '../../repositories/advisor.repository';
 import { createNotification } from '../notification.service';
-import { uploadToR2 } from '../external/r2.service';
+import * as fileService from './file.service';
+import { presentInsurances } from './healthInsurance.service';
+import { presentAcademicDocuments } from './academicDocument.service';
+import { presentPassports } from './passport.service';
+import { presentVisas } from './visa.service';
+import type { ClaimActor } from './filePolicy';
+import { DOCUMENT_FILES, STUDENT_FILES, presentFileFields, presentOne, resolveFileFields } from './fileFields';
 import { UpdateStudentDto } from '../../repositories/student.repository';
 
 // ── Queries ───────────────────────────────────────────────────────
@@ -34,8 +40,17 @@ export const getStudents = async (query: {
   return { students, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
 
-export const getStudentById = (id: number) =>
-  studentRepository.findById(id);
+export const getStudentById = async (id: number) => {
+  const student = await studentRepository.findById(id);
+  if (!student) return null;
+  return {
+    ...(await presentOne(student, STUDENT_FILES)),
+    passports: await presentPassports(student.passports),
+    visas: await presentVisas(student.visas),
+    healthInsurances: await presentInsurances(student.healthInsurances),
+    documents: await presentFileFields(student.documents, DOCUMENT_FILES),
+  };
+};
 
 export const getMyProfile = async (userId: number) => {
   const [student, staffContact] = await Promise.all([
@@ -45,7 +60,8 @@ export const getMyProfile = async (userId: number) => {
 
   if (!student) return null;
 
-  const { user, advisor, ...studentData } = student;
+  const { user, advisor, ...rest } = student;
+  const studentData = await presentOne(rest, STUDENT_FILES);
 
   let advisorEmail: string | null = null;
   if (advisor) {
@@ -59,6 +75,10 @@ export const getMyProfile = async (userId: number) => {
 
   return {
     ...studentData,
+    passports: await presentPassports(studentData.passports),
+    visas: await presentVisas(studentData.visas),
+    healthInsurances: await presentInsurances(studentData.healthInsurances),
+    academicDocuments: await presentAcademicDocuments(studentData.academicDocuments),
     email: studentData.email || user?.email || null,
     advisor: advisorFlat,
     staffContact: staffContact ?? null,
@@ -91,16 +111,24 @@ export const createStudent = async (data: {
   });
 };
 
-export const updateStudent = (id: number, dto: UpdateStudentDto) =>
-  studentRepository.update(id, dto);
+// Staff edit: a photoUrl in the body is claimed like any other file reference
+export const updateStudent = async (id: number, dto: Omit<UpdateStudentDto, 'photoUrl'> & { photoUrl?: string | null }, actor: ClaimActor) => {
+  const { photoUrl, ...rest } = dto;
+  const photo = photoUrl === undefined
+    ? {}
+    : await resolveFileFields({ photoUrl }, STUDENT_FILES, { kind: 'student', studentId: id }, actor);
+  return presentOne(await studentRepository.update(id, { ...rest, ...photo }), STUDENT_FILES);
+};
 
 export const deleteStudent = (id: number) =>
   studentRepository.remove(id);
 
-export const uploadPhoto = async (studentId: number, file: Express.Multer.File) => {
-  const { url } = await uploadToR2(file.buffer, file.originalname, file.mimetype, 'photos');
-  const student = await studentRepository.updatePhotoUrl(studentId, url);
-  return { url, student };
+export const uploadPhoto = async (studentId: number, file: Express.Multer.File, uploadedById: number) => {
+  const { url, file: stored } = await fileService.store(file.buffer, {
+    originalName: file.originalname, purpose: 'STUDENT_PHOTO', uploadedById, ownerStudentId: studentId,
+  });
+  const student = await presentOne(await studentRepository.updatePhotoFile(studentId, stored.id), STUDENT_FILES);
+  return { url, fileId: stored.id, student };
 };
 
 export const submitPhase2 = async (userId: number) => {

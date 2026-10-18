@@ -15,7 +15,9 @@ import {
   RiHeartPulseLine, RiBookOpenLine, RiCalendarLine, RiExchangeLine,
   RiClipboardLine, RiAddLine, RiArrowLeftSLine, RiArrowRightSLine,
 } from 'react-icons/ri';
-import { requestTypeApi, requestApi, studentMeApi, type ApiRequestType, type ApiRequest } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, latestComment, type ApiRequestType, type ApiRequest } from '@/lib/api';
+import Pagination from '@/components/ui/Pagination';
+import { useFitPageSize, usePaged } from '@/lib/useFitPageSize';
 
 /* ─── Icon map ──────────────────────────────────────────────── */
 const ICON_MAP: Record<string, IconType> = {
@@ -38,7 +40,7 @@ function IconComponent({ iconKey, size = 36, className }: { iconKey: string; siz
 type HistoryStatus =
   | 'PENDING' | 'FORWARDED_TO_ADVISOR' | 'ADVISOR_APPROVED' | 'ADVISOR_REJECTED'
   | 'STAFF_APPROVED' | 'STAFF_REJECTED' | 'FORWARDED_TO_DEAN'
-  | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED';
+  | 'DEAN_APPROVED' | 'DEAN_REJECTED' | 'CANCELLED' | 'CANCEL_REQUESTED';
 
 const STATUS_CONFIG: Record<HistoryStatus, { label: string; icon: React.ReactNode; className: string }> = {
   PENDING:              { label: 'Pending',         icon: <RiTimeLine size={13} />,        className: 'bg-yellow-100 text-yellow-700' },
@@ -51,6 +53,7 @@ const STATUS_CONFIG: Record<HistoryStatus, { label: string; icon: React.ReactNod
   DEAN_APPROVED:        { label: 'Finished',         icon: <RiCheckLine size={13} />,       className: 'bg-green-100 text-green-600' },
   DEAN_REJECTED:        { label: 'Rejected',         icon: <RiCloseCircleLine size={13} />, className: 'bg-red-100 text-red-500' },
   CANCELLED:            { label: 'Cancelled',        icon: <RiCloseCircleLine size={13} />, className: 'bg-gray-100 text-gray-500' },
+  CANCEL_REQUESTED:     { label: 'Cancellation Requested', icon: <RiTimeLine size={13} />, className: 'bg-amber-100 text-amber-700' },
 };
 
 function formatDate(iso: string) {
@@ -83,11 +86,15 @@ export default function StudentRequestPage() {
       .finally(() => setLoadingHistory(false));
   }, []);
 
+  // History: as many rows as fit under the cards; the rest go to the next pages
+  const { ref: historyRef, pageSize: historyPageSize } = useFitPageSize<HTMLDivElement>();
+  const historyPaging = usePaged(history, historyPageSize, history.length);
+
   const totalPages = Math.ceil(requestTypes.length / ITEMS_PER_PAGE);
   const visibleTypes = requestTypes.slice(requestPage * ITEMS_PER_PAGE, (requestPage + 1) * ITEMS_PER_PAGE);
 
   return (
-    <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-8">
+    <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-8 min-h-0">
 
       {/* ── New Request ── */}
       <section>
@@ -164,7 +171,7 @@ export default function StudentRequestPage() {
       </section>
 
       {/* ── History ── */}
-      <section className="flex-1">
+      <section className="flex-1 min-h-0 flex flex-col">
         <h2 className="text-xl font-bold text-primary mb-4">History</h2>
 
         {loadingHistory ? (
@@ -178,7 +185,8 @@ export default function StudentRequestPage() {
             No requests yet. Click a request type above to get started.
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div ref={historyRef} className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
             <table className="w-full text-sm border-t border-gray-100">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -191,18 +199,18 @@ export default function StudentRequestPage() {
                 </tr>
               </thead>
               <tbody>
-                {history.map(item => {
+                {historyPaging.visible.map(item => {
                   const status = (item.status as HistoryStatus) ?? 'PENDING';
                   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG['PENDING'];
                   return (
-                    <tr key={item.id} className="border-b border-gray-50 last:border-none hover:bg-gray-50/60 transition">
+                    <tr key={item.id} data-row className="border-b border-gray-50 last:border-none hover:bg-gray-50/60 transition">
                       <td className="py-3 px-4 font-medium text-primary">
                         {item.requestType?.name ?? item.title}
                       </td>
                       <td className="py-3 px-4 text-gray-600">{formatDate(item.createdAt)}</td>
                       <td className="py-3 px-4 text-gray-600">{formatDate(item.updatedAt)}</td>
                       <td className="py-3 px-4 text-gray-500 max-w-[180px] truncate">
-                        {item.deanComment ?? item.advisorComment ?? item.staffComment ?? '—'}
+                        {latestComment(item) ?? '—'}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className={clsx(
@@ -226,6 +234,11 @@ export default function StudentRequestPage() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={historyPaging.page} totalPages={historyPaging.totalPages}
+            totalItems={history.length} pageSize={historyPageSize} onChange={historyPaging.setPage}
+          />
+          </>
         )}
       </section>
     </div>

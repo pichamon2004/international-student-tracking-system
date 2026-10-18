@@ -63,9 +63,10 @@ function VisaForm() {
   );
 
   const [form, setForm] = useState({
-    passport:        '',
+    passport:        '', // passport id, as a string for the select
     issuingCountry:  '',
     placeOfIssue:    '',
+    visaNumber:      '',
     validFrom:       '',
     validUntil:      '',
     visaType:        '',
@@ -86,11 +87,20 @@ function VisaForm() {
     studentMeApi.get().then(res => {
       const s = res.data.data;
       setStudentNumId(s.id);
-      setPassportOptions(s.passports.map(p => ({ value: p.passportNumber, label: `${p.passportNumber} · ${p.issuingCountry}` })));
+      // Current passport first and labelled, so it's clear which one is in use
+      setPassportOptions(
+        [...s.passports]
+          .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent))
+          .map(p => ({
+            value: String(p.id),
+            label: `${p.passportNumber} · ${p.issuingCountry ?? '—'}${p.isCurrent ? ' (Current passport)' : ''}`,
+          }))
+      );
 
       setForm(prev => ({
         ...prev,
-        passport:    prev.passport || s.passports[0]?.passportNumber || '',
+        // A new visa defaults to the current passport; an edited one shows its own below
+        passport:    prev.passport || String(s.passports.find(p => p.isCurrent)?.id ?? ''),
         givenName:   s.firstNameEn ?? '',
         surname:     s.lastNameEn ?? '',
         dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : '',
@@ -106,6 +116,8 @@ function VisaForm() {
               ...prev,
               issuingCountry:  visa.issuingCountry ?? '',
               placeOfIssue:    visa.issuingPlace ?? '',
+              visaNumber:      visa.visaNumber ?? '',
+              passport:        visa.passportId ? String(visa.passportId) : prev.passport,
               validFrom:       visa.issueDate ? visa.issueDate.slice(0, 10) : '',
               validUntil:      visa.expiryDate ? visa.expiryDate.slice(0, 10) : '',
               visaType:        visa.visaType ?? '',
@@ -166,6 +178,8 @@ function VisaForm() {
         const file = refs[key].current?.files?.[0];
         if (!file) return undefined;
         const fd = new FormData();
+        // which field this image is for — the server derives the file's purpose from it
+        fd.append('slot', UPLOAD_SLOTS.find(s => s.key === key)!.field);
         fd.append('image', file);
         const res = await api.post(`/students/${studentNumId}/visas/image`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
@@ -185,6 +199,8 @@ function VisaForm() {
         visaType:       form.visaType,
         issuingCountry: form.issuingCountry,
         issuingPlace:   form.placeOfIssue || undefined,
+        visaNumber:     form.visaNumber.trim() || undefined,
+        passportId:     form.passport ? Number(form.passport) : undefined,
         issueDate:      form.validFrom,
         expiryDate:     form.validUntil,
         entries:        form.numberOfEntries || undefined,
@@ -240,6 +256,9 @@ function VisaForm() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Field label="Passport" hint="The passport this visa is stamped in">
                 <CustomSelect value={form.passport} onChange={setVal('passport')} options={passportOptions} placeholder="Select" />
+              </Field>
+              <Field label="Visa number" hint="As printed on the visa sticker">
+                <input value={form.visaNumber} onChange={setText('visaNumber')} placeholder="e.g. 1234567" className={inputCls} />
               </Field>
               <Field label="Visa type" required>
                 <CustomSelect value={form.visaType} onChange={setVal('visaType')} options={withValue(VISA_TYPES, form.visaType)} placeholder="Select" />

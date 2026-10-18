@@ -135,6 +135,8 @@ function DependentForm() {
         const file = refs[key].current?.files?.[0];
         if (!file) return undefined;
         const fd = new FormData();
+        // which field this image is for — the server derives the file's purpose from it
+        fd.append('slot', UPLOAD_SLOTS.find(s => s.key === key)!.field);
         fd.append('image', file);
         const res = await api.post(`/students/${studentNumId}/dependents/image`, fd, {
           headers: { 'Content-Type': 'multipart/form-data' },

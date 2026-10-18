@@ -11,7 +11,7 @@ interface StaffUser {
   email: string;
   name: string;
   phone: string | null;
-  role: string;
+  roles: string[];
   isActive: boolean;
   createdAt: string;
 }

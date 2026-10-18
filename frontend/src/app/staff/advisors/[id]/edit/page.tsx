@@ -30,12 +30,16 @@ export default function AdvisorEditPage() {
   const [lastName, setLastName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [tel, setTel] = useState('');
+  const [position, setPosition] = useState('');
   const [email, setEmail] = useState('');
   const [nationality, setNationality] = useState('');
   const [search, setSearch] = useState('');
   const [students, setStudents] = useState<AssignedStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Add-student picker state
   const [showPicker, setShowPicker] = useState(false);
@@ -58,8 +62,10 @@ export default function AdvisorEditPage() {
         setFirstName(a.firstNameEn ?? '');
         setLastName(a.lastNameEn ?? '');
         setTel(a.phone ?? '');
+        setPosition(a.position ?? '');
         setEmail(a.email ?? '');
         setNationality(a.nationality ?? '');
+        setPhotoUrl(a.photoUrl ?? null);
         if (a.students) {
           setStudents(a.students.map(s => ({
             id: s.id,
@@ -73,6 +79,24 @@ export default function AdvisorEditPage() {
       .catch(() => toast.error('Failed to load advisor'))
       .finally(() => setLoading(false));
   }, [advisorId]);
+
+  // Uploads straight away (like the advisor's own profile page) — it doesn't wait for Save
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const res = await advisorApi.uploadPhotoFor(advisorId, file);
+      setPhotoUrl(res.data.data.url);
+      toast.success('Photo updated');
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast.error(msg ?? 'Failed to upload photo');
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -96,6 +120,8 @@ export default function AdvisorEditPage() {
         firstNameEn: firstName || undefined,
         lastNameEn: lastName || undefined,
         phone: tel || undefined,
+        // blank clears it — which also takes away the executive (VICE_DEAN) role
+        position: position.trim() || null,
       });
       toast.success('Advisor updated');
       router.back();
@@ -251,12 +277,20 @@ export default function AdvisorEditPage() {
 
             {/* Avatar Upload */}
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-white text-2xl font-bold shrink-0">
-                {(firstName[0] ?? '') + (lastName[0] ?? '')}
+              <div className="w-20 h-20 rounded-full overflow-hidden bg-primary flex items-center justify-center text-white text-2xl font-bold shrink-0">
+                {photoUrl
+                  ? <img src={photoUrl} alt="Advisor" className="w-full h-full object-cover" />
+                  : (firstName[0] ?? '') + (lastName[0] ?? '')}
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors">
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+              >
                 <RiUpload2Line size={15} />
-                Upload New Photo
+                {uploadingPhoto ? 'Uploading…' : 'Upload New Photo'}
               </button>
             </div>
 
@@ -371,6 +405,22 @@ export default function AdvisorEditPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Administrative position */}
+              <div className="flex flex-col gap-1 md:col-span-2">
+                <label className="text-xs font-medium text-primary/50">Administrative Position <span className="text-gray-300">(optional)</span></label>
+                <input
+                  type="text"
+                  value={position}
+                  onChange={e => setPosition(e.target.value)}
+                  placeholder="e.g. Associate Dean for Academic Affairs"
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-primary bg-white outline-none focus:border-primary transition-colors placeholder-gray-300"
+                />
+                <p className="text-[11px] text-gray-400">
+                  Executives can be chosen to sign for the Dean, and can sign in either as an advisor or as an executive.
+                  Leave blank if this teacher has no administrative role.
+                </p>
               </div>
 
             </div>

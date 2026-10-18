@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import { RiSearchLine, RiArrowDownSLine, RiCloseLine, RiCheckLine, RiEyeLine } from 'react-icons/ri';
 
@@ -20,23 +20,59 @@ const ACTION_COLORS: Record<string, string> = {
   CREATE: 'bg-green-100 text-green-700',
   UPDATE: 'bg-blue-100 text-blue-700',
   DELETE: 'bg-red-100 text-red-700',
+  REVOKE: 'bg-orange-100 text-orange-700',
   LOGIN:  'bg-purple-100 text-purple-700',
   LOGOUT: 'bg-gray-100 text-gray-600',
 };
 
 const PAGE_SIZE = 20;
 
-function JsonBlock({ raw }: { raw: string | null }) {
-  if (!raw) return <span className="text-gray-400 text-xs italic">No data</span>;
+// File URLs inside a snapshot: public ones (bucket now private) or signed ones (long expired)
+const FILE_URL = /https?:\/\/[^\s"'<>\\]*(?:r2\.dev|r2\.cloudflarestorage\.com)[^\s"'<>\\]*/g;
+
+// The snapshot's URL no longer opens by itself — ask the API for a fresh one
+async function openSnapshotFile(logId: number, url: string) {
+  const w = window.open('', '_blank'); // opened synchronously so the popup isn't blocked
   try {
-    return (
-      <pre className="text-xs bg-gray-50 rounded-lg p-3 overflow-auto max-h-72 text-gray-700 whitespace-pre-wrap leading-relaxed">
-        {JSON.stringify(JSON.parse(raw), null, 2)}
-      </pre>
-    );
+    const res = await api.get<{ success: boolean; data: { url: string } }>(`/audit-logs/${logId}/file`, { params: { url } });
+    if (w) w.location.href = res.data.data.url;
   } catch {
-    return <p className="text-xs text-gray-500">{raw}</p>;
+    w?.close();
+    alert('This file is no longer available.');
   }
+}
+
+function withFileLinks(text: string, logId: number) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of Array.from(text.matchAll(FILE_URL))) {
+    const start = m.index ?? 0;
+    parts.push(text.slice(last, start));
+    parts.push(
+      <button key={start} type="button" onClick={() => openSnapshotFile(logId, m[0])}
+        title={m[0]} className="text-primary underline hover:text-primary/70">
+        [open file]
+      </button>
+    );
+    last = start + m[0].length;
+  }
+  parts.push(text.slice(last));
+  return parts;
+}
+
+function JsonBlock({ raw, logId }: { raw: string | null; logId: number }) {
+  if (!raw) return <span className="text-gray-400 text-xs italic">No data</span>;
+  let text: string;
+  try {
+    text = JSON.stringify(JSON.parse(raw), null, 2);
+  } catch {
+    return <p className="text-xs text-gray-500">{withFileLinks(raw, logId)}</p>;
+  }
+  return (
+    <pre className="text-xs bg-gray-50 rounded-lg p-3 overflow-auto max-h-72 text-gray-700 whitespace-pre-wrap leading-relaxed">
+      {withFileLinks(text, logId)}
+    </pre>
+  );
 }
 
 function SimpleDropdown({
@@ -139,7 +175,7 @@ export default function AuditLogsPage() {
   const pagedLogs  = filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasFilter  = entity || action || startDate || endDate;
 
-  const actionOptions = ['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT'].map(a => ({ label: a, value: a }));
+  const actionOptions = ['CREATE', 'UPDATE', 'DELETE', 'REVOKE', 'LOGIN', 'LOGOUT'].map(a => ({ label: a, value: a }));
 
   if (noAccess) {
     return (
@@ -320,11 +356,11 @@ export default function AuditLogsPage() {
             <div className="p-6 grid grid-cols-2 gap-4 overflow-auto max-h-[60vh]">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Before</p>
-                <JsonBlock raw={detailLog.before} />
+                <JsonBlock raw={detailLog.before} logId={detailLog.id} />
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">After</p>
-                <JsonBlock raw={detailLog.after} />
+                <JsonBlock raw={detailLog.after} logId={detailLog.id} />
               </div>
             </div>
           </div>

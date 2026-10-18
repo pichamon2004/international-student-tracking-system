@@ -1,6 +1,6 @@
 import prisma from '../utils/prisma';
 
-const USER_SELECT = { id: true, name: true, email: true, role: true } as const;
+const USER_SELECT = { id: true, name: true, email: true } as const;
 
 // ── Queries ───────────────────────────────────────────────────────
 
