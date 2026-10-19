@@ -87,8 +87,20 @@ async function addColumnIfMissing(table: string, column: string, definition: str
 async function migrateDependentPassportsAndVisas() {
   // Shape the target tables the way db push will leave them (nullable where a dependent has no value)
   await addColumnIfMissing('passports', 'dependentId', 'INT NULL');
+  await addColumnIfMissing('passports', 'imageFileId', 'INT NULL');
   await addColumnIfMissing('visas', 'dependentId', 'INT NULL');
   await addColumnIfMissing('visas', 'passportId', 'INT NULL');
+  await addColumnIfMissing('visas', 'imageFileId', 'INT NULL');
+  await addColumnIfMissing('visas', 'arrivalStampFileId', 'INT NULL');
+  await addColumnIfMissing('visas', 'departureStampFileId', 'INT NULL');
+  // Drop legacy single-column unique index so multiple passports per student are allowed.
+  // Must create a regular index first so the FK (passports_studentId_fkey) still has an index to use.
+  if (await indexExists('passports', 'passports_studentId_key')) {
+    if (!(await indexExists('passports', 'passports_studentId_idx'))) {
+      await prisma.$executeRawUnsafe('CREATE INDEX `passports_studentId_idx` ON passports (`studentId`)');
+    }
+    await prisma.$executeRawUnsafe('ALTER TABLE passports DROP INDEX `passports_studentId_key`');
+  }
   await prisma.$executeRawUnsafe('ALTER TABLE passports MODIFY issuingCountry VARCHAR(191) NULL, MODIFY issueDate DATETIME(3) NULL');
   await prisma.$executeRawUnsafe('ALTER TABLE visas MODIFY issuingCountry VARCHAR(191) NULL, MODIFY issueDate DATETIME(3) NULL');
 
@@ -99,9 +111,17 @@ async function migrateDependentPassportsAndVisas() {
       passportImageFileId: number | null; visaImageFileId: number | null;
       arrivalStampFileId: number | null; departureStampFileId: number | null;
     };
+    const col = async (c: string) => await columnExists('dependents', c);
+    const [piF, viF, asF, dsF] = await Promise.all([
+      col('passportImageFileId'), col('visaImageFileId'),
+      col('arrivalStampFileId'),  col('departureStampFileId'),
+    ]);
     const deps = await prisma.$queryRawUnsafe<Dep[]>(
       `SELECT id, studentId, passportNumber, passportExpiry, visaType, visaExpiry, visaStatus,
-              passportImageFileId, visaImageFileId, arrivalStampFileId, departureStampFileId
+              ${piF ? 'passportImageFileId' : 'NULL AS passportImageFileId'},
+              ${viF ? 'visaImageFileId'     : 'NULL AS visaImageFileId'},
+              ${asF ? 'arrivalStampFileId'  : 'NULL AS arrivalStampFileId'},
+              ${dsF ? 'departureStampFileId': 'NULL AS departureStampFileId'}
          FROM dependents`
     );
     for (const d of deps) {
