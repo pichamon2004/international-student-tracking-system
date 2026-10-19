@@ -8,32 +8,36 @@ import { defaultProgress, UserProfileProgress } from '@/lib/progressStore';
 import { RiMailLine, RiPhoneLine } from 'react-icons/ri';
 import { BsExclamation } from 'react-icons/bs';
 import {
-    LuUserRound, LuBookUser, LuFileText, LuHeartPulse, LuGraduationCap, LuUsers,
     LuTriangleAlert, LuExternalLink, LuArrowRight,
 } from 'react-icons/lu';
+import { PersonIcon, PassportIcon, DocumentIcon, HealthIcon, AcademicCapIcon, PeopleIcon } from '@/components/icons/ProfileIcons';
 import type { IconType } from 'react-icons';
 import { studentMeApi, studentApi, type ApiPassport, type ApiVisa, type ApiHealthInsurance } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { advisorFullName } from '@/lib/names';
 
 const INTERSERVICE_URL = 'https://interservice.kku.ac.th';
 
 type ProfileCard = { label: string; description: string; href: string; Icon: IconType };
 
-const profileSections: { title: string; cards: ProfileCard[] }[] = [
+// classic: the earlier look (big centered icon + label)
+const profileSections: { title: string; classic?: boolean; cards: ProfileCard[] }[] = [
     {
         title: 'Identity & travel documents',
+        classic: true,
         cards: [
-            { label: 'Personal Information', description: 'Name, contact details and address', href: '/student/profile/personal', Icon: LuUserRound },
-            { label: 'Passport', description: 'Passport number, issue and expiry dates', href: '/student/profile/passport', Icon: LuBookUser },
-            { label: 'Visa', description: 'Visa type, validity and extensions', href: '/student/profile/visa', Icon: LuFileText },
+            { label: 'Personal Information', description: 'Name, contact details and address', href: '/student/profile/personal', Icon: PersonIcon },
+            { label: 'Passport', description: 'Passport number, issue and expiry dates', href: '/student/profile/passport', Icon: PassportIcon },
+            { label: 'Visa', description: 'Visa type, validity and extensions', href: '/student/profile/visa', Icon: DocumentIcon },
         ],
     },
     {
         title: 'Study & family',
+        classic: true,
         cards: [
-            { label: 'Health Insurance', description: 'Policy, provider and coverage period', href: '/student/profile/health-insurance', Icon: LuHeartPulse },
-            { label: 'Academic Record', description: 'Program, enrollment status and grades', href: '/student/profile/academic', Icon: LuGraduationCap },
-            { label: 'Dependent', description: 'Family members staying with you', href: '/student/profile/dependent', Icon: LuUsers },
+            { label: 'Health Insurance', description: 'Policy, provider and coverage period', href: '/student/profile/health-insurance', Icon: HealthIcon },
+            { label: 'Academic Record', description: 'Program, enrollment status and grades', href: '/student/profile/academic', Icon: AcademicCapIcon },
+            { label: 'Dependent', description: 'Family members staying with you', href: '/student/profile/dependent', Icon: PeopleIcon },
         ],
     },
 ];
@@ -72,8 +76,8 @@ interface StudentCardProps {
 function StudentCard({ studentId, idNo, name, faculty, degree, enrollmentDate, expectedGraduation, photoUrl }: StudentCardProps) {
     const barcodeVal = idNo || studentId || 'N/A';
     return (
-        <div className="bg-white rounded-2xl shadow-sm w-full mx-auto border border-gray-100 flex md:h-70 2xl:h-80">
-            <div className='w-1/3 p-4 flex flex-col items-center justify-between'>
+        <div className="bg-white rounded-2xl shadow-sm w-full mx-auto border border-gray-100 flex lg:h-70 2xl:h-80">
+            <div className='w-1/3 p-4 md:p-3 lg:p-4 flex flex-col items-center justify-between'>
                 <div className="h-[85%] w-full rounded-xl bg-primary/10 border flex items-center justify-center text-primary text-4xl font-bold overflow-hidden">
                     {photoUrl ? (
                         <img src={photoUrl} alt={name} className="w-full h-full object-cover" />
@@ -86,27 +90,27 @@ function StudentCard({ studentId, idNo, name, faculty, degree, enrollmentDate, e
                     <span>expiry {fmtDate(expectedGraduation)}</span>
                 </div>
             </div>
-            <div className='p-4 flex-1 flex flex-col items-start justify-between'>
+            <div className='p-4 md:p-3 lg:p-4 flex-1 flex flex-col items-start justify-between'>
                 <div>
-                    <div className="flex items-center gap-3 py-2">
+                    <div className="flex items-center gap-3 py-2 md:py-0.5 lg:py-2">
                         <div className="w-10 h-50 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                            <img src="/kkulogo.png" alt="KKU" className="w-8 h-14 2xl:w-10 2xl:h-16 object-contain" />
+                            <img src="/kkulogo.png" alt="KKU" className="w-8 h-14 md:w-6 md:h-10 lg:w-8 lg:h-14 2xl:w-10 2xl:h-16 object-contain" />
                         </div>
-                        <div className="flex flex-col leading-tight gap-3">
-                            <span className="text-[#A73B24] text-sm 2xl:text-base font-normal">มหาวิทยาลัยขอนแก่น</span>
-                            <span className="text-[#A73B24] text-sm 2xl:text-base font-normal tracking-wide">KHON KAEN UNIVERSITY</span>
+                        <div className="flex flex-col leading-tight gap-3 md:gap-1 lg:gap-3">
+                            <span className="text-[#A73B24] text-sm md:text-xs lg:text-sm 2xl:text-base font-normal">มหาวิทยาลัยขอนแก่น</span>
+                            <span className="text-[#A73B24] text-sm md:text-xs lg:text-sm 2xl:text-base font-normal tracking-wide">KHON KAEN UNIVERSITY</span>
                         </div>
                     </div>
-                    <div className="flex flex-col gap-0.5 text-sm 2xl:text-base text-black justify-center">
+                    <div className="flex flex-col gap-0.5 text-sm md:text-xs lg:text-sm 2xl:text-base text-black justify-center">
                         <p><span className="font-semibold">Student ID No. :</span> {studentId || '—'}</p>
                         <p><span className="font-semibold">Identification No. :</span> {idNo || '—'}</p>
-                        <p className="mt-1 font-normal">{name || '—'}</p>
+                        <p className="mt-1 md:mt-0.5 lg:mt-1 font-normal">{name || '—'}</p>
                         <p className="font-normal">{faculty || '—'}</p>
                         <p className="font-normal">{degree || '—'}</p>
                     </div>
                 </div>
                 <div className="w-full flex items-end justify-between pr-3">
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden md:[&_svg]:h-9 lg:[&_svg]:h-auto">
                         <Barcode
                             value={barcodeVal}
                             width={1.2}
@@ -115,7 +119,7 @@ function StudentCard({ studentId, idNo, name, faculty, degree, enrollmentDate, e
                             margin={0}
                         />
                     </div>
-                    <div className='flex flex-col items-center'>
+                    <div className='flex flex-col items-center md:[&_svg]:w-10 md:[&_svg]:h-10 lg:[&_svg]:w-auto lg:[&_svg]:h-auto'>
                         <QRCode value={barcodeVal} size={52} />
                         <label className='text-[8px] mt-0'>{studentId}</label>
                     </div>
@@ -136,7 +140,7 @@ function initials(name: string): string {
 function ContactRow({ role, name, phone, email }: { role: string; name: string; phone: string; email: string }) {
     const known = hasValue(name);
     return (
-        <div className="flex-1 flex items-center gap-3 rounded-xl border border-gray-100 p-3 min-w-0">
+        <div className="flex-1 flex items-center gap-3 rounded-xl border border-gray-100 p-3 md:p-2.5 lg:p-3 min-w-0">
             <div className="w-11 h-11 rounded-full bg-[#DEEBFF] text-primary flex items-center justify-center text-sm font-bold shrink-0">
                 {known ? initials(name).toUpperCase() : '?'}
             </div>
@@ -154,16 +158,16 @@ function ContactRow({ role, name, phone, email }: { role: string; name: string; 
                     </>
                 )}
             </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
+            <div className="flex flex-col md:flex-row lg:flex-col gap-1.5 shrink-0">
                 {hasValue(email) && (
                     <a href={`mailto:${email}`} title={`Email ${name}`}
-                        className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition">
+                        className="w-9 h-9 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-lg bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition">
                         <RiMailLine size={16} />
                     </a>
                 )}
                 {hasValue(phone) && (
                     <a href={`tel:${phone.replace(/\s+/g, '')}`} title={`Call ${name}`}
-                        className="w-9 h-9 rounded-lg border border-primary/40 text-primary flex items-center justify-center hover:bg-primary/5 transition">
+                        className="w-9 h-9 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-lg border border-primary/40 text-primary flex items-center justify-center hover:bg-primary/5 transition">
                         <RiPhoneLine size={16} />
                     </a>
                 )}
@@ -220,7 +224,7 @@ export default function StudentProfilePage() {
             const passport = (s.passports as ApiPassport[])?.find(p => p.isCurrent);
             const adv = s.advisor;
             const advisorName = adv
-                ? [adv.titleEn, adv.firstNameEn, adv.lastNameEn].filter(Boolean).join(' ')
+                ? advisorFullName(adv)
                 : '—';
 
             setStudentData({
@@ -284,9 +288,11 @@ export default function StudentProfilePage() {
     }
 
     return (
-        <div className="grid md:grid-cols-5 gap-6 flex-1">
+        // Phones: everything stacked. Tablets (md): card + contacts side by side, the
+        // welcome panel full width below. Desktop (lg): card + contacts | welcome panel.
+        <div className="grid lg:grid-cols-5 md:grid-rows-[auto_1fr] lg:grid-rows-none gap-6 flex-1">
             {/* Left: Student Card */}
-            <div className="col-span-1 md:col-span-2 flex flex-col gap-6">
+            <div className="col-span-1 lg:col-span-2 flex flex-col md:grid md:grid-cols-2 lg:flex gap-6">
                 <StudentCard
                     studentId={studentData.studentId}
                     idNo={studentData.passportNumber}
@@ -298,10 +304,10 @@ export default function StudentProfilePage() {
                     photoUrl={studentData.photoUrl}
                 />
                 {/* Contacts */}
-                <div className="flex-1 bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-4">
+                <div className="flex-1 bg-white rounded-2xl shadow-sm p-5 md:p-3 lg:p-5 flex flex-col gap-4 md:gap-2 lg:gap-4">
                     <div className="flex items-center gap-2.5">
                         <span className="w-1 h-5 rounded-full bg-primary" />
-                        <h2 className="text-lg font-semibold text-gray-800">Your contacts</h2>
+                        <h2 className="text-lg md:text-base lg:text-lg font-semibold text-gray-800">Your contacts</h2>
                     </div>
                     {[
                         { role: 'College staff', name: studentData.staffName,   phone: studentData.staffPhone,   email: studentData.staffEmail },
@@ -311,7 +317,7 @@ export default function StudentProfilePage() {
             </div>
 
             {/* Right: To-do List or Profile Cards */}
-            <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-5 col-span-full md:col-span-3">
+            <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 flex flex-col gap-5 col-span-full lg:col-span-3">
                 {!showTodo ? (
                     <>
                         <h2 className="text-2xl font-bold text-gray-900">
@@ -343,7 +349,16 @@ export default function StudentProfilePage() {
                             <section key={section.title} className="flex-1 flex flex-col gap-3">
                                 <h3 className="text-base font-semibold text-gray-900">{section.title}</h3>
                                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    {section.cards.map(({ label, description, href, Icon }) => (
+                                    {section.cards.map(({ label, description, href, Icon }) => section.classic ? (
+                                        <button
+                                            key={label}
+                                            onClick={() => router.push(href)}
+                                            className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm hover:border-primary/50 hover:shadow transition"
+                                        >
+                                            <Icon className="text-primary text-5xl" />
+                                            <span className="text-base text-primary font-medium text-center">{label}</span>
+                                        </button>
+                                    ) : (
                                         <button
                                             key={label}
                                             onClick={() => router.push(href)}

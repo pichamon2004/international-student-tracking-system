@@ -6,6 +6,7 @@ import { useAuthStore } from '@/lib/auth';
 import { RoleDetail, ModuleWithPermissions } from '@/types';
 import toast from 'react-hot-toast';
 import { RiDeleteBin6Line, RiAlertLine, RiEditLine } from 'react-icons/ri';
+import CustomSelect from '@/components/ui/CustomSelect';
 
 const METHODS = ['view', 'create', 'edit', 'delete'] as const;
 type Method = typeof METHODS[number];
@@ -168,10 +169,48 @@ export default function RolesPage() {
   };
 
   return (
-    <div className="flex flex-1 min-h-0 gap-6 overflow-hidden">
+    <div className="flex flex-col md:flex-row flex-1 min-h-0 gap-4 md:gap-6 overflow-hidden">
+
+      {/* Phones — role picker instead of the side list */}
+      <div className="md:hidden shrink-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">Roles</h2>
+          {canCreate && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="text-sm px-3 py-1 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+            >
+              + New Role
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <CustomSelect
+              value={selected ? String(selected.id) : ''}
+              onChange={v => { const r = roles.find(x => String(x.id) === v); if (r) selectRole(r); }}
+              options={roles.map(r => ({ value: String(r.id), label: `${r.name} (${r.code})${r.isActive ? '' : ' — Inactive'}` }))}
+              placeholder="Select a role"
+              wrapOptions
+            />
+          </div>
+          {selected && canEdit && (
+            <button onClick={() => openEdit(selected)} title="Edit role"
+              className="w-10 h-10 shrink-0 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-primary hover:border-primary/30 transition">
+              <RiEditLine size={16} />
+            </button>
+          )}
+          {selected && canDelete && (
+            <button onClick={() => openDelete(selected)} title="Delete role"
+              className="w-10 h-10 shrink-0 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-200 transition">
+              <RiDeleteBin6Line size={16} />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Left panel — role list */}
-      <div className="w-64 flex-shrink-0 flex flex-col min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="hidden md:flex w-64 flex-shrink-0 flex-col min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-4 pt-4 pb-3 flex-shrink-0">
           <h2 className="text-lg font-semibold text-gray-800">Roles</h2>
           {canCreate && (
@@ -232,10 +271,11 @@ export default function RolesPage() {
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">{selected.name}</h3>
-                <p className="text-sm text-gray-400">{selected.code}</p>
+            <div className="flex items-center justify-between gap-3 px-4 md:px-6 py-3 md:py-4 border-b border-gray-100">
+              <div className="min-w-0">
+                <p className="md:hidden text-sm font-semibold text-gray-700">Permissions</p>
+                <h3 className="hidden md:block text-lg font-semibold text-gray-800">{selected.name}</h3>
+                <p className="hidden md:block text-sm text-gray-400">{selected.code}</p>
               </div>
               {canEdit && (
                 <button
@@ -249,16 +289,16 @@ export default function RolesPage() {
             </div>
 
             <div className="flex-1 overflow-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[460px]">
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    <th className="text-left px-6 py-3 text-gray-600 font-medium bg-white border-b border-gray-100">Module</th>
+                    <th className="sticky left-0 z-10 text-left px-4 md:px-6 py-3 text-gray-600 font-medium bg-white border-b border-gray-100">Module</th>
                     {METHODS.map(m => (
-                      <th key={m} className="px-4 py-3 text-center text-gray-600 font-medium w-24 bg-white border-b border-gray-100">
+                      <th key={m} className="px-2 md:px-4 py-3 text-center text-gray-600 font-medium w-16 md:w-24 bg-white border-b border-gray-100">
                         {METHOD_LABELS[m]}
                       </th>
                     ))}
-                    <th className="px-4 py-3 text-center text-gray-600 font-medium w-20 bg-white border-b border-gray-100">All</th>
+                    <th className="px-2 md:px-4 py-3 text-center text-gray-600 font-medium w-14 md:w-20 bg-white border-b border-gray-100">All</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -274,11 +314,11 @@ export default function RolesPage() {
 
                     return (
                       <tr key={mod.id} className="hover:bg-gray-50/60">
-                        <td className="px-6 py-3 font-medium text-gray-700">{mod.name}</td>
+                        <td className="sticky left-0 bg-white px-4 md:px-6 py-3 font-medium text-gray-700 min-w-[8rem]">{mod.name}</td>
                         {METHODS.map(m => {
                           const permId = permMap[m];
                           return (
-                            <td key={m} className="px-4 py-3 text-center bg-white/50">
+                            <td key={m} className="px-2 md:px-4 py-3 text-center bg-white/50">
                               {permId ? (
                                 <input
                                   type="checkbox"
@@ -293,7 +333,7 @@ export default function RolesPage() {
                             </td>
                           );
                         })}
-                        <td className="px-4 py-3 text-center bg-white/50">
+                        <td className="px-2 md:px-4 py-3 text-center bg-white/50">
                           <input
                             type="checkbox"
                             checked={allChecked}

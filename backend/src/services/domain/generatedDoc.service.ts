@@ -4,6 +4,7 @@ import * as documentTemplateRepository from '../../repositories/documentTemplate
 import * as generatedDocRepository from '../../repositories/generatedDoc.repository';
 import * as studentRepository from '../../repositories/student.repository';
 import * as userRepository from '../../repositories/user.repository';
+import * as templateVariableRepository from '../../repositories/templateVariable.repository';
 import * as userService from './user.service';
 import * as deanDelegationService from './deanDelegation.service';
 import * as fileService from './file.service';
@@ -98,7 +99,74 @@ export const generatePdf = async (
     }
   }
 
+  // One document per template: generated automatically on submit now, so a
+  // later Generate (the student's sign-on-submit, or staff's fallback button)
+  // returns that document instead of making a second copy.
+  const existing = (await generatedDocRepository.findByRequestId(requestId)).find(d => d.templateId === templateId);
+  if (existing) return presentOne(existing, GENERATED_DOC_FILES);
+
   return createDoc(request, template, formData, userId);
+};
+
+// ── staff-filled variables (inputType 'staff', e.g. the document number) ──
+
+const STAFF_PLACEHOLDER = '..........';
+
+export const staffVariableKeys = async () =>
+  (await templateVariableRepository.findAll()).filter(v => v.inputType === 'staff').map(v => v.key);
+
+/**
+ * The values a document is rendered with: the student's form data plus what IR
+ * staff filled in at approval. Until then staff variables print as a dotted
+ * blank, like the paper form, instead of failing as missing.
+ */
+async function docVars(formData: Record<string, string>, staffDataJson: string | null | undefined) {
+  const staffData: Record<string, string> = staffDataJson ? JSON.parse(staffDataJson) : {};
+  const vars = { ...formData };
+  for (const key of await staffVariableKeys()) vars[key] = staffData[key]?.trim() || STAFF_PLACEHOLDER;
+  return vars;
+}
+
+const SIGNED_METHODS = ['digital', 'manual'];
+const needsSigning = (t: { isActive?: boolean; signingMethod: string; variables: string | null }) =>
+  t.isActive !== false && SIGNED_METHODS.includes(t.signingMethod) && parseRequiredSigKeys(t.variables).length > 0;
+
+/**
+ * Generates any missing document for the request's digital/manual templates,
+ * so each signer finds it ready (no Generate step) and approvals can require
+ * their signature. "approval" templates are generated on Approve instead.
+ */
+export const ensureSigningDocs = async (requestId: number, actorUserId: number) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request?.requestTypeId) return;
+  const templates = (await documentTemplateRepository.findByRequestTypeId(request.requestTypeId)).filter(needsSigning);
+  if (templates.length === 0) return;
+  const docs = await generatedDocRepository.findByRequestId(requestId);
+  const formData: Record<string, string> = request.formData ? JSON.parse(request.formData) : {};
+  for (const template of templates) {
+    if (docs.some(d => d.templateId === template.id)) continue;
+    await createDoc(request, template, formData, actorUserId);
+  }
+};
+
+/**
+ * Approving is signing for digital/manual documents: refuse the approval while
+ * a document of this request has a box for the role that it hasn't signed.
+ */
+export const assertSignedBeforeApproval = async (requestId: number, role: string, actorUserId: number) => {
+  await ensureSigningDocs(requestId, actorUserId);
+  const docs = await generatedDocRepository.findSigningStateByRequestId(requestId);
+  const unsigned = docs.filter(d =>
+    needsSigning(d.template)
+    && parseRequiredSigKeys(d.template.variables).includes(`sig_${role}`)
+    && !d.signatures.some(s => s.role === role)
+  );
+  if (unsigned.length > 0) {
+    throw Object.assign(
+      new Error(`Sign the document before approving: ${unsigned.map(d => d.template.name).join(', ')}`),
+      { statusCode: 409, code: 'SIGNATURE_REQUIRED' }
+    );
+  }
 };
 
 type RequestForDoc = NonNullable<Awaited<ReturnType<typeof requestRepository.findById>>>;
@@ -110,23 +178,7 @@ async function createDoc(
   formData: Record<string, string>,
   userId: number
 ) {
-  const requiredSigKeys = parseRequiredSigKeys(template.variables);
-  const { html: mergedHtml, missing } = mergeTemplateToHtml(template.body, formData);
-  if (missing.length > 0) {
-    throw Object.assign(
-      new Error(`Missing variables: ${missing.join(', ')}`),
-      { statusCode: 400 }
-    );
-  }
-
-  const sigNames = await resolveSigNames(requiredSigKeys, formData, request.student);
-  const sigGridHtml = buildSignatureGridHtml(
-    requiredSigKeys,
-    Object.fromEntries(requiredSigKeys.map(k => [k, { name: sigNames[k] }]))
-  );
-  const fullBodyHtml = resolveStaticImages(mergedHtml + sigGridHtml);
-
-  const pdfBuffer = await renderHtmlToPdf(fullBodyHtml);
+  const { pdfBuffer, requiredSigKeys } = await renderUnsigned(request, template, formData);
 
   const { file } = await fileService.store(pdfBuffer, {
     originalName: `req${request.id}.pdf`, purpose: 'GENERATED_PDF', uploadedById: userId, ownerStudentId: request.studentId,
@@ -145,6 +197,56 @@ async function createDoc(
   await backfillApprovalSignatures(doc.id, request, requiredSigKeys, userId);
   return presentOne((await generatedDocRepository.findById(doc.id)) ?? doc, GENERATED_DOC_FILES);
 }
+
+// The document before anyone signs: merged body + empty signature boxes
+async function renderUnsigned(
+  request: Pick<RequestForDoc, 'student' | 'staffData'>,
+  template: TemplateForDoc,
+  formData: Record<string, string>
+) {
+  const requiredSigKeys = parseRequiredSigKeys(template.variables);
+  const { html: mergedHtml, missing } = mergeTemplateToHtml(template.body, await docVars(formData, request.staffData));
+  if (missing.length > 0) {
+    throw Object.assign(
+      new Error(`Missing variables: ${missing.join(', ')}`),
+      { statusCode: 400 }
+    );
+  }
+
+  const sigNames = await resolveSigNames(requiredSigKeys, formData, request.student);
+  const sigGridHtml = buildSignatureGridHtml(
+    requiredSigKeys,
+    Object.fromEntries(requiredSigKeys.map(k => [k, { name: sigNames[k] }]))
+  );
+  const fullBodyHtml = resolveStaticImages(mergedHtml + sigGridHtml);
+  return { pdfBuffer: await renderHtmlToPdf(fullBodyHtml), requiredSigKeys };
+}
+
+/**
+ * Re-renders every document of the request — after staff fill in the
+ * document number, so it shows in documents generated before that. Signed
+ * documents keep their signatures (embedAndFinalize re-merges them).
+ */
+export const rerenderRequestDocs = async (requestId: number, actorUserId: number) => {
+  const request = await requestRepository.findById(requestId);
+  if (!request) return;
+  for (const doc of await generatedDocRepository.findSigningStateByRequestId(requestId)) {
+    if (doc.signatures.length > 0) {
+      await embedAndFinalize(doc.id, actorUserId);
+      continue;
+    }
+    const full = await generatedDocRepository.findById(doc.id);
+    if (!full) continue;
+    const formData: Record<string, string> = full.formData ? JSON.parse(full.formData) : {};
+    const { pdfBuffer } = await renderUnsigned(request, full.template, formData);
+    const { file } = await fileService.store(pdfBuffer, {
+      originalName: `req${request.id}.pdf`, purpose: 'GENERATED_PDF', uploadedById: actorUserId, ownerStudentId: request.studentId,
+    });
+    const previous = full.fileId;
+    await generatedDocRepository.updateFile(doc.id, file.id);
+    if (previous) await fileService.softDelete(previous).catch(() => { });
+  }
+};
 
 // ── "approval" signing: the approver's name is printed on Approve ────
 
@@ -379,7 +481,8 @@ export const embedAndFinalize = async (docId: number, actorUserId?: number) => {
 
   const requiredSigKeys = parseRequiredSigKeys(doc.template.variables);
   const formData: Record<string, string> = doc.formData ? JSON.parse(doc.formData) : {};
-  const { html: mergedHtml } = mergeTemplateToHtml(doc.template.body, formData);
+  const staffData = doc.requestId ? (await requestRepository.findById(doc.requestId))?.staffData : null;
+  const { html: mergedHtml } = mergeTemplateToHtml(doc.template.body, await docVars(formData, staffData));
 
   // For each required role that has signed, show the actual signer's name
   // (not just who was expected to sign) alongside their drawn/uploaded image.
@@ -395,7 +498,8 @@ export const embedAndFinalize = async (docId: number, actorUserId?: number) => {
     entries[key] = {
       name: signer?.name,
       imageUrl: isApproval ? undefined : await signatureImageDataUri(sig),
-      ...(isApproval && { date: sig.signedAt, signatureText: signer?.name ?? undefined }),
+      date: sig.signedAt,
+      ...(isApproval && { signatureText: signer?.name ?? undefined }),
     };
   }
 

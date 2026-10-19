@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import { RiSearchLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { requestApi, type ApiRequest } from '@/lib/api';
+import { requestApi, isSignatureRequired, type ApiRequest } from '@/lib/api';
 import Pagination from '@/components/ui/Pagination';
 import { useFitPageSize, usePaged } from '@/lib/useFitPageSize';
 import toast from 'react-hot-toast';
@@ -64,7 +64,13 @@ export default function DeanRequestPage() {
       await requestApi.updateStatus(id, status);
       toast.success('Status updated');
       load();
-    } catch {
+    } catch (e) {
+      // Approving this request means signing its document — that happens on the detail page
+      if (isSignatureRequired(e)) {
+        toast.error('Sign the document to approve this request');
+        router.push(`/dean/request/${id}`);
+        return;
+      }
       toast.error('Failed to update status');
     }
   }

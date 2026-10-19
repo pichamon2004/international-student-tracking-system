@@ -4,6 +4,7 @@ export interface CreateAdvisorDto {
   email:        string;
   titleEn?:     string;
   firstNameEn:  string;
+  middleNameEn?: string;
   lastNameEn:   string;
   phone?:       string;
   nationality?: string;
@@ -13,6 +14,7 @@ export interface CreateAdvisorDto {
 export interface UpdateAdvisorDto {
   titleEn?:           string;
   firstNameEn?:       string;
+  middleNameEn?:      string | null;
   lastNameEn?:        string;
   phone?:             string;
   nationality?:       string;
@@ -23,6 +25,10 @@ export interface UpdateAdvisorDto {
   workPermitExpiry?:  Date;
   workPermitFileId?:  number | null;
 }
+
+/** "Dr. John Michael Smith" — also kept on users.name, which signatures and approvals print */
+export const advisorDisplayName = (a: { titleEn?: string | null; firstNameEn?: string | null; middleNameEn?: string | null; lastNameEn?: string | null }) =>
+  [a.titleEn, a.firstNameEn, a.middleNameEn, a.lastNameEn].filter(Boolean).join(' ');
 
 const FILE_REF = { select: { id: true, storageKey: true } } as const;
 
@@ -78,7 +84,7 @@ export const findUserEmailById = (advisorId: number) =>
 
 export const createWithUser = (dto: CreateAdvisorDto) =>
   prisma.$transaction(async (tx) => {
-    const name = [dto.titleEn, dto.firstNameEn, dto.lastNameEn].filter(Boolean).join(' ');
+    const name = advisorDisplayName(dto);
     const user = await tx.user.create({
       data: { email: dto.email, name, isActive: true },
     });
@@ -89,6 +95,7 @@ export const createWithUser = (dto: CreateAdvisorDto) =>
         userId:      user.id,
         titleEn:     dto.titleEn     ?? null,
         firstNameEn: dto.firstNameEn,
+        middleNameEn: dto.middleNameEn || null,
         lastNameEn:  dto.lastNameEn,
         phone:       dto.phone       ?? null,
         nationality: dto.nationality ?? null,
@@ -104,6 +111,7 @@ export const updateByUserId = (userId: number, dto: UpdateAdvisorDto) =>
     data: {
       titleEn:           dto.titleEn,
       firstNameEn:       dto.firstNameEn,
+      middleNameEn:      dto.middleNameEn,
       lastNameEn:        dto.lastNameEn,
       phone:             dto.phone,
       nationality:       dto.nationality,
@@ -120,6 +128,7 @@ export const updateById = (id: number, dto: UpdateAdvisorDto) =>
     data: {
       titleEn:           dto.titleEn,
       firstNameEn:       dto.firstNameEn,
+      middleNameEn:      dto.middleNameEn,
       lastNameEn:        dto.lastNameEn,
       phone:             dto.phone,
       nationality:       dto.nationality,

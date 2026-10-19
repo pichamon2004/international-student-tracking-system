@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import prisma from '../../utils/prisma';
 import * as userRepository from '../../repositories/user.repository';
+import { advisorDisplayName } from '../../repositories/advisor.repository';
 
 // ── JWT helpers ───────────────────────────────────────────────────
 
@@ -193,8 +194,7 @@ export const getMyProfile = async (userId: number) => {
   if (user.student?.firstNameEn) {
     displayName = user.student.firstNameEn;
   } else if (user.advisor) {
-    const { titleEn, firstNameEn, lastNameEn } = user.advisor;
-    const full = [titleEn, firstNameEn, lastNameEn].filter(Boolean).join(' ');
+    const full = advisorDisplayName(user.advisor);
     if (full) displayName = full;
   }
 

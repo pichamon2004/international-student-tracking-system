@@ -6,7 +6,7 @@ import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiUserSta
 import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
-import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, latestCancelRequest, reviewerComments, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
+import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, templateVariableApi, isSignatureRequired, isStaffFieldsRequired, STAFF_FIELD_PLACEHOLDER, latestCancelRequest, reviewerComments, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { needsSignatureToApprove } from '@/lib/signing';
 import jsPDF from 'jspdf';
@@ -53,14 +53,25 @@ export default function StaffRequestDetailPage() {
   // Approve is waiting on the signing dialog (digital/manual templates)
   const [signToApprove, setSignToApprove] = useState(false);
 
+  // Staff-filled document variables (inputType 'staff', e.g. the document number)
+  const [staffVarDefs, setStaffVarDefs] = useState<{ key: string; label: string }[]>([]);
+  const [staffValues, setStaffValues] = useState<Record<string, string>>({});
+  const [showStaffFieldsError, setShowStaffFieldsError] = useState(false);
+
   useEffect(() => {
     deanApi.getSignatory().then(r => setDeanName(r.data.data.name)).catch(() => {});
+    templateVariableApi.getAll()
+      .then(r => setStaffVarDefs(r.data.data.filter(v => v.inputType === 'staff').map(v => ({ key: v.key, label: v.label }))))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!id) return;
     requestApi.getById(Number(id))
-      .then(res => setReq(res.data.data))
+      .then(res => {
+        setReq(res.data.data);
+        try { setStaffValues(JSON.parse(res.data.data.staffData ?? '{}')); } catch { /* ignore */ }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
     loadGeneratedDoc(Number(id));
@@ -77,6 +88,12 @@ export default function StaffRequestDetailPage() {
       return;
     }
     setShowRejectError(false);
+    // The document number etc. go into the document, so they come before signing
+    if (status === 'STAFF_APPROVED' && staffFields.some(f => !staffValues[f.key]?.trim())) {
+      setShowStaffFieldsError(true);
+      toast.error('Please fill in the document fields before approving');
+      return;
+    }
     // Sign first — the approval is recorded from the dialog's onSigned
     if (status === 'STAFF_APPROVED' && !signed && mustSignToApprove) {
       setSignToApprove(true);
@@ -84,14 +101,28 @@ export default function StaffRequestDetailPage() {
     }
     setSubmittingStatus(status);
     try {
-      const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined);
-      setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments, attachmentFileIds: res.data.data.attachmentFileIds } : prev);
+      const staffData = status === 'STAFF_APPROVED' && staffFields.length > 0
+        ? Object.fromEntries(staffFields.map(f => [f.key, staffValues[f.key].trim()]))
+        : undefined;
+      const res = await requestApi.updateStatus(req.id, status, comment || undefined, attachedFiles.length > 0 ? attachedFiles : undefined, staffData);
+      setReq(prev => prev ? { ...prev, status, attachments: res.data.data.attachments, attachmentFileIds: res.data.data.attachmentFileIds, staffData: res.data.data.staffData ?? prev.staffData } : prev);
       if (status === 'STAFF_APPROVED') loadGeneratedDoc(req.id);
       setAttachedFiles([]);
       setComment('');
       if (attachInputRef.current) attachInputRef.current.value = '';
       toast.success('Status updated');
-    } catch {
+    } catch (e) {
+      // The document was only just generated (an older request) — reload it so Approve becomes Sign & Approve
+      if (isSignatureRequired(e)) {
+        loadGeneratedDoc(req.id);
+        toast.error('Please sign the document first, then approve');
+        return;
+      }
+      if (isStaffFieldsRequired(e)) {
+        setShowStaffFieldsError(true);
+        toast.error('Please fill in the document fields before approving');
+        return;
+      }
       toast.error('Failed to update status');
     } finally {
       setSubmittingStatus(null);
@@ -148,6 +179,9 @@ export default function StaffRequestDetailPage() {
   }
 
   const isApprovalSigning = req?.requestType?.documentTemplates?.[0]?.signingMethod === 'approval';
+
+  // The staff-filled variables this request's documents use
+  const staffFields = staffVarDefs.filter(d => (req?.requestType?.documentTemplates ?? []).some(t => (t.variables ?? '').includes(`{{${d.key}}}`)));
 
   function handleSigned(updated: ApiDocSignature[]) {
     setSignatures(updated);
@@ -289,7 +323,7 @@ export default function StaffRequestDetailPage() {
           )}
 
           {/* Sign Document Button — while the request awaits staff approval, signing happens through Approve */}
-          {genDoc && !isApprovalSigning && req.status !== 'PENDING' && !signatures.some(s => s.role === 'ir_staff') && (
+          {genDoc && requiredSigRoles.includes('ir_staff') && !isApprovalSigning && req.status !== 'PENDING' && !signatures.some(s => s.role === 'ir_staff') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -432,6 +466,36 @@ export default function StaffRequestDetailPage() {
             </div>
           </div>
 
+          {staffFields.length > 0 && (
+            <>
+              <p className="text-sm font-semibold text-primary/50 uppercase tracking-wide mt-2">Document Fields</p>
+              <div className="border border-gray-100 rounded-2xl p-5 flex flex-col gap-3">
+                {staffFields.map(f => (
+                  <div key={f.key} className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-gray-400 uppercase">
+                      {f.label}{req.status === 'PENDING' && <span className="text-red-500"> *</span>}
+                    </span>
+                    {req.status === 'PENDING' && !pendingCancel ? (
+                      <input
+                        value={staffValues[f.key] ?? ''}
+                        onChange={e => { setStaffValues(prev => ({ ...prev, [f.key]: e.target.value })); setShowStaffFieldsError(false); }}
+                        placeholder={`Enter ${f.label.toLowerCase()}`}
+                        className={`w-full border rounded-xl px-4 py-2.5 text-sm text-primary placeholder-gray-400 bg-gray-50 outline-none focus:border-primary transition-colors ${showStaffFieldsError && !staffValues[f.key]?.trim() ? 'border-red-400' : 'border-gray-200'}`}
+                      />
+                    ) : (
+                      <span className="text-sm text-gray-700 bg-gray-50 rounded-xl px-4 py-2.5">{staffValues[f.key] || '—'}</span>
+                    )}
+                  </div>
+                ))}
+                {req.status === 'PENDING' && (
+                  <p className={`text-xs pl-1 ${showStaffFieldsError ? 'text-red-500' : 'text-gray-400'}`}>
+                    {showStaffFieldsError ? 'Required before approving.' : 'Printed in the document when you approve.'}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
           <p className="text-sm font-semibold text-primary/50 uppercase tracking-wide mt-2">Activity Log</p>
           <div className="border border-gray-100 rounded-2xl overflow-hidden">
             <table className="w-full text-sm">
@@ -518,6 +582,7 @@ export default function StaffRequestDetailPage() {
           passport_number: s?.passports?.[0]?.passportNumber ?? '—',
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
           ...formDataObj,
+          ...Object.fromEntries(staffFields.map(f => [f.key, staffValues[f.key]?.trim() || STAFF_FIELD_PLACEHOLDER])),
         };
 
         // label text → variable key (for templates saved without data-var)
@@ -567,7 +632,7 @@ export default function StaffRequestDetailPage() {
           const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
           const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
           const sigHtml = sigVars.length > 0
-            ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
+            ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},calc((100% - 72px) / 4));justify-content:end;gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
             : '';
           return renderTemplate(t.body) + sigHtml;
         }).join('<hr style="margin:32px 0"/>');
@@ -628,7 +693,7 @@ export default function StaffRequestDetailPage() {
                 </button>
               </div>
 
-              <div ref={previewContentRef} className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+              <div ref={previewContentRef} className="flex-1 overflow-auto bg-gray-100 px-3 py-3 sm:px-6 sm:py-6 flex flex-col gap-4 sm:gap-6">
                 {genDoc && (
                   <div className="w-full max-w-[210mm] mx-auto flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg bg-primary/5 text-primary">
                     <RiFileTextLine size={13} />
@@ -641,10 +706,10 @@ export default function StaffRequestDetailPage() {
                 )}
 
                 {genDoc ? (
-                  <div className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                  <div className="bg-white shadow-md mx-auto" style={{ width: '100%', maxWidth: '210mm', aspectRatio: '210 / 297' }}>
                     <iframe
                       src={genDoc.signedFileUrl ?? genDoc.fileUrl ?? undefined}
-                      style={{ width: '100%', height: '297mm', border: 'none' }}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
                       title="Generated Document"
                     />
                   </div>
@@ -658,8 +723,8 @@ export default function StaffRequestDetailPage() {
                     const isImage = isImageUrl(url);
                     if (isPdf) {
                       return (
-                        <div key={i} className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
-                          <iframe src={url} style={{ width: '100%', height: '297mm', border: 'none' }} title={`Document ${i + 1}`} />
+                        <div key={i} className="bg-white shadow-md mx-auto" style={{ width: '100%', maxWidth: '210mm', aspectRatio: '210 / 297' }}>
+                          <iframe src={url} style={{ width: '100%', height: '100%', border: 'none' }} title={`Document ${i + 1}`} />
                         </div>
                       );
                     }
@@ -700,7 +765,7 @@ export default function StaffRequestDetailPage() {
                         <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
                         {sigVars.length > 0 && (
                           <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, calc((100% - 72px) / 4))`, justifyContent: 'end', gap: '24px' }}>
                               {sigVars.map((sv: string) => (
                                 <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                                   <div style={{ width: '100%', height: '40px', borderBottom: '2px solid #1f2937', marginTop: '16px' }} />

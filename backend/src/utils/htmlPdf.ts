@@ -70,16 +70,16 @@ const SIG_ROLE_LABELS: Record<string, string> = {
   sig_student: 'Student', sig_advisor: 'Advisor', sig_ir_staff: 'IR Staff', sig_dean: 'Dean',
 };
 
-// Same layout as the live preview's signature block: a row of up to 4 equal
-// boxes, each a blank line to sign above (or the actual signature image once
+// Same layout as the live preview's signature block: a row of quarter-width
+// boxes aligned to the right (one signer sits at the right like a letter's
+// signature, never stretched across the page), each a blank line to sign above (or the actual signature image once
 // signed) with the signer's name, role, and a date placeholder beneath it.
 export function buildSignatureGridHtml(
   requiredSigKeys: string[],
   entries: Record<string, { name?: string; imageUrl?: string; date?: Date; signatureText?: string }>
 ): string {
   if (requiredSigKeys.length === 0) return '';
-  const cols = Math.min(requiredSigKeys.length, 4);
-  const boxWidth = `${(100 / cols).toFixed(4)}%`;
+  const boxWidth = '25%';
   const boxes = requiredSigKeys.map(key => {
     const e = entries[key] ?? {};
     // Positioned absolutely within the line box instead of flex align-items,
@@ -102,14 +102,14 @@ export function buildSignatureGridHtml(
       + `<div style="position:relative;width:100%;height:70px;border-bottom:1px solid #1f2937;margin-top:10px">${img}</div>`
       + name
       + `<div style="font-size:11px;color:#6b7280;margin-top:4px">${SIG_ROLE_LABELS[key] ?? key.replace(/^sig_/, '')}</div>`
-      + `<div style="font-size:10px;color:#9ca3af;margin-top:4px">Date ${e.date ? e.date.toLocaleDateString('en-GB') : '....../....../......'}</div>`
+      + `<div style="font-size:10px;color:#9ca3af;margin-top:4px">Date ${e.date ? e.date.toLocaleDateString('en-GB', { timeZone: 'Asia/Bangkok' }) : '....../....../......'}</div>`
       + `</div>`;
   }).join('');
   // font-size:0 on the row collapses the whitespace between adjacent
   // inline-block columns (otherwise the newline/indentation between them
   // renders as a visible gap, same trick as real space between <li>s).
   return `<div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb">`
-    + `<div style="font-size:0">${boxes}</div>`
+    + `<div style="font-size:0;text-align:right">${boxes}</div>`
     + `</div>`;
 }
 
@@ -128,11 +128,25 @@ const DOC_BASE_CSS = `
     table { border-collapse:collapse; }
 `;
 
+// Thai templates ask for 'Sarabun' (the app's Thai font). The container has no
+// Thai font installed, so the copy shipped in assets/fonts is embedded here.
+const FONTS_DIR = path.join(process.cwd(), 'assets', 'fonts');
+let fontFaceCss: string | null = null;
+function fontFaces(): string {
+  if (fontFaceCss !== null) return fontFaceCss;
+  const file = path.join(FONTS_DIR, 'Sarabun-Regular.ttf');
+  fontFaceCss = fs.existsSync(file)
+    ? `@font-face { font-family:'Sarabun'; src:url(data:font/ttf;base64,${fs.readFileSync(file).toString('base64')}) format('truetype'); }`
+    : '';
+  return fontFaceCss;
+}
+
 // Matches the print CSS the frontend already uses for its own "Print" button
 // (student/request/new/[typeId]/page.tsx handlePrint), so a generated PDF
 // and a browser print of the same filled-in preview look identical.
 export async function renderHtmlToPdf(bodyHtml: string): Promise<Buffer> {
   const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    ${fontFaces()}
     body { margin:0; padding:15mm 20mm; font-family:'Times New Roman', serif; font-size:14px; color:#222; line-height:1.8; }
     /* Inline images (the logo) sit inside a line box sized by the
        paragraph's line-height, not just the image itself — that leaves a

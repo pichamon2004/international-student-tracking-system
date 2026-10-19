@@ -16,6 +16,10 @@ export interface StudentProfile {
   advisorName: string;
   visaExpiry: string;    // dd/mm/yyyy
   passportNumber: string;
+  nationality?: string;
+  enrollmentDate?: string;       // ISO
+  expectedGraduation?: string;   // ISO
+  startingSemester?: string;     // FIRST | SECOND | SUMMER
 }
 
 export const mockStudentProfile: StudentProfile = {

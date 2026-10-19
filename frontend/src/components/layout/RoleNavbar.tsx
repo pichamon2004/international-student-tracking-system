@@ -16,6 +16,8 @@ import {
   RiBriefcaseLine,
   RiCheckLine,
   RiArrowLeftRightLine,
+  RiMenuLine,
+  RiCloseLine,
 } from 'react-icons/ri';
 import { IconType } from 'react-icons';
 import { clsx } from 'clsx';
@@ -154,6 +156,51 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Phones: the menu items open as a grid of tiles from the ☰ button
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // The name next to the avatar gives way when the nav row needs the room
+  // (e.g. a hovered item expanding its label): it shrinks, and once it would be
+  // cut off it collapses so the avatar sits at the right edge. It comes back
+  // only when the nav row has room for the whole name again.
+  const nameRef = useRef<HTMLDivElement>(null);
+  const navRowRef = useRef<HTMLDivElement>(null);
+  const [nameClipped, setNameClipped] = useState(false);
+  const nameClippedRef = useRef(false);
+  const nameWidthRef = useRef(0);
+  useEffect(() => {
+    const el = nameRef.current;
+    const row = navRowRef.current;
+    if (!el || !row) return;
+    const check = () => {
+      let clipped: boolean;
+      if (!nameClippedRef.current) {
+        // Collapsed (below 900px) there's nothing to measure — keep the last width
+        const natural = Math.max(0, ...Array.from(el.children).map(c => c.scrollWidth));
+        if (natural > 0) nameWidthRef.current = natural;
+        clipped = natural > el.clientWidth + 1;
+      } else {
+        const links = Array.from(row.children) as HTMLElement[];
+        const used = links.reduce((sum, c) => sum + c.offsetWidth, 0) + 4 * Math.max(0, links.length - 1);
+        clipped = row.clientWidth - used < nameWidthRef.current + 10;
+      }
+      nameClippedRef.current = clipped;
+      setNameClipped(clipped);
+    };
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    ro.observe(row);
+    Array.from(row.children).forEach(c => ro.observe(c));
+    return () => ro.disconnect();
+  }, [items.length]);
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   // Refresh roles list every time dropdown opens so newly assigned roles appear immediately
   useEffect(() => {
     if (open && token) fetchRoles();
@@ -170,15 +217,15 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
   }, []);
 
   return (
-    <nav className="bg-white rounded-b-2xl shadow-sm px-6 py-3 flex items-center justify-between gap-6 ">
+    <nav className="relative bg-white rounded-b-2xl shadow-sm px-3 md:px-6 py-3 flex items-center justify-between gap-2 md:gap-6">
 
       {/* Logo */}
-      <div className="hidden md:flex items-center gap-2 shrink-0">
-        <img src="/logo.png" alt="logo" className="h-10 w-auto" />
+      <div className="flex items-center gap-2 shrink-0">
+        <img src="/logo.png" alt="logo" className="h-8 md:h-10 w-auto" />
       </div>
 
-      {/* Nav */}
-      <div className="flex items-center gap-1 flex-1 justify-center ">
+      {/* Nav (phones use the ☰ tile grid below instead) */}
+      <div ref={navRowRef} className="hidden min-[900px]:flex items-center gap-1 flex-1 justify-center ">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           const isShow = activeItem === href || hoveredItem === href;
@@ -216,28 +263,31 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
         })}
       </div>
 
+      {/* Phones: push the bell, avatar and ☰ to the right */}
+      <div className="flex-1 min-[900px]:hidden" />
+
       {/* Notifications */}
       <NotificationBell />
 
       {/* Avatar */}
-      <div className="relative shrink-0" ref={dropdownRef}>
+      <div className="relative min-w-0" ref={dropdownRef}>
         <button
-          onClick={() => setOpen((prev) => !prev)}
-          className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-gray-50 transition-all duration-200"
+          onClick={() => { setOpen((prev) => !prev); setMenuOpen(false); }}
+          className="flex items-center gap-2.5 max-w-full rounded-xl px-2 py-1.5 hover:bg-gray-50 transition-all duration-200"
         >
-          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
+          <div className="w-9 h-9 shrink-0 rounded-full bg-primary flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
             {initials}
           </div>
 
-          <div className="hidden md:flex flex-col leading-tight text-left">
-            <span className="text-sm font-semibold text-primary">{displayName}</span>
-            <span className="text-xs text-gray-400 capitalize">{displayRole}</span>
+          <div ref={nameRef} className={clsx('hidden min-[900px]:flex flex-col min-w-0 overflow-hidden leading-tight text-left', nameClipped && '!hidden')}>
+            <span className="text-sm font-semibold text-primary whitespace-nowrap">{displayName}</span>
+            <span className="text-xs text-gray-400 capitalize whitespace-nowrap">{displayRole}</span>
           </div>
         </button>
 
         {open && (
           <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
-            <div className="md:hidden px-4 py-3 border-b border-gray-100">
+            <div className={clsx('px-4 py-3 border-b border-gray-100', !nameClipped && 'min-[900px]:hidden')}>
               <p className="text-sm font-semibold text-primary">{displayName}</p>
               <p className="text-xs text-gray-400 capitalize">{displayRole}</p>
             </div>
@@ -284,6 +334,44 @@ export default function RoleNavbar({ role }: RoleNavbarProps) {
           </div>
         )}
       </div>
+
+      {/* Phones: ☰ opens the menu as a grid of tiles */}
+      <button
+        type="button"
+        onClick={() => { setMenuOpen(v => !v); setOpen(false); }}
+        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={menuOpen}
+        className={clsx(
+          'min-[900px]:hidden w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-primary transition-colors',
+          menuOpen ? 'bg-[#C4E8FF]' : 'hover:bg-[#C4E8FF]'
+        )}
+      >
+        {menuOpen ? <RiCloseLine size={22} /> : <RiMenuLine size={22} />}
+      </button>
+
+      {menuOpen && (
+        <>
+          <div className="min-[900px]:hidden fixed inset-0 z-40 bg-black/20" onClick={() => setMenuOpen(false)} />
+          <div className="min-[900px]:hidden absolute left-0 right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-lg border border-gray-100 p-3 grid grid-cols-3 gap-2">
+            {items.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMenuOpen(false)}
+                className={clsx(
+                  'flex flex-col items-center justify-center gap-1.5 rounded-xl py-3 px-1 text-center text-xs font-medium leading-tight transition-colors',
+                  pathname.startsWith(href)
+                    ? 'bg-[#C4E8FF] text-primary'
+                    : 'text-gray-500 hover:bg-[#C4E8FF] hover:text-primary'
+                )}
+              >
+                <Icon size={22} />
+                <span className="line-clamp-2">{label}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
     </nav>
   );
 }

@@ -8,6 +8,7 @@ import { clsx } from 'clsx';
 import Button from '@/components/ui/Button';
 import { studentApi, type ApiStudentWithExpiry } from '@/lib/api';
 import FollowUpModal from '@/components/FollowUpModal';
+import { advisorFullName } from '@/lib/names';
 
 type AlertType = 'Visa' | 'Passport' | 'Health Insurance';
 type AlertStatus = 'critical' | 'warning' | 'normal' | 'expired';
@@ -42,7 +43,7 @@ function buildAlerts(students: ApiStudentWithExpiry[]): AlertRow[] {
     const nationality = s.nationality ?? s.homeCountry ?? '—';
     const studentId = s.studentId ?? '—';
     const advisor = s.advisor
-      ? [s.advisor.titleEn, s.advisor.firstNameEn, s.advisor.lastNameEn].filter(Boolean).join(' ')
+      ? advisorFullName(s.advisor)
       : '—';
 
     if (s.visas?.[0]?.expiryDate) {
@@ -153,9 +154,9 @@ export default function StaffNotificationPage() {
         ))}
       </div>
 
-      {/* Toolbar */}
+      {/* Toolbar — on phones: search on its own row, the two filters side by side below */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 flex-1 min-w-[200px] bg-white focus-within:border-primary transition-colors">
+        <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 w-full sm:w-auto sm:flex-1 sm:min-w-[200px] bg-white focus-within:border-primary transition-colors">
           <RiSearchLine size={16} className="text-gray-400 shrink-0" />
           <input
             type="text"
@@ -166,7 +167,7 @@ export default function StaffNotificationPage() {
           />
         </div>
 
-        <div ref={typeRef} className="relative min-w-[180px]">
+        <div ref={typeRef} className="relative flex-1 min-w-0 sm:flex-none sm:min-w-[180px]">
           <button
             onClick={() => { setOpenType(p => !p); setOpenStatus(false); }}
             className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-primary bg-white flex items-center justify-between hover:border-primary transition-colors"
@@ -186,7 +187,7 @@ export default function StaffNotificationPage() {
           )}
         </div>
 
-        <div ref={statusRef} className="relative min-w-[180px]">
+        <div ref={statusRef} className="relative flex-1 min-w-0 sm:flex-none sm:min-w-[180px]">
           <button
             onClick={() => { setOpenStatus(p => !p); setOpenType(false); }}
             className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm text-primary bg-white flex items-center justify-between hover:border-primary transition-colors"

@@ -21,20 +21,164 @@ const ACTION_LABELS: Record<string, { label: string; className: string }> = {
   DELETE: { label: 'Delete',      className: 'bg-red-100 text-red-700' },
 };
 
-function PayloadDiff({ payload, action }: { payload: Record<string, unknown>; action: string }) {
-  if (action === 'DELETE') {
-    return <p className="text-xs text-red-600 font-medium mt-1">This record will be deleted.</p>;
+// Field names as people read them; anything not listed is spelled out from camelCase
+const FIELD_LABELS: Record<string, string> = {
+  titleEn: 'Title', firstNameEn: 'First name', middleNameEn: 'Middle name', lastNameEn: 'Last name',
+  firstNameTh: 'First name (Thai)', lastNameTh: 'Last name (Thai)',
+  dateOfBirth: 'Date of birth', homeAddress: 'Home address', homeCountry: 'Home country',
+  thaiAddress: 'Address in Thailand', phone: 'Phone', email: 'Email',
+  emergencyContact: 'Emergency contact name', emergencyRelation: 'Emergency contact relation',
+  emergencyPhone: 'Emergency contact phone', emergencyEmail: 'Emergency contact email',
+  photoUrl: 'Photo', imageUrl: 'Image', fileUrl: 'File', backFileUrl: 'Back of card', pageUrls: 'Pages',
+  passportNumber: 'Passport number', passportExpiry: 'Passport expiry', passportImageUrl: 'Passport image',
+  issuingCountry: 'Issuing country', issuingPlace: 'Place of issue', issueDate: 'Issue date', expiryDate: 'Expiry date',
+  visaType: 'Visa type', visaNumber: 'Visa number', visaExpiry: 'Visa expiry', visaStatus: 'Visa status',
+  visaImageUrl: 'Visa image', arrivalImageUrl: 'Arrival stamp', departedImageUrl: 'Departure stamp',
+  policyNumber: 'Policy number', coverageType: 'Coverage type', startDate: 'Start date', endDate: 'End date',
+};
+
+// Columns that identify the record rather than describe it
+const HIDDEN_FIELDS = new Set(['id', 'studentId', 'createdAt', 'updatedAt', 'passportId', 'visaId', 'userId']);
+
+const fieldLabel = (key: string) =>
+  FIELD_LABELS[key] ?? key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()).replace(/ (\w)/g, (_, c: string) => ' ' + c.toLowerCase());
+
+const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(v);
+const isUrl = (v: unknown): v is string => typeof v === 'string' && /^(https?:\/\/|\/)/.test(v);
+
+/** URLs a value holds: one file URL, or a JSON list of page URLs */
+function urlsOf(v: unknown): string[] | null {
+  if (isUrl(v)) return [v];
+  if (typeof v === 'string' && v.startsWith('[')) {
+    try { const a = JSON.parse(v); if (Array.isArray(a) && a.every(isUrl)) return a; } catch { /* not a list */ }
   }
-  const entries = Object.entries(payload).filter(([, v]) => v !== null && v !== undefined && v !== '');
-  if (entries.length === 0) return null;
+  return null;
+}
+
+/** What two values are compared as: blanks alike, dates by day, file links without their signature */
+function normalize(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (isDate(v)) return v.slice(0, 10);
+  const urls = urlsOf(v);
+  if (urls) return urls.map(u => u.split('?')[0]).join('|');
+  return String(v).trim();
+}
+
+function FieldValue({ value, tone }: { value: unknown; tone?: 'old' | 'new' }) {
+  if (normalize(value) === '') return <span className="text-gray-300">—</span>;
+  const cls = tone === 'old' ? 'text-red-500 line-through' : tone === 'new' ? 'text-green-700 font-semibold' : 'text-gray-700';
+  const urls = urlsOf(value);
+  if (urls) {
+    return (
+      <span className={clsx('flex flex-wrap gap-x-2', tone === 'old' && 'opacity-70')}>
+        {urls.map((u, i) => (
+          <a key={i} href={u} target="_blank" rel="noopener noreferrer"
+            className={clsx('underline', tone === 'old' ? 'text-red-500' : tone === 'new' ? 'text-green-700 font-semibold' : 'text-primary')}>
+            {urls.length > 1 ? `Page ${i + 1}` : 'View file'}
+          </a>
+        ))}
+      </span>
+    );
+  }
+  let text: string;
+  if (isDate(value)) {
+    text = new Date(value.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } else if (typeof value === 'boolean') {
+    text = value ? 'Yes' : 'No';
+  } else if (typeof value === 'string' && /^[A-Z][A-Z_]+$/.test(value)) {
+    text = value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' '); // MALE → Male
+  } else {
+    text = String(value);
+  }
+  return <span className={clsx(cls, 'break-words')}>{text}</span>;
+}
+
+const TH = 'text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3 py-2';
+
+function PayloadDiff({ payload, current, action }: { payload: Record<string, unknown>; current?: Record<string, unknown> | null; action: string }) {
+  // DELETE: show what is about to go
+  if (action === 'DELETE') {
+    const rows = Object.entries(current ?? {}).filter(([k, v]) => !HIDDEN_FIELDS.has(k) && normalize(v) !== '' && typeof v !== 'object');
+    return (
+      <div className="mt-3 rounded-xl border border-red-100 overflow-hidden">
+        <p className="px-3 py-2 bg-red-50 text-xs text-red-600 font-semibold">This record will be deleted</p>
+        {rows.length > 0 && (
+          <table className="w-full text-xs">
+            <tbody className="divide-y divide-gray-50">
+              {rows.map(([k, v]) => (
+                <tr key={k}>
+                  <td className="px-3 py-2 text-gray-500 font-medium w-48">{fieldLabel(k)}</td>
+                  <td className="px-3 py-2"><FieldValue value={v} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  const keys = Object.keys(payload).filter(k => !HIDDEN_FIELDS.has(k));
+  // CREATE (or the record is gone): nothing to compare against
+  if (action === 'CREATE' || !current) {
+    const rows = keys.filter(k => normalize(payload[k]) !== '');
+    if (rows.length === 0) return null;
+    return (
+      <div className="mt-3 rounded-xl border border-gray-100 overflow-hidden">
+        <p className="px-3 py-2 bg-blue-50 text-xs text-blue-700 font-semibold">
+          {action === 'CREATE' ? 'New record' : 'Requested values'}
+          {action !== 'CREATE' && <span className="font-normal text-gray-400"> — the current record could not be found</span>}
+        </p>
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50/60"><tr><th className={clsx(TH, 'w-48')}>Field</th><th className={TH}>Value</th></tr></thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(k => (
+              <tr key={k}>
+                <td className="px-3 py-2 text-gray-500 font-medium">{fieldLabel(k)}</td>
+                <td className="px-3 py-2"><FieldValue value={payload[k]} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // UPDATE: every field, the changed ones highlighted
+  const changed = new Set(keys.filter(k => normalize(payload[k]) !== normalize(current[k])));
   return (
-    <div className="mt-2 space-y-1">
-      {entries.map(([key, val]) => (
-        <div key={key} className="flex gap-2 text-xs">
-          <span className="text-gray-500 font-medium min-w-[120px] shrink-0">{key}:</span>
-          <span className="text-gray-800 truncate">{String(val)}</span>
-        </div>
-      ))}
+    <div className="mt-3 rounded-xl border border-gray-100 overflow-hidden">
+      <p className={clsx('px-3 py-2 text-xs font-semibold', changed.size ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500')}>
+        {changed.size
+          ? `${changed.size} field${changed.size > 1 ? 's' : ''} changed`
+          : 'No differences from the current record'}
+      </p>
+      <table className="w-full text-xs table-fixed">
+        <thead className="bg-gray-50/60">
+          <tr>
+            <th className={clsx(TH, 'w-[34%]')}>Field</th>
+            <th className={clsx(TH, 'w-[33%]')}>Current</th>
+            <th className={clsx(TH, 'w-[33%]')}>Requested</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {keys.map(k => {
+            const isChanged = changed.has(k);
+            return (
+              <tr key={k} className={clsx(isChanged && 'bg-amber-50/60')}>
+                <td className={clsx('px-3 py-2 font-medium border-l-[3px]', isChanged ? 'border-amber-400 text-gray-800' : 'border-transparent text-gray-500')}>
+                  <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    {fieldLabel(k)}
+                    {isChanged && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Changed</span>}
+                  </span>
+                </td>
+                <td className="px-3 py-2"><FieldValue value={current[k]} tone={isChanged ? 'old' : undefined} /></td>
+                <td className="px-3 py-2"><FieldValue value={payload[k]} tone={isChanged ? 'new' : undefined} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -128,7 +272,7 @@ export default function ChangeRequestsPage() {
                         <p className="text-xs text-gray-400 mt-0.5">{date}</p>
 
                         {expanded === cr.id && (
-                          <PayloadDiff payload={cr.payload} action={cr.action} />
+                          <PayloadDiff payload={cr.payload} current={cr.current} action={cr.action} />
                         )}
 
                         {rejectId === cr.id && (

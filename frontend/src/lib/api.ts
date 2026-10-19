@@ -103,6 +103,7 @@ export interface ApiRequest {
   title: string;
   description: string | null;
   formData: string | null;  // JSON string
+  staffData?: string | null; // JSON string — staff-filled variables (e.g. document number)
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -114,7 +115,7 @@ export interface ApiRequest {
     nationality: string | null; homeCountry: string | null;
     passports?: { passportNumber: string; expiryDate: string }[];
     advisor?: {
-      titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null;
+      titleEn: string | null; firstNameEn: string | null; middleNameEn?: string | null; lastNameEn: string | null;
       phone: string | null; user?: { email: string } | null;
     } | null;
   };
@@ -178,17 +179,20 @@ export const requestApi = {
   reviewCancel: (id: number, approve: boolean, note?: string) =>
     api.post<{ success: boolean; data: ApiRequest }>(`/requests/${id}/cancel/review`, { approve, note }),
 
-  updateStatus: (id: number, status: string, comment?: string, files?: File[]) => {
+  // staffData: values of the documents' staff-filled variables (sent as JSON text either way)
+  updateStatus: (id: number, status: string, comment?: string, files?: File[], staffData?: Record<string, string>) => {
+    const staffJson = staffData ? JSON.stringify(staffData) : undefined;
     if (files && files.length > 0) {
       const form = new FormData();
       form.append('status', status);
       if (comment) form.append('comment', comment);
+      if (staffJson) form.append('staffData', staffJson);
       files.forEach(f => form.append('files', f));
       return api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}/status`, form, {
         headers: { 'Content-Type': undefined },
       });
     }
-    return api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}/status`, { status, comment });
+    return api.put<{ success: boolean; data: ApiRequest }>(`/requests/${id}/status`, { status, comment, staffData: staffJson });
   },
   followUp: (id: number) =>
     api.post<{ success: boolean; message: string; data: { roleLabel: string; notifiedCount: number } }>(`/requests/${id}/follow-up`),
@@ -231,6 +235,7 @@ export interface ApiStudent {
   level: string | null;
   enrollmentDate: string | null;
   expectedGraduation: string | null;
+  startingSemester: string | null;
   scholarship: string | null;
   advisorId: number | null;
 
@@ -246,14 +251,14 @@ export interface ApiStudentDetail extends ApiStudent {
   passports: ApiPassport[];
   visas: ApiVisa[];
   healthInsurances: ApiHealthInsurance[];
-  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null } | null;
+  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; middleNameEn?: string | null; lastNameEn: string | null } | null;
 }
 
 export interface ApiStudentWithExpiry extends ApiStudent {
   passports?: { passportNumber: string; expiryDate: string }[];
   visas?: { visaType: string; expiryDate: string }[];
   healthInsurances?: { provider: string; expiryDate: string }[];
-  advisor?: { titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null } | null;
+  advisor?: { titleEn: string | null; firstNameEn: string | null; middleNameEn?: string | null; lastNameEn: string | null } | null;
 }
 
 export const studentApi = {
@@ -410,12 +415,22 @@ export interface SelectOption {
 // 'select' = Dropdown (searchable), 'radio' = Choice (radio buttons).
 export const hasOptions = (t?: string) => t === 'select' || t === 'radio';
 
+/** The approval was refused because the approver hasn't signed the request's document yet. */
+export const isSignatureRequired = (e: unknown) =>
+  (e as { response?: { data?: { code?: string } } })?.response?.data?.code === 'SIGNATURE_REQUIRED';
+
+export const isStaffFieldsRequired = (e: unknown) =>
+  (e as { response?: { data?: { code?: string } } })?.response?.data?.code === 'STAFF_FIELDS_REQUIRED';
+
+/** Staff-filled variables print as a dotted blank until staff fill them in */
+export const STAFF_FIELD_PLACEHOLDER = '..........';
+
 export interface ApiTemplateVariable {
   id: number;
   key: string;
   label: string;
   description: string | null;
-  inputType: 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio';
+  inputType: 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio' | 'staff';
   options: string | null; // JSON SelectOption[] stored as string
   createdAt: string;
   updatedAt: string;
@@ -522,6 +537,7 @@ export interface ApiAdvisor {
   userId: number;
   titleEn: string | null;
   firstNameEn: string | null;
+  middleNameEn: string | null;
   lastNameEn: string | null;
   position: string | null;
   email: string | null;
@@ -553,7 +569,7 @@ export interface ApiStudentMe extends ApiStudent {
   visas: ApiVisa[];
   healthInsurances: ApiHealthInsurance[];
   academicDocuments: ApiAcademicDocument[];
-  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; lastNameEn: string | null; phone: string | null; email: string | null } | null;
+  advisor: { id: number; titleEn: string | null; firstNameEn: string | null; middleNameEn?: string | null; lastNameEn: string | null; phone: string | null; email: string | null } | null;
   staffContact: { name: string; phone: string | null; email: string } | null;
 }
 
@@ -641,9 +657,9 @@ export const advisorApi = {
     api.get<{ success: boolean; data: ApiAdvisor[] }>('/advisors'),
   getById: (id: number) =>
     api.get<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`),
-  update: (data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'> & { nationality?: string }>) =>
+  update: (data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'middleNameEn' | 'lastNameEn' | 'phone' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry'> & { nationality?: string }>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>('/advisors/me', data),
-  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'lastNameEn' | 'phone' | 'position' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry' | 'isActive'>>) =>
+  updateById: (id: number, data: Partial<Pick<ApiAdvisor, 'titleEn' | 'firstNameEn' | 'middleNameEn' | 'lastNameEn' | 'phone' | 'position' | 'nationality' | 'email' | 'workPermitNumber' | 'workPermitIssue' | 'workPermitExpiry' | 'isActive'>>) =>
     api.put<{ success: boolean; data: ApiAdvisor }>(`/advisors/${id}`, data),
   getDeans: () =>
     api.get<{ success: boolean; data: ApiDeanUser[] }>('/advisors/deans'),
@@ -722,6 +738,8 @@ export interface ApiChangeRequest {
   entityId: number | null;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
   payload: Record<string, unknown>;
+  // The record as it is now (UPDATE/DELETE) — null if it no longer exists
+  current?: Record<string, unknown> | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   reviewNote?: string;
   createdAt: string;

@@ -7,6 +7,7 @@ import AddAdvisorModal, { NewAdvisorData } from '@/components/AddAdvisorModal';
 import ImportModal from '@/components/ImportModal';
 import { advisorApi, type ApiAdvisor } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { advisorFullName } from '@/lib/names';
 
 const ADVISOR_COLUMNS = [
   { key: 'email',       label: 'Email',         required: true,  example: 'john@kku.ac.th' },
@@ -49,7 +50,7 @@ export default function StaffAdvisorsPage() {
 
   const handleToggleActive = async (advisor: ApiAdvisor) => {
     const activating = !advisor.isActive;
-    const name = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ') || 'Advisor';
+    const name = advisorFullName(advisor) || 'Advisor';
     setBusyId(advisor.id);
     try {
       await advisorApi.updateById(advisor.id, { isActive: activating });
@@ -85,20 +86,20 @@ export default function StaffAdvisorsPage() {
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-2xl font-semibold text-primary">Advisor Management</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xl sm:text-2xl font-semibold text-primary">Advisor Management</p>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-2xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-2xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
           >
             <RiUploadLine size={16} />
             Import Excel
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap bg-primary text-white px-6 py-2 rounded-2xl flex items-center gap-2 hover:opacity-90 transition-all duration-200"
           >
             <RiAddLine className="text-lg" />
             Advisor
@@ -118,7 +119,7 @@ export default function StaffAdvisorsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {advisors.map(advisor => {
-            const fullName = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ') || '—';
+            const fullName = advisorFullName(advisor) || '—';
             const studentCount = (advisor as ApiAdvisor & { _count?: { students: number } })._count?.students ?? 0;
             return (
               <div key={advisor.id} className="bg-white rounded-2xl p-5 flex flex-col gap-4 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
@@ -139,12 +140,12 @@ export default function StaffAdvisorsPage() {
                 {/* Name + Faculty */}
                 <div>
                   <p className="font-semibold text-primary leading-snug">{fullName}</p>
+                  <p className="mt-0.5 text-xs text-gray-500 truncate" title={advisor.email ?? undefined}>{advisor.email || '—'}</p>
                   {advisor.position && (
-                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-secondary text-primary text-[11px] font-semibold">
+                    <span className="inline-block mt-1.5 px-2.5 py-0.5 rounded-full bg-secondary text-primary text-[11px] font-semibold">
                       {advisor.position}
                     </span>
                   )}
-                  {advisor.email && <p className="text-xs text-gray-400">{advisor.email}</p>}
                 </div>
 
                 <hr />

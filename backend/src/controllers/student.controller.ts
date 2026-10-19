@@ -5,6 +5,8 @@ import * as changeRequestService from '../services/domain/changeRequest.service'
 import { UpdateStudentDto } from '../repositories/student.repository';
 import prisma from '../utils/prisma';
 
+const STARTING_SEMESTERS = ['FIRST', 'SECOND', 'SUMMER'];
+
 export const getStudents = async (req: AuthRequest, res: Response): Promise<void> => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -84,8 +86,13 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
     emergencyContact, emergencyEmail, emergencyPhone, emergencyRelation,
     faculty, program, level, academicStatus, scholarship, advisorId,
     registrationStatus, registrationStep, rejectionReason, photoUrl,
-    dateOfBirth, enrollmentDate, expectedGraduation,
+    dateOfBirth, enrollmentDate, expectedGraduation, startingSemester,
   } = req.body;
+
+  if (startingSemester !== undefined && !STARTING_SEMESTERS.includes(startingSemester)) {
+    res.status(400).json({ success: false, message: `startingSemester must be one of ${STARTING_SEMESTERS.join(', ')}` });
+    return;
+  }
 
   const dto = {
     titleEn, firstNameEn, middleNameEn, lastNameEn,
@@ -97,6 +104,7 @@ export const updateStudent = async (req: AuthRequest, res: Response): Promise<vo
     dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
     enrollmentDate: enrollmentDate ? new Date(enrollmentDate) : undefined,
     expectedGraduation: expectedGraduation ? new Date(expectedGraduation) : undefined,
+    startingSemester,
   };
 
   const student = await studentService.updateStudent(studentDbId, dto, req.user!);

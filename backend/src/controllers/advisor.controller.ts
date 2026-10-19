@@ -24,21 +24,21 @@ export const getMyProfile = async (req: AuthRequest, res: Response): Promise<voi
 };
 
 export const createAdvisor = async (req: AuthRequest, res: Response): Promise<void> => {
-  const { email, titleEn, firstNameEn, lastNameEn, phone, nationality, position } = req.body;
+  const { email, titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality, position } = req.body;
   const advisor = await advisorService.createAdvisor({
-    email, titleEn, firstNameEn, lastNameEn, phone, nationality, position,
+    email, titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality, position,
   });
   res.status(201).json({ success: true, data: advisor });
 };
 
 export const updateMyProfile = async (req: AuthRequest, res: Response): Promise<void> => {
   const {
-    titleEn, firstNameEn, lastNameEn, phone, nationality,
+    titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality,
     workPermitNumber, workPermitIssue, workPermitExpiry,
   } = req.body;
 
   const dto: UpdateAdvisorDto = {
-    titleEn, firstNameEn, lastNameEn, phone, nationality,
+    titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality,
     workPermitNumber,
     workPermitIssue:  workPermitIssue  ? new Date(workPermitIssue)  : undefined,
     workPermitExpiry: workPermitExpiry ? new Date(workPermitExpiry) : undefined,
@@ -50,14 +50,14 @@ export const updateMyProfile = async (req: AuthRequest, res: Response): Promise<
 
 export const updateAdvisorById = async (req: AuthRequest, res: Response): Promise<void> => {
   const {
-    titleEn, firstNameEn, lastNameEn, phone, nationality, position,
+    titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality, position, email,
     isActive, workPermitNumber, workPermitIssue, workPermitExpiry, workPermitFileUrl,
   } = req.body;
 
   // Only staff set the administrative position (it grants the VICE_DEAN role),
   // so updateMyProfile above deliberately leaves it out.
   const dto = {
-    titleEn, firstNameEn, lastNameEn, phone, nationality, position,
+    titleEn, firstNameEn, middleNameEn, lastNameEn, phone, nationality, position, email,
     isActive, workPermitNumber, workPermitFileUrl,
     workPermitIssue:  workPermitIssue  ? new Date(workPermitIssue)  : undefined,
     workPermitExpiry: workPermitExpiry ? new Date(workPermitExpiry) : undefined,

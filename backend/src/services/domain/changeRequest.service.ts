@@ -1,12 +1,16 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '../../utils/prisma';
 import * as repo from '../../repositories/changeRequest.repository';
+import * as dependentRepository from '../../repositories/dependent.repository';
 import * as healthInsuranceService from './healthInsurance.service';
 import * as academicDocumentService from './academicDocument.service';
 import * as passportService from './passport.service';
 import * as visaService from './visa.service';
 import * as dependentService from './dependent.service';
-import { STUDENT_FILES, resolveFileFields, withoutFileFields } from './fileFields';
+import {
+  PASSPORT_FILES, STUDENT_FILES, VISA_FILES,
+  includeFiles, presentOne, resolveFileFields, withoutFileFields,
+} from './fileFields';
 import type { ClaimActor } from './filePolicy';
 import { hasFileFields, presentChangeRequest, toStoredPayload } from './changeRequestFiles';
 
@@ -75,9 +79,54 @@ export const cancelChange = async (id: number, studentId: number) => {
   return repo.updateStatus(id, 'CANCELLED');
 };
 
-export const listPending = async () => Promise.all((await repo.findAllPending()).map(cr => presentChangeRequest(cr)));
+// The record as it is now, in the same shape as a presented payload (file
+// fields as URLs), so staff can compare current → requested. null = the record
+// is gone; undefined = nothing to compare (CREATE).
+async function currentRecord(cr: { studentId: number; entityType: string; entityId: number | null; action: string }) {
+  if (cr.action === 'CREATE') return undefined;
+  const byId = <T extends { id: number }>(rows: T[]) => rows.find(r => r.id === cr.entityId) ?? null;
+  switch (cr.entityType) {
+    case 'STUDENT_PROFILE': {
+      const row = await prisma.student.findUnique({ where: { id: cr.studentId }, include: includeFiles(STUDENT_FILES) });
+      return row ? presentOne(row, STUDENT_FILES) : null;
+    }
+    case 'PASSPORT': {
+      const row = await prisma.passport.findFirst({
+        // Requests from before multi-passport support target the current passport
+        where: cr.entityId ? { id: cr.entityId, studentId: cr.studentId } : { studentId: cr.studentId, isCurrent: true },
+        include: includeFiles(PASSPORT_FILES),
+      });
+      return row ? presentOne(row, PASSPORT_FILES) : null;
+    }
+    case 'VISA': {
+      if (!cr.entityId) return null;
+      const row = await prisma.visa.findFirst({ where: { id: cr.entityId, studentId: cr.studentId }, include: includeFiles(VISA_FILES) });
+      return row ? presentOne(row, VISA_FILES) : null;
+    }
+    case 'DEPENDENT': {
+      if (!cr.entityId) return null;
+      // Flattened with their current passport and visa, as the dependent API shows it
+      const row = await dependentRepository.findByIdAndStudentId(cr.entityId, cr.studentId);
+      return row ? dependentService.presentDependent(row) : null;
+    }
+    case 'HEALTH_INSURANCE':
+      return byId(await healthInsuranceService.getHealthInsurances(cr.studentId));
+    case 'ACADEMIC_DOCUMENT':
+      return byId(await academicDocumentService.getAcademicDocuments(cr.studentId));
+    default:
+      return undefined;
+  }
+}
 
-export const getOne = async (id: number) => presentChangeRequest(await repo.findById(id));
+const presentForReview = async <T extends { studentId: number; entityType: string; entityId: number | null; action: string; payload: unknown }>(cr: T) =>
+  ({ ...(await presentChangeRequest(cr)), current: await currentRecord(cr) });
+
+export const listPending = async () => Promise.all((await repo.findAllPending()).map(presentForReview));
+
+export const getOne = async (id: number) => {
+  const cr = await repo.findById(id);
+  return cr ? presentForReview(cr) : null;
+};
 
 export const listPendingOfType = async (studentId: number, entityType: string) =>
   Promise.all((await repo.findPendingOfType(studentId, entityType)).map(cr => presentChangeRequest(cr)));

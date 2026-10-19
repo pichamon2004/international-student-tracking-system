@@ -39,6 +39,7 @@ export interface UpdateStudentDto {
   dateOfBirth?: Date;
   enrollmentDate?: Date;
   expectedGraduation?: Date;
+  startingSemester?: string;
 }
 
 export interface CreateStudentDto {
@@ -71,7 +72,7 @@ export const findMany = (
       passports: { where: { isCurrent: true, dependentId: null }, select: { passportNumber: true, expiryDate: true }, take: 1 },
       visas: { where: { status: 'ACTIVE', dependentId: null }, select: { visaType: true, expiryDate: true }, take: 1 },
       healthInsurances: { where: { isCurrent: true }, select: { provider: true, expiryDate: true }, take: 1 },
-      advisor: { select: { titleEn: true, firstNameEn: true, lastNameEn: true } },
+      advisor: { select: { titleEn: true, firstNameEn: true, middleNameEn: true, lastNameEn: true } },
     },
   });
 
@@ -88,7 +89,7 @@ export const findById = (id: number) =>
       photoFile: PHOTO_FILE,
       healthInsurances: { where: { isCurrent: true }, take: 1, include: INSURANCE_FILES },
       documents: { include: DOCUMENT_FILES },
-      advisor: { select: { id: true, titleEn: true, firstNameEn: true, lastNameEn: true } },
+      advisor: { select: { id: true, titleEn: true, firstNameEn: true, middleNameEn: true, lastNameEn: true } },
     },
   });
 
@@ -108,7 +109,7 @@ export const findByUserIdWithProfile = (userId: number) =>
       dependents: { select: { id: true }, take: 1 },
       advisor: {
         select: {
-          id: true, titleEn: true, firstNameEn: true, lastNameEn: true,
+          id: true, titleEn: true, firstNameEn: true, middleNameEn: true, lastNameEn: true,
           phone: true,
         },
       },
@@ -235,6 +236,7 @@ export const update = (id: number, dto: UpdateStudentDto) =>
       dateOfBirth: dto.dateOfBirth,
       enrollmentDate: dto.enrollmentDate,
       expectedGraduation: dto.expectedGraduation,
+      startingSemester: dto.startingSemester,
     },
     include: { photoFile: PHOTO_FILE },
   });

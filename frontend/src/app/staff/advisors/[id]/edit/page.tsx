@@ -61,6 +61,7 @@ export default function AdvisorEditPage() {
         setPrefix(a.titleEn ?? '');
         setFirstName(a.firstNameEn ?? '');
         setLastName(a.lastNameEn ?? '');
+        setMiddleName(a.middleNameEn ?? '');
         setTel(a.phone ?? '');
         setPosition(a.position ?? '');
         setEmail(a.email ?? '');
@@ -118,15 +119,20 @@ export default function AdvisorEditPage() {
       await advisorApi.updateById(advisorId, {
         titleEn: prefix || undefined,
         firstNameEn: firstName || undefined,
+        middleNameEn: middleName.trim(),
         lastNameEn: lastName || undefined,
         phone: tel || undefined,
+        nationality: nationality || undefined,
+        email: email.trim() || undefined,
         // blank clears it — which also takes away the executive (VICE_DEAN) role
         position: position.trim() || null,
       });
       toast.success('Advisor updated');
       router.back();
-    } catch {
-      toast.error('Failed to save');
+    } catch (err: unknown) {
+      // e.g. the email is already another account's
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to save');
     } finally {
       setSaving(false);
     }

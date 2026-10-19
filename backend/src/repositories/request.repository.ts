@@ -14,6 +14,7 @@ export interface CreateRequestDto {
 
 export interface UpdateRequestStatusDto {
   status: RequestStatus;
+  staffData?: string;
 }
 
 const STUDENT_SELECT = {
@@ -64,7 +65,7 @@ export const findById = (id: number) =>
         include: {
           passports: { where: { isCurrent: true, dependentId: null }, take: 1, select: { passportNumber: true, expiryDate: true } },
           advisor: {
-            select: { titleEn: true, firstNameEn: true, lastNameEn: true, phone: true, user: { select: { email: true } } },
+            select: { titleEn: true, firstNameEn: true, middleNameEn: true, lastNameEn: true, phone: true, user: { select: { email: true } } },
           },
         },
       },
@@ -102,6 +103,7 @@ export const updateStatus = (id: number, dto: UpdateRequestStatusDto, db: Db = p
     where: { id },
     data: {
       status: dto.status,
+      ...(dto.staffData !== undefined && { staffData: dto.staffData }),
     },
     include: { attachmentFiles: ATTACHMENT_FILES },
   });

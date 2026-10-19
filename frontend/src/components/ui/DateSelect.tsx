@@ -35,6 +35,17 @@ export default function DateSelect({ value, onChange, disabled, placeholder = 'S
   const [viewYear, setViewYear] = useState(selected?.getFullYear() ?? today.getFullYear());
   const [viewMonth, setViewMonth] = useState(selected?.getMonth() ?? today.getMonth());
   const [showYearPicker, setShowYearPicker] = useState(false);
+  // The calendar is wider than a narrow field: open it toward whichever side has room
+  const [alignRight, setAlignRight] = useState(false);
+
+  function toggle() {
+    if (disabled) return;
+    if (!open && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setAlignRight(r.left + 256 > window.innerWidth - 8 && r.right - 256 >= 8);
+    }
+    setOpen(p => !p);
+  }
 
   // Update view when value changes externally
   useEffect(() => {
@@ -107,7 +118,7 @@ export default function DateSelect({ value, onChange, disabled, placeholder = 'S
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen(p => !p)}
+        onClick={toggle}
         className={clsx(
           'w-full border rounded-xl px-4 py-2.5 text-sm flex items-center justify-between bg-white transition-colors',
           disabled ? 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50' : 'border-gray-200 text-gray-700 hover:border-primary cursor-pointer',
@@ -122,7 +133,8 @@ export default function DateSelect({ value, onChange, disabled, placeholder = 'S
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1 z-50 bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-64">
+        <div className={clsx('absolute top-full mt-1 z-50', alignRight ? 'right-0' : 'left-0')}>
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-64">
           {/* Header */}
           <div className="flex items-center justify-between mb-2 px-1">
             <button
@@ -211,6 +223,7 @@ export default function DateSelect({ value, onChange, disabled, placeholder = 'S
               </div>
             </>
           )}
+        </div>
         </div>
       )}
     </div>

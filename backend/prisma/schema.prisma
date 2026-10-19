@@ -160,6 +160,7 @@ model Student {
   level              AcademicLevel?
   enrollmentDate     DateTime?
   expectedGraduation DateTime?
+  startingSemester   String? // FIRST | SECOND | SUMMER — the semester the student started in
   academicStatus     String?
   scholarship        String?
   advisorId          Int?
@@ -200,11 +201,12 @@ model Student {
 model Advisor {
   id          Int     @id @default(autoincrement())
   userId      Int     @unique
-  titleEn     String?
-  firstNameEn String?
-  lastNameEn  String?
-  nationality String?
-  phone       String?
+  titleEn      String?
+  firstNameEn  String?
+  middleNameEn String?
+  lastNameEn   String?
+  nationality  String?
+  phone        String?
   // Administrative position (e.g. "Associate Dean for Academic Affairs").
   // Set → the advisor also holds the VICE_DEAN role and can be picked to sign for the dean.
   position    String?
@@ -485,6 +487,7 @@ model Request {
   title         String
   description   String?       @db.Text
   formData      String?       @db.LongText // JSON — values student filled in
+  staffData     String?       @db.Text // JSON — values IR staff filled in at approval (inputType 'staff' variables)
   status        RequestStatus @default(PENDING)
 
   createdAt DateTime @default(now())
@@ -623,7 +626,7 @@ model TemplateVariable {
   key         String   @unique
   label       String
   description String?  @db.Text
-  inputType   String   @default("auto") // auto | text | date | textarea | select (dropdown) | radio (choice)
+  inputType   String   @default("auto") // auto | text | date | textarea | select (dropdown) | radio (choice) | staff (IR staff fills it in at approval)
   options     String?  @db.Text // JSON SelectOption[] — used when inputType = 'select' or 'radio'
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

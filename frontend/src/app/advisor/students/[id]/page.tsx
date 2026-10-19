@@ -6,6 +6,7 @@ import { RiArrowLeftLine, RiMailLine, RiPhoneLine, RiMapPinLine, RiCheckboxCircl
 import { clsx } from 'clsx';
 import { BsPeopleFill } from 'react-icons/bs';
 import { RenewalDetailModal, type RenewalModalData } from '@/components/RenewalDetailModal';
+import { semesterLabel } from '@/lib/semester';
 import {
   studentApi, visaApi, healthInsuranceApi, dependentApi, academicDocumentApi,
   type ApiStudentDetail, type ApiVisa, type ApiHealthInsurance, type ApiDependent, type ApiAcademicDocument,
@@ -316,6 +317,7 @@ export default function StudentDetailPage() {
                   { label: 'Level',     value: student.level ?? '—' },
                   { label: 'Enrollment Date',      value: fmt(student.enrollmentDate) },
                   { label: 'Expected Graduation',  value: fmt(student.expectedGraduation) },
+                  { label: 'Starting Semester',    value: semesterLabel(student.startingSemester) },
                   { label: 'Scholarship',          value: student.scholarship ?? '—' },
                 ]} />
               </div>

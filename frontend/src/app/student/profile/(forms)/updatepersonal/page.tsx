@@ -9,6 +9,7 @@ import { studentMeApi, studentApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 import CustomSelect from '@/components/ui/CustomSelect';
 import DateSelect from '@/components/ui/DateSelect';
+import { PROGRAMS } from '@/lib/programs';
 
 const PREFIXES = ['Mr.', 'Mrs.', 'Ms.', 'Miss'];
 const RELATIONSHIP = ['Parent','Sister','brother','Advisor','Faculty Staff'];
@@ -20,13 +21,6 @@ const DEGREES = [
   { value: 'BACHELOR', label: "Bachelor's Degree" },
   { value: 'MASTER',   label: "Master's Degree" },
   { value: 'PHD',      label: 'Doctoral Degree (Ph.D.)' },
-];
-const PROGRAMS = [
-  'M.Sc. Computer Science and Information Technology',
-  'M.Sc. Data Science and Artificial Intelligence (International Program)',
-  'M.Sc. Geo-Informatics',
-  'Ph.D. Computer Science and Information Technology (International Program)',
-  'Ph.D. Geo-Informatics',
 ];
 const FACULTIES = ['College of Computing'];
 

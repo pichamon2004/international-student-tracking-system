@@ -5,11 +5,18 @@ import { RiUploadCloud2Line, RiPencilLine, RiCloseLine, RiCheckLine, RiMailLine,
 import toast from 'react-hot-toast';
 import { advisorApi, type ApiAdvisor } from '@/lib/api';
 import DateSelect from '@/components/ui/DateSelect';
+import CustomSelect from '@/components/ui/CustomSelect';
+import { strOptions } from '@/components/profile/FormUI';
 import { InfoTile, SectionCard, SectionTitle, fmtDate, expiryStatus, EXPIRY_STYLE } from '@/components/profile/ProfileUI';
+import { advisorFullName } from '@/lib/names';
+
+// Same choices as the staff advisor edit page
+const TITLES = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Asst. Prof.', 'Assoc. Prof.', 'Prof.'];
 
 type FormState = {
   titleEn: string;
   firstNameEn: string;
+  middleNameEn: string;
   lastNameEn: string;
   phone: string;
   nationality: string;
@@ -21,6 +28,7 @@ type FormState = {
 const toForm = (a: ApiAdvisor): FormState => ({
   titleEn:          a.titleEn ?? '',
   firstNameEn:      a.firstNameEn ?? '',
+  middleNameEn:     a.middleNameEn ?? '',
   lastNameEn:       a.lastNameEn ?? '',
   phone:            a.phone ?? '',
   nationality:      a.nationality ?? '',
@@ -92,6 +100,7 @@ export default function AdvisorProfilePage() {
       const res = await advisorApi.update({
         titleEn:          form.titleEn.trim() || undefined,
         firstNameEn:      form.firstNameEn.trim(),
+        middleNameEn:     form.middleNameEn.trim(),
         lastNameEn:       form.lastNameEn.trim(),
         phone:            form.phone.trim() || undefined,
         nationality:      form.nationality.trim() || undefined,
@@ -121,7 +130,7 @@ export default function AdvisorProfilePage() {
     );
   }
 
-  const fullName = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ') || '—';
+  const fullName = advisorFullName(advisor) || '—';
   const initials = [advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).map(w => w![0]).join('').toUpperCase() || '?';
   const permitStatus = advisor.workPermitExpiry ? expiryStatus(advisor.workPermitExpiry) : null;
   const studentCount = advisor.students?.length ?? 0;
@@ -195,8 +204,9 @@ export default function AdvisorProfilePage() {
           <SectionTitle title="Personal information" />
           {editing ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <Field label="Title"><input value={form.titleEn} onChange={setText('titleEn')} placeholder="e.g. Dr." className={inputCls} /></Field>
+              <Field label="Title"><CustomSelect value={form.titleEn} onChange={set('titleEn')} options={strOptions(TITLES, form.titleEn)} placeholder="— Select —" wrapOptions /></Field>
               <Field label="First name"><input value={form.firstNameEn} onChange={setText('firstNameEn')} className={inputCls} /></Field>
+              <Field label="Middle name"><input value={form.middleNameEn} onChange={setText('middleNameEn')} placeholder="(optional)" className={inputCls} /></Field>
               <Field label="Last name"><input value={form.lastNameEn} onChange={setText('lastNameEn')} className={inputCls} /></Field>
               <Field label="Phone"><input value={form.phone} onChange={setText('phone')} className={inputCls} /></Field>
               <Field label="Nationality"><input value={form.nationality} onChange={setText('nationality')} className={inputCls} /></Field>
@@ -211,6 +221,7 @@ export default function AdvisorProfilePage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <InfoTile label="Title" value={advisor.titleEn} />
               <InfoTile label="First name" value={advisor.firstNameEn} />
+              <InfoTile label="Middle name" value={advisor.middleNameEn} />
               <InfoTile label="Last name" value={advisor.lastNameEn} />
               <InfoTile label="Phone" value={advisor.phone} />
               <InfoTile label="Nationality" value={advisor.nationality} />

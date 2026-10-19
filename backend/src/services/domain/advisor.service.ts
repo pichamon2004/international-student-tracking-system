@@ -7,11 +7,13 @@ import prisma from '../../utils/prisma';
 import * as fileService from './file.service';
 import type { ClaimActor } from './filePolicy';
 import { ADVISOR_FILES, presentOne, resolveFileFields, userPhotoUrl } from './fileFields';
-import { CreateAdvisorDto, UpdateAdvisorDto } from '../../repositories/advisor.repository';
+import { CreateAdvisorDto, UpdateAdvisorDto, advisorDisplayName } from '../../repositories/advisor.repository';
 
 // ── Queries ───────────────────────────────────────────────────────
 
-export const getAdvisors = () => advisorRepository.findAll();
+// email flat on each advisor, the same as getAdvisorById
+export const getAdvisors = async () =>
+  (await advisorRepository.findAll()).map(a => ({ ...a, email: a.user?.email ?? null }));
 
 export const getDeans = () => userRepository.findByRole('DEAN');
 
@@ -52,6 +54,9 @@ export const getMyProfile = async (userId: number) => {
 // ── Mutations ─────────────────────────────────────────────────────
 
 // undefined = leave unchanged; blank/null = clear (Excel cells may not be strings)
+// A cleared input ("") clears the middle name; undefined leaves it as is
+const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
+
 const normalizePosition = (position: unknown): string | null | undefined =>
   position === undefined ? undefined : (position == null ? null : String(position).trim() || null);
 
@@ -85,26 +90,52 @@ export const createAdvisor = async (dto: CreateAdvisorDto) => {
   return advisor;
 };
 
+// users.name is what signatures, approvals and the header show — keep it in
+// step with the advisor's name fields
+const syncUserName = (advisor: Parameters<typeof advisorDisplayName>[0] & { userId: number }) =>
+  prisma.user.update({ where: { id: advisor.userId }, data: { name: advisorDisplayName(advisor) } });
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Staff changing the advisor's login email. The Google account linked to the
+// old address is unlinked, so the next sign-in links the new address's account
+// and the old one stops working.
+async function changeEmail(userId: number, currentEmail: string, raw: unknown) {
+  if (typeof raw !== 'string') return;
+  const email = raw.trim().toLowerCase();
+  if (!email || email === currentEmail.toLowerCase()) return;
+  if (!EMAIL_RE.test(email)) throw Object.assign(new Error('Invalid email address'), { statusCode: 400 });
+  const taken = await userRepository.findByEmail(email);
+  if (taken && taken.id !== userId) {
+    throw Object.assign(new Error('This email is already used by another account'), { statusCode: 409 });
+  }
+  await prisma.user.update({ where: { id: userId }, data: { email, googleId: null } });
+}
+
 export const updateMyProfile = async (userId: number, dto: UpdateAdvisorDto) => {
-  await advisorRepository.updateByUserId(userId, dto);
+  const advisor = await advisorRepository.updateByUserId(userId, { ...dto, middleNameEn: blankToNull(dto.middleNameEn) });
+  await syncUserName(advisor);
   // The full profile (email, photo, students) — what the profile page shows
   return getMyProfile(userId);
 };
 
 export const updateAdvisorById = async (
   id: number,
-  dto: Omit<UpdateAdvisorDto, 'workPermitFileUrl'> & { workPermitFileUrl?: string | null },
+  dto: Omit<UpdateAdvisorDto, 'workPermitFileUrl'> & { workPermitFileUrl?: string | null; email?: unknown },
   actor: ClaimActor
 ) => {
   const existing = await advisorRepository.findById(id);
   if (!existing) throw Object.assign(new Error('Advisor not found'), { statusCode: 404 });
+  await changeEmail(existing.userId, existing.user.email, dto.email);
   // The work permit belongs to the advisor's user, not to whoever attaches it
-  const { workPermitFileUrl, ...rest } = dto;
+  const { workPermitFileUrl, email: _email, ...rest } = dto;
+  rest.middleNameEn = blankToNull(rest.middleNameEn);
   const permit = workPermitFileUrl === undefined
     ? {}
     : await resolveFileFields({ workPermitFileUrl }, ADVISOR_FILES, { kind: 'user', userId: existing.userId }, actor);
   const advisor = await advisorRepository.updateById(id, { ...rest, ...permit, position: normalizePosition(dto.position) });
   await syncExecutiveRole(advisor.userId, !!advisor.position && advisor.isActive);
+  await syncUserName(advisor);
   return advisor;
 };
 

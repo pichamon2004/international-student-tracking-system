@@ -13,11 +13,12 @@ import {
   type DocTemplate,
   type StudentProfile,
 } from '@/lib/mockRequestData';
-import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, generatedDocApi, hasOptions, type ApiTemplateVariable, type SelectOption, type ApiGeneratedDoc } from '@/lib/api';
+import { requestTypeApi, requestApi, studentMeApi, userApi, deanApi, templateVariableApi, generatedDocApi, hasOptions, STAFF_FIELD_PLACEHOLDER, type ApiTemplateVariable, type SelectOption, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 import DateSelect from '@/components/ui/DateSelect';
 import CustomSelect from '@/components/ui/CustomSelect';
 import SignatureModal from '@/components/SignatureModal';
+import { advisorFullName } from '@/lib/names';
 
 /* ─── Variable labels ────────────────────────────────────────── */
 const VARIABLE_LABELS: Record<string, string> = {
@@ -82,7 +83,47 @@ function buildBaseVarMap(profile: StudentProfile): Record<string, string> {
     visa_expiry: profile.visaExpiry,
     passport_number: profile.passportNumber,
     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+    // Thai official letters: Buddhist-era date, e.g. 1 กรกฎาคม 2568
+    date_th: thaiDate(new Date()),
+    academic_year_be: profile.enrollmentDate ? thaiAcademicYear(new Date(profile.enrollmentDate)) : '',
+    study_start_th: profile.enrollmentDate ? thaiDate(new Date(profile.enrollmentDate)) : '',
+    study_end_th: profile.expectedGraduation ? thaiDate(new Date(profile.expectedGraduation)) : '',
   };
+}
+
+const thaiDate = (d: Date) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// The Thai academic year (B.E.) starts in June, so January–May belong to the
+// academic year that began the previous June.
+const thaiAcademicYear = (d: Date) => String(d.getFullYear() - (d.getMonth() < 5 ? 1 : 0) + 543);
+
+// Choice variables answered from the student's record. Each gives the text to
+// match against the variable's options; the matched option's docText goes into
+// the document. When nothing matches (e.g. nationality "Other"), the student
+// picks the option as usual.
+const PROFILE_OPTION_SOURCES: Record<string, (p: StudentProfile) => string> = {
+  nationality_th: p => p.nationality ?? '',
+  degree_level_th: p => ({ BACHELOR: "Bachelor's degree", MASTER: "Master's degree", PHD: 'Doctoral degree' }[p.level] ?? ''),
+  program_th: p => p.program,
+  semester_th: p => ({ FIRST: 'First semester', SECOND: 'Second semester', SUMMER: 'Summer session' } as Record<string, string>)[p.startingSemester ?? ''] ?? '',
+  // Any scholarship on record other than Self-support means a scholarship student
+  funding_type: p => (!p.scholarship ? '' : p.scholarship === 'Self-support' ? 'Self-funded' : 'Scholarship'),
+  bank_funding: p => ({ 'ASEAN & GMS': 'ASEAN & GMS Scholarship', 'Self-support': 'Self-funded' } as Record<string, string>)[p.scholarship] ?? '',
+  study_duration: p => {
+    if (!p.enrollmentDate || !p.expectedGraduation) return '';
+    const start = new Date(p.enrollmentDate), end = new Date(p.expectedGraduation);
+    const years = Math.round(((end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth()) / 12);
+    return years > 0 ? `${years} year${years > 1 ? 's' : ''}` : '';
+  },
+};
+
+/** The option a profile value stands for: same label, or a label the value contains ("M.Sc. Geo-Informatics" → "Geo-Informatics"). */
+function matchProfileOption(value: string, options: SelectOption[]): SelectOption | undefined {
+  const norm = (s: string) => s.toLowerCase().replace(/\(international program\)/g, '').replace(/\s+/g, ' ').trim();
+  const v = norm(value);
+  if (!v) return undefined;
+  const choices = options.filter(o => typeof o !== 'string' && !o.allowInput);
+  return choices.find(o => norm(o.label) === v) ?? choices.find(o => norm(o.label) && v.includes(norm(o.label)));
 }
 
 const CHIP_LABEL_TO_KEY: Record<string, string> = {
@@ -265,9 +306,9 @@ function DocumentPreviewModal({
   function handlePrint() {
     const sigBlockHtml = sigVars.length > 0 ? `
       <div style="margin-top:20px;padding-top:12px;border-top:1px solid #e5e7eb;">
-        <div style="font-size:0;">
+        <div style="font-size:0;text-align:right;">
           ${sigVars.map((sv: string) => `
-            <div style="display:inline-block;vertical-align:top;width:${(100 / Math.min(sigVars.length, 4)).toFixed(4)}%;box-sizing:border-box;padding:0 12px;text-align:center;font-size:14px;">
+            <div style="display:inline-block;vertical-align:top;width:25%;box-sizing:border-box;padding:0 12px;text-align:center;font-size:14px;">
               <div style="width:100%;height:70px;border-bottom:1px solid #1f2937;margin-top:10px;"></div>
               ${SIG_NAMES[sv] ? `<div style="font-size:11px;font-weight:600;margin-top:4px;">${SIG_NAMES[sv]}</div>` : ''}
               <div style="font-size:11px;color:#6b7280;margin-top:4px;">${SIG_ROLES[sv] ?? sv}</div>
@@ -368,7 +409,7 @@ function DocumentPreviewModal({
             {/* Signature block */}
             {sigVars.length > 0 && (
               <div style={{ marginTop: '20px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, calc((100% - 72px) / 4))`, justifyContent: 'end', gap: '24px' }}>
                   {sigVars.map((sv: string) => (
                     <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                       <div style={{ width: '100%', height: '70px', borderBottom: '1px solid #1f2937', marginTop: '10px' }} />
@@ -714,7 +755,8 @@ function SidePanelActions({
 const PROFILE_AUTO_FILL_KEYS = new Set([
   'student_name', 'student_id', 'student_title', 'thai_tel', 'email',
   'education_level', 'funding_type', 'scholarship_name', 'program',
-  'advisor_name', 'visa_expiry', 'date',
+  'advisor_name', 'visa_expiry', 'passport_number', 'date', 'date_th',
+  'academic_year_be', 'study_start_th', 'study_end_th',
 ]);
 
 // Fallback for built-in profile variables that may be empty
@@ -726,6 +768,10 @@ const PROFILE_INPUT_FALLBACKS: Record<string, { label: string; type: 'text' | 'd
   scholarship_name: { label: 'Scholarship Name',       type: 'text', placeholder: 'Scholarship name' },
   advisor_name:     { label: 'Advisor Name',           type: 'text', placeholder: 'Advisor full name' },
   visa_expiry:      { label: 'Visa Expiry Date',       type: 'date' },
+  passport_number:  { label: 'Passport Number',        type: 'text', placeholder: 'Passport number' },
+  academic_year_be: { label: 'Academic Year (B.E.)',   type: 'text', placeholder: 'e.g. 2568' },
+  study_start_th:   { label: 'Study Start Date (Thai)', type: 'text', placeholder: 'e.g. 23 มิถุนายน 2568' },
+  study_end_th:     { label: 'Study End Date (Thai)',  type: 'text', placeholder: 'e.g. 22 มิถุนายน 2570' },
 };
 
 function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanName, irStaffName, varDefs, initialFormData, initialNote, isEdit }: { typeName: string; requiredDocs: DocTemplate[]; onSubmit: (formData: Record<string, string>, description: string) => void; profile: StudentProfile; deanName?: string; irStaffName?: string; varDefs: ApiTemplateVariable[]; initialFormData?: Record<string, string>; initialNote?: string; isEdit?: boolean }) {
@@ -754,7 +800,25 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
     scholarship_name: { label: 'Scholarship',      value: p.scholarship },
     advisor_name:     { label: 'Advisor',          value: p.advisorName },
     visa_expiry:      { label: 'Visa Expiry',      value: p.visaExpiry },
+    passport_number:  { label: 'Passport Number',  value: p.passportNumber },
+    academic_year_be: { label: 'Academic Year (B.E.)', value: baseVarMap['academic_year_be'] ?? '' },
+    study_start_th:   { label: 'Study Start Date', value: baseVarMap['study_start_th'] ?? '' },
+    study_end_th:     { label: 'Study End Date',   value: baseVarMap['study_end_th'] ?? '' },
   };
+
+  // Choice variables the student's record already answers: key → document text
+  const profileOptionVars = useMemo(() => {
+    const out: Record<string, { label: string; docText: string }> = {};
+    for (const [key, source] of Object.entries(PROFILE_OPTION_SOURCES)) {
+      const def = varDefMap[key];
+      if (!def || !hasOptions(def.inputType)) continue;
+      try {
+        const opt = matchProfileOption(source(p), JSON.parse(def.options ?? '[]'));
+        if (opt) out[key] = { label: opt.label, docText: opt.docText?.trim() || opt.label };
+      } catch { /* ignore */ }
+    }
+    return out;
+  }, [p, varDefMap]);
 
   // Classify template variables using DB inputType
   const { autoFilledFields, missingProfileKeys, userInputKeys } = useMemo(() => {
@@ -767,7 +831,9 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
       const dbDef = varDefMap[key];
       const dbInputType = dbDef?.inputType ?? 'auto';
 
-      if (PROFILE_AUTO_FILL_KEYS.has(key) && dbInputType === 'auto') {
+      if (profileOptionVars[key]) {
+        auto.push({ label: dbDef.label, value: profileOptionVars[key].label, key });
+      } else if (PROFILE_AUTO_FILL_KEYS.has(key) && dbInputType === 'auto') {
         // Built-in profile variable — auto-fill if has value, else show input
         const profileField = ALL_PROFILE_FIELDS[key];
         if (profileField && profileField.value && profileField.value !== '—') {
@@ -775,6 +841,8 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
         } else if (PROFILE_INPUT_FALLBACKS[key]) {
           missingProfile.push(key);
         }
+      } else if (dbInputType === 'staff') {
+        // IR staff fill it in when approving — never asked of the student
       } else if (dbInputType !== 'auto') {
         // DB says student must fill this in
         userInput.push(key);
@@ -783,7 +851,7 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
     });
     return { autoFilledFields: auto, missingProfileKeys: missingProfile, userInputKeys: userInput };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allVarTokens, p, varDefMap]);
+  }, [allVarTokens, p, varDefMap, profileOptionVars]);
 
   const allInputKeys = [...missingProfileKeys, ...userInputKeys];
   const [formData, setFormData] = useState<Record<string, string>>(() => {
@@ -839,8 +907,13 @@ function DynamicRequestForm({ typeName, requiredDocs, onSubmit, profile, deanNam
       }
       return [k, formData[k] || '—'];
     });
-    return { ...baseVarMap, ...Object.fromEntries(entries) };
-  }, [baseVarMap, allInputKeys, formData, varDefMap]);
+    const fromProfile = Object.fromEntries(Object.entries(profileOptionVars).map(([k, o]) => [k, o.docText]));
+    // Staff-filled variables (document number) show as a dotted blank, like the PDF
+    const staffBlanks = Object.fromEntries(
+      Object.values(varDefMap).filter(d => d.inputType === 'staff').map(d => [d.key, STAFF_FIELD_PLACEHOLDER])
+    );
+    return { ...baseVarMap, ...staffBlanks, ...fromProfile, ...Object.fromEntries(entries) };
+  }, [baseVarMap, profileOptionVars, allInputKeys, formData, varDefMap]);
 
   const hasInputFields = allInputKeys.length > 0;
   const allInputsFilled = allInputKeys.every(k => {
@@ -1134,7 +1207,7 @@ export default function NewRequestFormPage({ params, searchParams }: { params: {
         setStudentDbId(s.id);
         const adv = s.advisor;
         const advisorName = adv
-          ? [adv.titleEn, adv.firstNameEn, adv.lastNameEn].filter(Boolean).join(' ')
+          ? advisorFullName(adv)
           : '';
         const visaExpiry = s.visas?.[0]?.expiryDate?.slice(0, 10) ?? '';
         const levelMap: Record<string, StudentProfile['level']> = {
@@ -1155,6 +1228,10 @@ export default function NewRequestFormPage({ params, searchParams }: { params: {
           advisorName,
           visaExpiry,
           passportNumber: s.passports?.find(p => p.isCurrent)?.passportNumber ?? '',
+          nationality: s.nationality ?? '',
+          enrollmentDate: s.enrollmentDate ?? '',
+          expectedGraduation: s.expectedGraduation ?? '',
+          startingSemester: s.startingSemester ?? '',
         });
       } catch (e) {
         console.error('Failed to load data:', e);

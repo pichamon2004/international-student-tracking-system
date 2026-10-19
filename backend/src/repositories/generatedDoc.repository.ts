@@ -35,6 +35,17 @@ export const findByRequestId = (requestId: number) =>
     orderBy: { createdAt: 'desc' },
   });
 
+/** The request's documents with what decides who still has to sign: the template's method + boxes, and who signed. */
+export const findSigningStateByRequestId = (requestId: number) =>
+  prisma.generatedDocument.findMany({
+    where:   { requestId },
+    select:  {
+      id: true, templateId: true,
+      template:   { select: { name: true, variables: true, signingMethod: true } },
+      signatures: { select: { role: true } },
+    },
+  });
+
 export const findById = (id: number) =>
   prisma.generatedDocument.findUnique({
     where:   { id },
@@ -77,6 +88,14 @@ export const updateSignedFile = (id: number, signedFileId: number, signedBy: str
   prisma.generatedDocument.update({
     where: { id },
     data:  { signedFileId, signedBy, signedAt: new Date(), signingMode: 'manual' },
+    include: WITH_FILES,
+  });
+
+/** A re-rendered unsigned PDF replaces the original (e.g. once staff fill in the document number) */
+export const updateFile = (id: number, fileId: number) =>
+  prisma.generatedDocument.update({
+    where: { id },
+    data:  { fileId },
     include: WITH_FILES,
   });
 

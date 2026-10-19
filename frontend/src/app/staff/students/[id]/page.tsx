@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import { RenewalDetailModal, type RenewalModalData } from '@/components/RenewalDetailModal';
 import CustomSelect from '@/components/ui/CustomSelect';
 import DateSelect from '@/components/ui/DateSelect';
+import { STARTING_SEMESTER_OPTIONS, semesterLabel } from '@/lib/semester';
 
 type VisaStatus = 'Active' | 'Expired' | 'Expiring Soon';
 type Tab = 'Student Information' | 'Passport & Visa' | 'Health Insurance' | 'Academic Record' | 'Dependents' | 'Recent Activity' | 'Renewal History';
@@ -271,6 +272,7 @@ const SCHOLARSHIP_OPTIONS = [
   'Self-support',
   'อื่นๆ',
 ] as const;
+const OTHER_SCHOLARSHIP = 'อื่นๆ';
 
 function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { studentDbId: number; onClose: () => void; onConfirm: () => void }) {
   const modalInputCls = 'w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition bg-white disabled:bg-gray-50 disabled:text-gray-400';
@@ -280,7 +282,9 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
     faculty: 'College of Computing',
     enrollmentDate: '',
     expectedGraduation: '',
+    startingSemester: '',
     scholarship: '',
+    scholarshipOther: '',   // the scholarship name when 'อื่นๆ' is chosen
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -290,6 +294,9 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
     if (!form.faculty)            e.faculty            = 'Required';
     if (!form.enrollmentDate)     e.enrollmentDate     = 'Required';
     if (!form.expectedGraduation) e.expectedGraduation = 'Required';
+    if (!form.startingSemester)   e.startingSemester   = 'Required';
+    if (!form.scholarship)        e.scholarship        = 'Required';
+    else if (form.scholarship === OTHER_SCHOLARSHIP && !form.scholarshipOther.trim()) e.scholarship = 'Enter the scholarship name';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -302,7 +309,8 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
         faculty: form.faculty,
         enrollmentDate: new Date(form.enrollmentDate).toISOString(),
         expectedGraduation: new Date(form.expectedGraduation).toISOString(),
-        scholarship: form.scholarship || undefined,
+        startingSemester: form.startingSemester,
+        scholarship: form.scholarship === OTHER_SCHOLARSHIP ? form.scholarshipOther.trim() : form.scholarship,
         registrationStatus: 'ACTIVE',
         registrationStep: 2,
       });
@@ -352,10 +360,22 @@ function RegistrationApproveModal({ studentDbId, onClose, onConfirm }: { student
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className={modalLabelCls}>Scholarship</label>
-            <input value={form.scholarship} onChange={e => setForm(p => ({ ...p, scholarship: e.target.value }))}
-              placeholder="e.g. KKU Scholarship (leave blank if none)"
-              className={modalInputCls} />
+            <label className={modalLabelCls}>Starting Semester <span className="text-red-400">*</span></label>
+            <CustomSelect value={form.startingSemester} onChange={(v) => setForm(p => ({ ...p, startingSemester: v }))}
+              options={STARTING_SEMESTER_OPTIONS} placeholder="Select semester" />
+            {errors.startingSemester && <p className="text-xs text-red-500">{errors.startingSemester}</p>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className={modalLabelCls}>Scholarship <span className="text-red-400">*</span></label>
+            <CustomSelect value={form.scholarship} onChange={(v) => setForm(p => ({ ...p, scholarship: v }))}
+              options={[...SCHOLARSHIP_OPTIONS]} placeholder="Select scholarship (Self-support if none)" />
+            {form.scholarship === OTHER_SCHOLARSHIP && (
+              <input value={form.scholarshipOther} onChange={e => setForm(p => ({ ...p, scholarshipOther: e.target.value }))}
+                placeholder="Scholarship name"
+                className={clsx(modalInputCls, 'mt-2', errors.scholarship && 'border-red-400')} />
+            )}
+            {errors.scholarship && <p className="text-xs text-red-500">{errors.scholarship}</p>}
           </div>
 
           {errors.general && <p className="text-sm text-red-500">{errors.general}</p>}
@@ -988,6 +1008,7 @@ export default function StaffStudentDetailPage() {
                   { label: 'Level',                value: student.level ?? '—' },
                   { label: 'Enrollment Date',      value: fmt(student.enrollmentDate) },
                   { label: 'Expected Graduation',  value: fmt(student.expectedGraduation) },
+                  { label: 'Starting Semester',    value: semesterLabel(student.startingSemester) },
                   { label: 'Scholarship',          value: student.scholarship ?? '—' },
                 ]} />
               </div>

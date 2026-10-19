@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
-import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line, RiAddLine } from 'react-icons/ri';
+import { RiCloseLine, RiFilePdf2Line, RiEyeLine, RiSettings3Line, RiAddLine, RiTable2, RiZoomInLine, RiZoomOutLine, RiExpandWidthLine } from 'react-icons/ri';
 import CustomSelect from '@/components/ui/CustomSelect';
 import { type ApiTemplateVariable } from '@/lib/api';
 import { useAuthStore } from '@/lib/auth';
@@ -70,6 +70,43 @@ function LivePreview({ html }: { html: string }) {
 
 const FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36];
 
+/* ─── Page zoom (view only — the saved template is unaffected) ── */
+const PAPER_WIDTH = 794; // A4 at 96dpi
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2];
+
+function ZoomControl({ zoom, setZoom, scrollRef }: {
+  zoom: number;
+  setZoom: (z: number) => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const out = [...ZOOM_STEPS].reverse().find(z => z < zoom - 0.001);
+  const into = ZOOM_STEPS.find(z => z > zoom + 0.001);
+  // Page width fills the gray area (minus its p-6 padding on both sides)
+  const fit = () => {
+    const w = scrollRef.current?.clientWidth;
+    if (w) setZoom(Math.min(2, Math.max(0.3, (w - 48) / PAPER_WIDTH)));
+  };
+  const btn = 'w-7 h-7 rounded-lg flex items-center justify-center text-primary/70 hover:bg-[#DEEBFF] hover:text-primary disabled:opacity-30 disabled:hover:bg-transparent transition';
+  return (
+    <div className="absolute bottom-4 right-4 z-10 flex items-center gap-0.5 bg-white rounded-xl shadow-md border border-[#0776BC]/15 p-1">
+      <button title="Zoom out" disabled={!out} onMouseDown={e => { e.preventDefault(); if (out) setZoom(out); }} className={btn}>
+        <RiZoomOutLine size={15} />
+      </button>
+      <button title="Reset to 100%" onMouseDown={e => { e.preventDefault(); setZoom(1); }}
+        className="min-w-[3rem] h-7 px-1 rounded-lg text-xs font-semibold text-primary hover:bg-[#DEEBFF] tabular-nums transition">
+        {Math.round(zoom * 100)}%
+      </button>
+      <button title="Zoom in" disabled={!into} onMouseDown={e => { e.preventDefault(); if (into) setZoom(into); }} className={btn}>
+        <RiZoomInLine size={15} />
+      </button>
+      <span className="w-px h-4 bg-[#0776BC]/15 mx-0.5" />
+      <button title="Fit page width" onMouseDown={e => { e.preventDefault(); fit(); }} className={btn}>
+        <RiExpandWidthLine size={15} />
+      </button>
+    </div>
+  );
+}
+
 type DocSubTab = 'Edit' | 'Preview';
 
 interface DocTemplateModalProps {
@@ -112,16 +149,36 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
   const [fontSize, setFontSize] = useState(14);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
   const editorRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const paperScrollRef = useRef<HTMLDivElement>(null);
   // Saved selection range — updated while cursor/selection is inside editor
   const savedRangeRef = useRef<Range | null>(null);
+  // Toolbar "Insert table" column picker
+  const [showTableMenu, setShowTableMenu] = useState(false);
+  const tableMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // While "+ Field" is open, Escape closes only that dialog
     if (showFieldModal) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // An open column picker closes first, not the whole editor
+      if (showTableMenu) setShowTableMenu(false);
+      else onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose, showFieldModal]);
+  }, [onClose, showFieldModal, showTableMenu]);
+
+  // Clicking anywhere outside the column picker closes it
+  useEffect(() => {
+    if (!showTableMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (!tableMenuRef.current?.contains(e.target as Node)) setShowTableMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showTableMenu]);
 
   // Track active formats, save selection range, and read font size at cursor
   useEffect(() => {
@@ -269,6 +326,61 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
     if (sel) { sel.removeAllRanges(); sel.addRange(range); }
     savedRangeRef.current = range.cloneRange();
     handleInput();
+  };
+
+  // A borderless one-row table, so pieces of text can sit side by side (e.g.
+  // document no. | date). It goes in as its own block after the paragraph
+  // holding the cursor, followed by an empty paragraph to keep typing below it.
+  const insertTableBlock = (cells: { width: string; content: string; align?: string }[]) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const tmp = document.createElement('div');
+    tmp.innerHTML =
+      '<table style="width:100%;border-collapse:collapse"><tbody><tr>'
+      + cells.map(c => `<td style="width:${c.width};vertical-align:top;text-align:${c.align ?? 'left'};padding:4px 6px">${c.content}</td>`).join('')
+      + '</tr></tbody></table><p><br></p>';
+
+    const sel = window.getSelection();
+    const range = savedRangeRef.current ?? (sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null);
+    let block: Node | null = range && editor.contains(range.commonAncestorContainer) ? range.startContainer : null;
+    while (block && block.parentNode !== editor) block = block.parentNode;
+    const nodes = Array.from(tmp.childNodes);
+    if (block) {
+      const empty = !(block.textContent ?? '').replace(/\u200B/g, '').trim() && !(block as Element).querySelector?.('img,[data-var],table');
+      let ref: Node = block;
+      nodes.forEach(n => { editor.insertBefore(n, ref.nextSibling); ref = n; });
+      if (empty) editor.removeChild(block);
+    } else {
+      nodes.forEach(n => editor.appendChild(n));
+    }
+    // Put the cursor in the left cell's text, selected, ready to overwrite
+    const target = (nodes[0] as Element).querySelector('td p');
+    if (target && sel) {
+      const r = document.createRange();
+      r.selectNodeContents(target);
+      sel.removeAllRanges();
+      sel.addRange(r);
+      savedRangeRef.current = r.cloneRange();
+    }
+    handleInput();
+  };
+
+  // Letterhead: text | logo | text, so lines can sit beside the logo (a plain
+  // logo is a centered block on its own line)
+  const insertLetterhead = () => insertTableBlock([
+    { width: '36%', content: '<p>ข้อความด้านซ้าย</p>' },
+    { width: '28%', content: '<img src="/kkulogo2.png" alt="KKU Logo" style="height:100px;margin:0 auto" />', align: 'center' },
+    { width: '36%', content: '<p>ข้อความด้านขวา</p>' },
+  ]);
+
+  // n equal, empty columns — each cell is aligned with the toolbar's Align buttons
+  const insertTable = (n: number) => {
+    setShowTableMenu(false);
+    insertTableBlock(Array.from({ length: n }, () => ({
+      width: `${(100 / n).toFixed(2).replace(/\.?0+$/, '')}%`,
+      content: '<p><br></p>',
+    })));
   };
 
   const insertVariable = (v: string, label = varLabel(v)) => {
@@ -437,6 +549,9 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
           #dtm-editor ul, .dtm-content ul { list-style-type: disc; padding-left: 1.6em; margin: 0.25em 0; }
           #dtm-editor ol, .dtm-content ol { list-style-type: decimal; padding-left: 1.6em; margin: 0.25em 0; }
           #dtm-editor li, .dtm-content li { margin: 0.1em 0; }
+          /* Letterhead/table cells: show their edges while editing only, so it's
+             clear where to click — the preview and the PDF stay borderless. */
+          #dtm-editor td { outline: 1px dashed rgba(7,118,188,0.3); outline-offset: -1px; }
           /* Templates saved earlier store the old inline-block chip style in
              their HTML — override it so variable lines keep normal height. */
           #dtm-editor [data-var]:not([data-var^="{{sig_"]), .dtm-content [data-var]:not([data-var^="{{sig_"]) {
@@ -513,11 +628,41 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
                     {btn.icon}
                   </button>
                 ))}
+
+                <div className="w-5 h-px bg-[#0776BC]/20 my-0.5" />
+
+                {/* Table: pick how many columns */}
+                <div ref={tableMenuRef} className="relative">
+                  <button title="Insert table"
+                    onMouseDown={e => { e.preventDefault(); setShowTableMenu(v => !v); }}
+                    className={clsx(
+                      'w-7 h-7 rounded flex items-center justify-center transition',
+                      showTableMenu ? 'bg-primary text-white shadow-sm' : 'text-primary/70 hover:bg-[#DEEBFF]'
+                    )}>
+                    <RiTable2 size={15} />
+                  </button>
+                  {showTableMenu && (
+                    <div className="absolute left-full ml-2 top-0 z-20 bg-white rounded-lg shadow-lg border border-[#0776BC]/15 p-2">
+                      <p className="text-[10px] font-semibold text-primary/60 uppercase tracking-wide mb-1.5 whitespace-nowrap">Columns</p>
+                      <div className="flex gap-1">
+                        {[2, 3, 4, 5, 6].map(n => (
+                          <button key={n} title={`Table with ${n} columns`}
+                            onMouseDown={e => { e.preventDefault(); insertTable(n); }}
+                            className="w-7 h-7 rounded border border-[#0776BC]/20 text-primary text-xs font-semibold hover:bg-[#DEEBFF] hover:border-primary/30 transition">
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* A4 contentEditable area */}
-              <div className="bg-[#f0f4f8] flex-1 overflow-auto p-6 flex justify-center min-h-0">
-                <div className="bg-white shadow-md rounded-sm shrink-0" style={{ width: '794px', minHeight: '1123px' }}>
+              <div className="relative flex-1 min-w-0 min-h-0 flex">
+              <div ref={paperScrollRef} className="bg-[#f0f4f8] flex-1 overflow-auto p-6 min-h-0">
+                {/* mx-auto rather than justify-center: a zoomed-in page scrolls instead of being cut off on the left */}
+                <div className="bg-white shadow-md rounded-sm mx-auto" style={{ width: `${PAPER_WIDTH}px`, minHeight: '1123px', zoom }}>
                   <div className="h-1.5 bg-primary rounded-t-sm" />
                   <div
                     id="dtm-editor"
@@ -538,6 +683,8 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
                   />
                 </div>
               </div>
+              <ZoomControl zoom={zoom} setZoom={setZoom} scrollRef={paperScrollRef} />
+              </div>
 
               {/* Right panel — variables */}
               <div className="w-52 shrink-0 bg-[#DEEBFF]/20 border-l border-[#0776BC]/10 flex flex-col overflow-hidden min-h-0">
@@ -556,6 +703,13 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
                         </button>
                       ))}
                     </div>
+                    <button
+                      title="Letterhead: text on the left, the logo in the middle, text on the right"
+                      onMouseDown={e => { e.preventDefault(); insertLetterhead(); }}
+                      className="w-full py-1 rounded-lg border border-[#0776BC]/20 bg-white text-primary text-xs font-semibold hover:bg-[#DEEBFF] hover:border-primary/30 active:scale-[0.98] transition-all"
+                    >
+                      Letterhead (text | logo | text)
+                    </button>
                   </div>
                   <button
                     onMouseDown={e => { e.preventDefault(); setShowFieldModal(true); }}
@@ -622,14 +776,15 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
 
           {/* ══ PREVIEW TAB ══ */}
           {subTab === 'Preview' && (
-            <div className="flex-1 overflow-auto p-6 min-h-0 bg-[#f0f4f8] flex justify-center">
-              <div className="bg-white shadow-md rounded-sm shrink-0" style={{ width: '794px', minHeight: '1123px' }}>
+            <div className="relative flex-1 min-w-0 min-h-0 flex">
+            <div ref={paperScrollRef} className="flex-1 overflow-auto p-6 min-h-0 bg-[#f0f4f8]">
+              <div className="bg-white shadow-md rounded-sm mx-auto" style={{ width: `${PAPER_WIDTH}px`, minHeight: '1123px', zoom }}>
                 <div className="h-1.5 bg-primary rounded-t-sm" />
                 <div className="px-10 py-8" style={{ fontFamily: "var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif", lineHeight: '1.8', fontSize: '14px', minHeight: '1100px' }}>
                   <LivePreview html={bodyHtml} />
                   {signatories.length > 0 && bodyHtml.trim() && bodyHtml !== '<br>' && (
                     <div className="mt-8 pt-6 border-t border-gray-200">
-                      <div className={clsx('grid gap-4', signatories.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 xl:grid-cols-4')}>
+                      <div className="grid gap-4 justify-end" style={{ gridTemplateColumns: `repeat(${Math.min(signatories.length, 4)}, calc((100% - 48px) / 4))` }}>
                         {signatories.map(sv => {
                           const resolvedName =
                             sv === '{{sig_ir_staff}}' ? (currentUser?.name ?? '') :
@@ -651,6 +806,8 @@ export default function DocTemplateModal({ template, isCreate, allVariables, onV
                   )}
                 </div>
               </div>
+            </div>
+            <ZoomControl zoom={zoom} setZoom={setZoom} scrollRef={paperScrollRef} />
             </div>
           )}
         </div>

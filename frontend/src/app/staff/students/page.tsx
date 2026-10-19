@@ -7,6 +7,7 @@ import { RiSearchLine, RiAddLine, RiCloseLine, RiUserAddLine, RiUploadLine, RiFo
 import Button from '@/components/ui/Button';
 import { studentApi, type ApiStudent } from '@/lib/api';
 import CustomSelect from '@/components/ui/CustomSelect';
+import { PROGRAMS } from '@/lib/programs';
 import ImportModal from '@/components/ImportModal';
 import { useAuthStore } from '@/lib/auth';
 import toast from 'react-hot-toast';
@@ -153,7 +154,16 @@ function AddStudentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (data
           </div>
 
           {/* Program */}
-          {field('program', 'Program', 'e.g. Computer Science', 'text', false)}
+          <div className="flex flex-col gap-1">
+            <label className={labelCls}>Program</label>
+            <CustomSelect
+              value={form.program}
+              onChange={(val) => setForm(f => ({ ...f, program: val }))}
+              options={PROGRAMS}
+              placeholder="— Select program —"
+              wrapOptions
+            />
+          </div>
 
           {/* Degree */}
           <div className="flex flex-col gap-1">
@@ -279,19 +289,19 @@ export default function StaffStudentPage() {
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-2xl font-semibold text-primary">Student Management</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xl sm:text-2xl font-semibold text-primary">Student Management</p>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-all duration-200"
           >
             <RiUploadLine size={16} />
             Import Excel
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
           >
             <RiAddLine size={16} />
             Student

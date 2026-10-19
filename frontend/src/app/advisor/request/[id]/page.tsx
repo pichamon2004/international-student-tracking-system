@@ -6,7 +6,7 @@ import Button from '@/components/ui/Button';
 import SignatureModal from '@/components/SignatureModal';
 import { RiArrowLeftLine, RiUser3Line, RiFileTextLine, RiCalendarLine, RiAttachmentLine, RiCloseLine, RiCheckLine, RiEyeLine, RiPrinterLine, RiDownloadLine, RiPenNibLine } from 'react-icons/ri';
 import { clsx } from 'clsx';
-import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
+import { isImageUrl, isPdfUrl, fileExtension, fileApi, requestApi, deanApi, generatedDocApi, isSignatureRequired, type ApiRequest, type ApiDocSignature, type ApiGeneratedDoc } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { needsSignatureToApprove } from '@/lib/signing';
 import jsPDF from 'jspdf';
@@ -120,7 +120,13 @@ export default function RequestDetailPage() {
       loadGeneratedDoc(req.id);
       setActionDone(true);
       toast.success('Request approved');
-    } catch {
+    } catch (e) {
+      // The document was only just generated (an older request) — reload it so Approve becomes Sign & Approve
+      if (isSignatureRequired(e)) {
+        loadGeneratedDoc(req.id);
+        toast.error('Please sign the document first, then approve');
+        return;
+      }
       toast.error('Failed to approve request');
     } finally {
       setSubmitting(null);
@@ -230,7 +236,7 @@ export default function RequestDetailPage() {
           </button>
 
           {/* While the request awaits this approver, signing happens through Approve */}
-          {genDoc && !isApprovalSigning && !isActionable && !signatures.some(s => s.role === 'advisor') && (
+          {genDoc && requiredSigRoles.includes('advisor') && !isApprovalSigning && !isActionable && !signatures.some(s => s.role === 'advisor') && (
             <button
               onClick={() => setShowSignModal(true)}
               className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-all duration-200"
@@ -392,6 +398,8 @@ export default function RequestDetailPage() {
           passport_number: s?.passports?.[0]?.passportNumber ?? '—',
           date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
           ...formDataObj,
+          // the document number etc. once staff filled them in
+          ...(() => { try { return JSON.parse(req.staffData ?? '{}'); } catch { return {}; } })(),
         };
 
         const LABEL_TO_KEY: Record<string, string> = {
@@ -431,7 +439,7 @@ export default function RequestDetailPage() {
           const SIG_NAMES: Record<string, string> = { '{{sig_student}}': studentFullName, '{{sig_advisor}}': '', '{{sig_ir_staff}}': '', '{{sig_dean}}': deanName };
           const SIG_ROLES: Record<string, string> = { '{{sig_student}}': 'Student', '{{sig_advisor}}': 'Advisor', '{{sig_ir_staff}}': 'IR Staff', '{{sig_dean}}': 'Dean' };
           const sigHtml = sigVars.length > 0
-            ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},1fr);gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
+            ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;display:grid;grid-template-columns:repeat(${Math.min(sigVars.length, 4)},calc((100% - 72px) / 4));justify-content:end;gap:24px">${sigVars.map((sv: string) => `<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="width:100%;height:40px;border-bottom:2px solid #1f2937;margin-top:16px"></div>${SIG_NAMES[sv] ? `<span style="font-size:11px;font-weight:600;text-align:center">${SIG_NAMES[sv]}</span>` : ''}<span style="font-size:11px;color:#6b7280">${SIG_ROLES[sv] ?? sv}</span><span style="font-size:10px;color:#9ca3af">Date ....../....../......</span></div>`).join('')}</div>`
             : '';
           return renderTemplate(t.body) + sigHtml;
         }).join('<hr style="margin:32px 0"/>');
@@ -491,7 +499,7 @@ export default function RequestDetailPage() {
                 </button>
               </div>
 
-              <div ref={previewContentRef} className="flex-1 overflow-y-auto bg-gray-100 px-6 py-6 flex flex-col gap-6">
+              <div ref={previewContentRef} className="flex-1 overflow-auto bg-gray-100 px-3 py-3 sm:px-6 sm:py-6 flex flex-col gap-4 sm:gap-6">
                 {genDoc && (
                   <div className="w-full max-w-[210mm] mx-auto flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg bg-primary/5 text-primary">
                     <RiFileTextLine size={13} />
@@ -503,10 +511,10 @@ export default function RequestDetailPage() {
                   </div>
                 )}
                 {genDoc && (
-                  <div className="bg-white shadow-md mx-auto" style={{ width: '210mm', minHeight: '297mm' }}>
+                  <div className="bg-white shadow-md mx-auto" style={{ width: '100%', maxWidth: '210mm', aspectRatio: '210 / 297' }}>
                     <iframe
                       src={genDoc.signedFileUrl ?? genDoc.fileUrl ?? undefined}
-                      style={{ width: '100%', height: '297mm', border: 'none' }}
+                      style={{ width: '100%', height: '100%', border: 'none' }}
                       title="Generated Document"
                     />
                   </div>
@@ -527,7 +535,7 @@ export default function RequestDetailPage() {
                       <div dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.body) }} />
                       {sigVars.length > 0 && (
                         <div style={{ marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, 1fr)`, gap: '24px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(sigVars.length, 4)}, calc((100% - 72px) / 4))`, justifyContent: 'end', gap: '24px' }}>
                             {sigVars.map((sv: string) => (
                               <div key={sv} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                                 <div style={{ width: '100%', height: '40px', borderBottom: '2px solid #1f2937', marginTop: '16px' }} />

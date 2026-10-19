@@ -8,7 +8,7 @@ import { hasOptions, type ApiTemplateVariable, type SelectOption } from '@/lib/a
 
 export type { SelectOption };
 
-type InputType = 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio';
+type InputType = 'auto' | 'text' | 'date' | 'textarea' | 'select' | 'radio' | 'staff';
 
 interface Props {
   variable: ApiTemplateVariable | null;
@@ -30,6 +30,7 @@ const INPUT_TYPE_OPTIONS: { value: InputType; label: string; desc: string }[] = 
   { value: 'textarea', label: 'Long Text',   desc: 'Student types a longer answer' },
   { value: 'radio',    label: 'Choice',      desc: 'Student picks one option' },
   { value: 'select',   label: 'Dropdown',    desc: 'Student picks from a searchable list' },
+  { value: 'staff',    label: 'Staff fills in', desc: 'IR staff type it in when approving (e.g. document number)' },
 ];
 
 function parseOptions(raw: string | null | undefined): SelectOption[] {

@@ -55,7 +55,8 @@ export const errorHandler = (
 
   // Custom service errors thrown as Object.assign(new Error(...), { statusCode })
   if (err instanceof Error && typeof (err as unknown as { statusCode?: unknown }).statusCode === 'number') {
-    res.status((err as unknown as { statusCode: number }).statusCode).json({ success: false, message: err.message });
+    const { statusCode, code } = err as unknown as { statusCode: number; code?: unknown };
+    res.status(statusCode).json({ success: false, message: err.message, ...(typeof code === 'string' && { code }) });
     return;
   }
 

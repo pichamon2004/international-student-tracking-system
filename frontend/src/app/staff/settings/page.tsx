@@ -300,7 +300,7 @@ function EmailTemplatesTab() {
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-gray-400 font-medium">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
         <button onClick={() => setModal('create')}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition-all shadow-sm">
@@ -321,8 +321,8 @@ function EmailTemplatesTab() {
         <div className="flex flex-col gap-3">
           {templates.map(t => (
             <div key={t.id}
-              className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
-              <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+              className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
+              <div className={clsx('hidden sm:flex w-10 h-10 rounded-xl items-center justify-center shrink-0',
                 t.isActive ? 'bg-[#DEEBFF] text-primary' : 'bg-gray-100 text-gray-400')}>
                 <RiMailLine size={18} />
               </div>
@@ -567,7 +567,7 @@ function RequestTypesTab({
   return (
     <div className="flex flex-col gap-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-gray-400 font-medium">{types.length} type{types.length !== 1 ? 's' : ''}</p>
         <button onClick={() => setModal('create')} disabled={saving}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition-all shadow-sm">
@@ -584,10 +584,10 @@ function RequestTypesTab({
         <div className="flex flex-col gap-3">
           {types.map(t => (
             <div key={t.id}
-              className="flex items-start gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
+              className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
               {/* Icon */}
               <div className={clsx(
-                'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                'hidden sm:flex w-10 h-10 rounded-xl items-center justify-center shrink-0',
                 t.isActive ? 'bg-[#DEEBFF] text-primary' : 'bg-gray-100 text-gray-400'
               )}>
                 <IconComponent iconKey={t.icon} size={18} />
@@ -613,7 +613,7 @@ function RequestTypesTab({
               </div>
 
               {/* Right side */}
-              <div className="flex items-center gap-2 shrink-0 self-start mt-0.5">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0 self-start mt-0.5">
                 <StatusBadge active={t.isActive} onToggle={() => handleToggle(t)} />
                 <button onClick={() => setModal(t)} title="Edit"
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-primary/10 hover:text-primary transition">
@@ -758,15 +758,28 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-6">
+    <div className="bg-white w-full flex-1 rounded-2xl p-4 sm:p-6 flex flex-col gap-5 sm:gap-6 min-w-0">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-primary">Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-primary">Settings</h1>
         <p className="text-sm text-gray-400 mt-0.5">Manage templates and request types used across the system.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-end gap-1 border-b border-[#DEEBFF]">
+      {/* Tabs — phones: a 2×2 grid so every tab is visible at once */}
+      <div className="sm:hidden grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-[#F0F6FF]">
+        {TABS.map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={clsx(
+              'px-2 py-2.5 text-sm font-semibold leading-tight rounded-xl transition-all duration-200',
+              activeTab === tab
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-gray-500 hover:text-primary hover:bg-white'
+            )}>
+            {tab}
+          </button>
+        ))}
+      </div>
+      <div className="hidden sm:flex items-end gap-1 border-b border-[#DEEBFF]">
         {TABS.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={clsx(
@@ -877,7 +890,7 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
 
       {/* Toolbar */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
+        <div className="flex-1 min-w-0 flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:border-primary transition-colors">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-400 shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" placeholder="Search key or label…" value={search} onChange={e => setSearch(e.target.value)}
             className="bg-transparent text-sm text-primary placeholder-gray-400 outline-none w-full" />
@@ -896,8 +909,8 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
       ) : (
         <div className="flex flex-col gap-2">
           {filtered.map(v => (
-            <div key={v.id} className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
-              <code className="shrink-0 px-2.5 py-1 rounded-lg bg-[#DEEBFF] text-primary text-xs font-mono font-semibold">
+            <div key={v.id} className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
+              <code className="hidden sm:inline shrink-0 px-2.5 py-1 rounded-lg bg-[#DEEBFF] text-primary text-xs font-mono font-semibold">
                 {`{{${v.key}}}`}
               </code>
               <div className="flex-1 min-w-0">
@@ -909,6 +922,7 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
                     v.inputType === 'textarea' ? 'bg-amber-100 text-amber-700' :
                     v.inputType === 'select'   ? 'bg-purple-100 text-purple-700' :
                     v.inputType === 'radio'    ? 'bg-indigo-100 text-indigo-700' :
+                    v.inputType === 'staff'    ? 'bg-rose-100 text-rose-700' :
                                                  'bg-gray-100 text-gray-600'
                   }`}>
                     {v.inputType === 'auto'     ? 'Auto' :
@@ -916,12 +930,16 @@ function VariablesTab({ vars, onRefresh }: { vars: ApiTemplateVariable[]; onRefr
                      v.inputType === 'date'     ? 'Date' :
                      v.inputType === 'select'   ? `Dropdown (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
                      v.inputType === 'radio'    ? `Choice (${(() => { try { return JSON.parse(v.options ?? '[]').length; } catch { return 0; } })()})` :
+                     v.inputType === 'staff'    ? 'Staff' :
                      'Text'}
                   </span>
                 </div>
+                <code className="sm:hidden inline-block max-w-full truncate mt-1 px-2 py-0.5 rounded-md bg-[#DEEBFF] text-primary text-[11px] font-mono font-semibold">
+                  {`{{${v.key}}}`}
+                </code>
                 {v.description && <p className="text-xs text-gray-400 truncate mt-0.5">{v.description}</p>}
               </div>
-              <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1.5 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button onClick={() => setModal(v)} title="Edit"
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-primary/10 hover:text-primary transition">
                   <RiEditLine size={15} />
@@ -975,7 +993,7 @@ type DocTemplatesTabControlledProps = {
 function DocTemplatesTabControlled({ templates, allVariables, onVariableCreated, modal, deleteTarget, onOpenCreate, onOpenEdit, onToggle, onSave, onCloseModal, onDeleteTarget, onDeleteConfirm, onDeleteCancel }: DocTemplatesTabControlledProps) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-gray-400 font-medium">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
         <button onClick={onOpenCreate}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 active:scale-95 transition-all shadow-sm">
@@ -990,8 +1008,8 @@ function DocTemplatesTabControlled({ templates, allVariables, onVariableCreated,
         <div className="flex flex-col gap-3">
           {templates.map(t => (
             <div key={t.id}
-              className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
-              <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+              className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border border-gray-100 bg-white hover:border-primary/20 hover:shadow-sm transition-all group">
+              <div className={clsx('hidden sm:flex w-10 h-10 rounded-xl items-center justify-center shrink-0',
                 t.isActive ? 'bg-[#DEEBFF] text-primary' : 'bg-gray-100 text-gray-400')}>
                 <RiFileTextLine size={18} />
               </div>

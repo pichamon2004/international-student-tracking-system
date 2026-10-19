@@ -48,11 +48,11 @@ function SimpleDropdown({
   const selected = options.find(o => o.value === value);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex-1 sm:flex-none">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-36"
+        className="w-full flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-36"
       >
         <span className={selected ? 'text-gray-800' : 'text-gray-400'}>
           {selected ? selected.label : placeholder}
@@ -311,11 +311,11 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-5">
+    <div className="flex flex-col gap-5">
 
       {/* Header + Filter */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 sm:px-6 py-4 flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-gray-800">User Management</h1>
             <p className="text-sm text-gray-400 mt-0.5">Add, edit and assign roles to users</p>
@@ -332,7 +332,7 @@ export default function UsersPage() {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-48">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-48">
             <RiSearchLine size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
@@ -370,7 +370,8 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="border-b border-gray-100">
               <th className="text-left px-6 py-3 text-gray-500 font-medium">Name</th>
@@ -425,12 +426,13 @@ export default function UsersPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Modal: Create User */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md flex flex-col gap-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-md flex flex-col gap-4 max-h-full overflow-y-auto">
             <h3 className="text-lg font-semibold">Add New User</h3>
             <p className="text-sm text-gray-400 -mt-2">User will sign in with Google using this email</p>
 
@@ -477,11 +479,11 @@ export default function UsersPage() {
 
       {/* Modal: Edit User */}
       {editUser && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-md flex flex-col gap-4 max-h-full overflow-y-auto">
+            <div className="flex flex-wrap items-center justify-between gap-x-3">
               <h3 className="text-lg font-semibold">Edit User</h3>
-              <span className="text-sm text-gray-400">{editUser.email}</span>
+              <span className="text-sm text-gray-400 break-all">{editUser.email}</span>
             </div>
 
             <div className="flex flex-col gap-1">

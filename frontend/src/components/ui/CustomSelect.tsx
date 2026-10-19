@@ -15,13 +15,16 @@ interface CustomSelectProps {
   className?: string;
   // Show a filter box at the top of the open list (for long option lists)
   searchable?: boolean;
+  // Keep the open list as wide as the field and wrap long options onto more
+  // lines, instead of growing past it (use inside narrow modals)
+  wrapOptions?: boolean;
 }
 
 function getLabel(o: Option) { return typeof o === 'string' ? o : o.label; }
 function getValue(o: Option) { return typeof o === 'string' ? o : o.value; }
 
 export default function CustomSelect({
-  value, onChange, options, placeholder = '— Select —', disabled = false, className, searchable = false,
+  value, onChange, options, placeholder = '— Select —', disabled = false, className, searchable = false, wrapOptions = false,
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -59,7 +62,7 @@ export default function CustomSelect({
           !displayLabel && 'text-gray-400'
         )}
       >
-        <span>{displayLabel || placeholder}</span>
+        <span className={clsx(wrapOptions && 'text-left')}>{displayLabel || placeholder}</span>
         <RiArrowDropDownLine
           size={22}
           className={clsx('text-gray-400 shrink-0 transition-transform duration-200', open && 'rotate-180')}
@@ -67,7 +70,10 @@ export default function CustomSelect({
       </button>
 
       {open && (
-        <div className="absolute top-full mt-1 min-w-full w-max max-w-[min(90vw,32rem)] bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+        <div className={clsx(
+          'absolute top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden',
+          wrapOptions ? 'w-full' : 'min-w-full w-max max-w-[min(90vw,32rem)]',
+        )}>
           {searchable && (
             <div className="p-2 border-b border-gray-100">
               <input

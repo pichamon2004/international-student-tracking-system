@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { BsPeopleFill } from 'react-icons/bs';
 import { FaRegCircleCheck, FaListCheck } from 'react-icons/fa6';
 import { advisorApi, requestApi, type ApiAdvisor } from '@/lib/api';
+import { advisorFullName } from '@/lib/names';
 
 export default function TeacherProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -47,7 +48,7 @@ export default function TeacherProfilePage() {
     );
   }
 
-  const fullName = [advisor.titleEn, advisor.firstNameEn, advisor.lastNameEn].filter(Boolean).join(' ') || '—';
+  const fullName = advisorFullName(advisor) || '—';
   const students = advisor.students ?? [];
 
   return (

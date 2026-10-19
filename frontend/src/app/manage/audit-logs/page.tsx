@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import api from '@/lib/api';
+import DateSelect from '@/components/ui/DateSelect';
 import { RiSearchLine, RiArrowDownSLine, RiCloseLine, RiCheckLine, RiEyeLine } from 'react-icons/ri';
 
 interface AuditLog {
@@ -97,11 +98,11 @@ function SimpleDropdown({
   const selected = options.find(o => o.value === value);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex-1 sm:flex-none">
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-36"
+        className="w-full flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-36"
       >
         <span className={selected ? 'text-gray-800' : 'text-gray-400'}>
           {selected ? selected.label : placeholder}
@@ -190,23 +191,23 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-5">
+    <div className="flex flex-col gap-5">
 
       {/* Header + Filters */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4 flex flex-col gap-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 sm:px-6 py-4 flex flex-col gap-4">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Audit Log</h1>
           <p className="text-sm text-gray-400 mt-0.5">Record of all actions in the system</p>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <div className="relative flex-1 min-w-44">
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-44">
             <RiSearchLine size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={entity}
               onChange={e => setEntity(e.target.value)}
               placeholder="Search entity..."
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
           <SimpleDropdown
@@ -215,21 +216,10 @@ export default function AuditLogsPage() {
             placeholder="All Actions"
             options={actionOptions}
           />
-          <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white text-sm">
-            <span className="text-gray-400 text-xs whitespace-nowrap">From</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="focus:outline-none text-sm text-gray-700 bg-transparent"
-            />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex-1 min-w-0 sm:flex-none sm:w-40"><DateSelect value={startDate} onChange={setStartDate} placeholder="From" /></div>
             <span className="text-gray-300">—</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="focus:outline-none text-sm text-gray-700 bg-transparent"
-            />
+            <div className="flex-1 min-w-0 sm:flex-none sm:w-40"><DateSelect value={endDate} onChange={setEndDate} placeholder="To" /></div>
           </div>
           {hasFilter && (
             <button
@@ -245,7 +235,8 @@ export default function AuditLogsPage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="border-b border-gray-100">
               <th className="text-left px-6 py-3 text-gray-500 font-medium">Time</th>
@@ -295,11 +286,12 @@ export default function AuditLogsPage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-t border-gray-100">
             <p className="text-sm text-gray-400">Total {filteredLogs.length} entries</p>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                 <button
                   key={p}
@@ -327,8 +319,8 @@ export default function AuditLogsPage() {
             onClick={e => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-3 min-w-0 flex-wrap">
                 <span className={`px-2.5 py-1 rounded-md text-xs font-semibold ${ACTION_COLORS[detailLog.action] ?? 'bg-gray-100 text-gray-600'}`}>
                   {detailLog.action}
                 </span>
@@ -346,14 +338,14 @@ export default function AuditLogsPage() {
             </div>
 
             {/* Meta info */}
-            <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-4 text-xs text-gray-500">
+            <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-100 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 break-all">
               <span><span className="font-medium text-gray-700">User</span>: {detailLog.user?.name ?? '—'} ({detailLog.user?.email})</span>
               <span><span className="font-medium text-gray-700">Time</span>: {new Date(detailLog.createdAt).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}</span>
               {detailLog.ipAddress && <span><span className="font-medium text-gray-700">IP</span>: {detailLog.ipAddress}</span>}
             </div>
 
             {/* Before / After */}
-            <div className="p-6 grid grid-cols-2 gap-4 overflow-auto max-h-[60vh]">
+            <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-auto max-h-[60vh]">
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Before</p>
                 <JsonBlock raw={detailLog.before} logId={detailLog.id} />

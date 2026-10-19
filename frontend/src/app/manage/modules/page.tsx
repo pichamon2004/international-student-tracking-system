@@ -86,7 +86,7 @@ export default function ModulesPage() {
   const canDelete = hasPermission('ROLE_MANAGEMENT.delete');
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
 
       {/* Header */}
       <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-4">

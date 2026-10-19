@@ -116,6 +116,7 @@ const assertRequiredFields = async (requestTypeId: number, rawFormData: unknown)
   const missing = [...requiredKeys].filter((key) => {
     const inputType = inputTypeByKey.get(key) ?? 'auto';
     if (inputType === 'auto') return false; // auto-filled from student profile, not student input
+    if (inputType === 'staff') return false; // IR staff fill it in when they approve
     const val = formData[key];
     return !val || !String(val).trim() || val === '—';
   });
@@ -185,7 +186,7 @@ export const createRequest = async (
     await assertRequiredFields(parseInt(String(dto.requestTypeId)), dto.formData);
   }
 
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const request = await requestRepository.create({
       studentId: studentId!,
       requestTypeId: dto.requestTypeId ? parseInt(String(dto.requestTypeId)) : null,
@@ -202,14 +203,70 @@ export const createRequest = async (
     }, tx);
     return request;
   });
+
+  // Documents that need signing are ready as soon as the request exists. A
+  // failure here doesn't undo the submission — the next approval retries it.
+  if (userId !== undefined) {
+    await generatedDocService.ensureSigningDocs(created.id, userId).catch(console.error);
+  }
+  return created;
 };
 
 const cancellationPendingError = () =>
   Object.assign(new Error('This request has a cancellation pending staff review'), { statusCode: 409 });
 
+// Variables of the request type's documents that IR staff fill in at approval
+// (inputType 'staff', e.g. the document number).
+const staffFieldKeys = async (requestTypeId: number) => {
+  const staffKeys = new Set(await generatedDocService.staffVariableKeys());
+  if (staffKeys.size === 0) return [];
+  const keys = new Set<string>();
+  for (const t of await documentTemplateRepository.findByRequestTypeId(requestTypeId)) {
+    if (t.isActive === false) continue;
+    const vars: string[] = t.variables ? JSON.parse(t.variables) : [];
+    for (const token of vars) {
+      const key = token.replace(/[{}]/g, '');
+      if (staffKeys.has(key)) keys.add(key);
+    }
+  }
+  return [...keys];
+};
+
+// Staff approval must come with every staff-filled value; returns the JSON to
+// store, or undefined when the request's documents have no such variable.
+const resolveStaffData = async (
+  existing: { requestTypeId: number | null; staffData: string | null },
+  submitted: Record<string, string> | undefined
+) => {
+  if (!existing.requestTypeId) return undefined;
+  const keys = await staffFieldKeys(existing.requestTypeId);
+  if (keys.length === 0) return undefined;
+  const previous: Record<string, string> = existing.staffData ? JSON.parse(existing.staffData) : {};
+  const values: Record<string, string> = {};
+  for (const key of keys) {
+    const value = String(submitted?.[key] ?? previous[key] ?? '').trim();
+    if (value) values[key] = value;
+  }
+  const missing = keys.filter(k => !values[k]);
+  if (missing.length > 0) {
+    throw Object.assign(
+      new Error(`Fill in before approving: ${missing.join(', ')}`),
+      { statusCode: 400, code: 'STAFF_FIELDS_REQUIRED' }
+    );
+  }
+  return JSON.stringify({ ...previous, ...values });
+};
+
+// The signature box each approval stands for
+const APPROVAL_SIGNING_ROLE: Record<string, string> = {
+  STAFF_APPROVED:   'ir_staff',
+  ADVISOR_APPROVED: 'advisor',
+  DEAN_APPROVED:    'dean',
+};
+
 export const updateRequestStatus = async (
   requestId: number,
-  dto: { status: string; comment?: string },
+  dto: { status: string; comment?: string; staffData?: Record<string, string> },
   userRole?: string,
   userId?: number,
   files?: Express.Multer.File[]
@@ -227,6 +284,13 @@ export const updateRequestStatus = async (
     }
   }
 
+  const staffData = dto.status === 'STAFF_APPROVED' ? await resolveStaffData(existing, dto.staffData) : undefined;
+
+  const signingRole = APPROVAL_SIGNING_ROLE[dto.status];
+  if (signingRole && userId !== undefined) {
+    await generatedDocService.assertSignedBeforeApproval(requestId, signingRole, userId);
+  }
+
   let attachedFileIds: number[] = [];
   if (files && files.length > 0) {
     if (userId === undefined) throw Object.assign(new Error('Unauthorized'), { statusCode: 401 });
@@ -242,6 +306,7 @@ export const updateRequestStatus = async (
   const updated = await prisma.$transaction(async (tx) => {
     const request = await requestRepository.updateStatus(requestId, {
       status: dto.status as RequestStatus,
+      staffData,
     }, tx);
     const event = await requestEventRepository.create({
       requestId,
@@ -260,16 +325,16 @@ export const updateRequestStatus = async (
     return request;
   });
 
+  // The documents were rendered with a blank document number — print it in
+  if (staffData !== undefined && userId !== undefined) {
+    await generatedDocService.rerenderRequestDocs(requestId, userId).catch(console.error);
+  }
+
   // Templates using the "approval" signing method get the approver's name
   // printed into their signature box as soon as they approve.
-  const approvalRole: Record<string, string> = {
-    STAFF_APPROVED:   'ir_staff',
-    ADVISOR_APPROVED: 'advisor',
-    DEAN_APPROVED:    'dean',
-  };
-  if (approvalRole[dto.status] && userId !== undefined) {
+  if (signingRole && userId !== undefined) {
     await generatedDocService
-      .recordApprovalSignature(requestId, approvalRole[dto.status], userId)
+      .recordApprovalSignature(requestId, signingRole, userId)
       .catch(console.error);
   }
 
@@ -422,8 +487,11 @@ export const updateRequest = async (
   });
 
   // Any generated PDF (and the signatures on it) was built from the old form
-  // data — drop it so the student re-generates and re-signs the new version.
+  // data — drop it and build the new version, for the student to re-sign.
   await generatedDocRepository.deleteByRequestId(requestId);
+  if (userId !== undefined) {
+    await generatedDocService.ensureSigningDocs(requestId, userId).catch(console.error);
+  }
 
   return updated;
 };

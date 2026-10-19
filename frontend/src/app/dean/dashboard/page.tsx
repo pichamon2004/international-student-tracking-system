@@ -63,10 +63,10 @@ export default function DeanDashboardPage() {
     <div className="flex flex-col gap-5 w-full flex-1 min-h-0">
 
       {/* ── Top row: stat card + signing authority ── */}
-      <div className="grid grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-5">
 
         {/* Stat card */}
-        <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        <div className="order-2 md:order-none md:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
           <div className="h-1.5 bg-primary" />
           <div className="flex flex-col justify-between flex-1 px-6 py-5">
             <div className="flex items-start justify-between">
@@ -93,7 +93,7 @@ export default function DeanDashboardPage() {
         </div>
 
         {/* Signing authority card (read-only) */}
-        <div className="col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col">
+        <div className="order-1 md:order-none md:col-span-3 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <RiShieldUserLine className="text-primary text-xl" />

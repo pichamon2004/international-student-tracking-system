@@ -41,7 +41,7 @@ export const findByIdWithProfile = (id: number) =>
     select: {
       id: true, email: true, name: true, createdAt: true,
       student: { select: { firstNameEn: true, lastNameEn: true, titleEn: true } },
-      advisor: { select: { firstNameEn: true, lastNameEn: true, titleEn: true } },
+      advisor: { select: { firstNameEn: true, middleNameEn: true, lastNameEn: true, titleEn: true } },
     },
   });
 

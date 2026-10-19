@@ -61,7 +61,21 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-const ITEMS_PER_PAGE = 4;
+// Cards per page fill whole rows of the grid below (grid-cols-2 sm:grid-cols-3 lg:grid-cols-4):
+// two rows on phones and tablets, one row on desktop
+function useCardsPerPage() {
+  const [n, setN] = useState(4);
+  useEffect(() => {
+    const lg = window.matchMedia('(min-width: 1024px)');
+    const sm = window.matchMedia('(min-width: 640px)');
+    const update = () => setN(lg.matches ? 4 : sm.matches ? 6 : 4);
+    update();
+    lg.addEventListener('change', update);
+    sm.addEventListener('change', update);
+    return () => { lg.removeEventListener('change', update); sm.removeEventListener('change', update); };
+  }, []);
+  return n;
+}
 
 /* ─── Main Page ─────────────────────────────────────────────── */
 export default function StudentRequestPage() {
@@ -90,8 +104,11 @@ export default function StudentRequestPage() {
   const { ref: historyRef, pageSize: historyPageSize } = useFitPageSize<HTMLDivElement>();
   const historyPaging = usePaged(history, historyPageSize, history.length);
 
-  const totalPages = Math.ceil(requestTypes.length / ITEMS_PER_PAGE);
-  const visibleTypes = requestTypes.slice(requestPage * ITEMS_PER_PAGE, (requestPage + 1) * ITEMS_PER_PAGE);
+  const perPage = useCardsPerPage();
+  const totalPages = Math.ceil(requestTypes.length / perPage);
+  // A resize can leave the current page past the end
+  useEffect(() => { setRequestPage(p => Math.min(p, Math.max(0, totalPages - 1))); }, [totalPages]);
+  const visibleTypes = requestTypes.slice(requestPage * perPage, (requestPage + 1) * perPage);
 
   return (
     <div className="bg-white w-full flex-1 rounded-2xl p-6 flex flex-col gap-8 min-h-0">

@@ -32,12 +32,23 @@ export const createRequest = async (req: AuthRequest, res: Response): Promise<vo
   res.status(201).json({ success: true, data: request });
 };
 
+// Sent as a JSON string — the status update is multipart because of the attachments
+const parseStaffData = (raw: unknown): Record<string, string> | undefined => {
+  if (typeof raw !== 'string' || !raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 // PUT /api/requests/:id/status
 export const updateRequestStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   const files = req.files && Array.isArray(req.files) ? (req.files as Express.Multer.File[]) : [];
   const updated = await requestService.updateRequestStatus(
     parseInt(req.params.id),
-    { status: req.body.status, comment: req.body.comment },
+    { status: req.body.status, comment: req.body.comment, staffData: parseStaffData(req.body.staffData) },
     req.user?.activeRole,
     req.user?.userId,
     files
