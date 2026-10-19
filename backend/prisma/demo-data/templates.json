@@ -1,0 +1,300 @@
+{
+  "templates": [
+    {
+      "name": "Leave Request Form",
+      "description": "Leave Request for International Student — CP KKU 660301.6.7",
+      "body": "<p style=\"font-weight:700;font-size:16px;margin:0px 0px 12px;text-align:center\"><img src=\"/kkulogo2.png\" alt=\"KKU Logo\" style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif;height:120px;margin:0px auto 8px\" /></p><p style=\"text-align:center;font-weight:700;font-size:16px;margin:0 0 12px\">Leave Request for International Student</p><table style=\"width:100%;border-collapse:collapse\"><tbody><tr><td style=\"width:50%;vertical-align:top;text-align:left;padding:4px 6px\"><p>CP KKU 660301.6.7/<span contenteditable=\"false\" data-var=\"{{doc_number}}\" style=\"--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: ;border-width:1px;border-color:rgba(7, 118, 188, 0.2);white-space:nowrap;padding:1px 8px;margin:0px 2px;border-radius:5px;background:rgb(222, 235, 255);color:rgb(7, 118, 188);font-size:11px;font-weight:600\">Document No.</span></p></td><td style=\"width:50%;vertical-align:top;text-align:left;padding:4px 6px\"><p style=\"text-align:right\">Date <span contenteditable=\"false\" data-var=\"{{date}}\" style=\"display:inline;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);line-height:1;white-space:nowrap\">Current Date</span></p></td></tr></tbody></table><p><br /></p><p></p><span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">Dear Dean of the College of C</span><span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">omputing, </span><p>I am ....... <span contenteditable=\"false\" data-var=\"{{student_name}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student Name</span> .......                Student ID no. : ....... <span contenteditable=\"false\" data-var=\"{{student_id}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student ID</span> <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">.......</span></p><p>Thai Tel. no. :  .......<span contenteditable=\"false\" data-var=\"{{thai_tel}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Thai Tel. No.</span> .......            E-mail : ....... <span contenteditable=\"false\" data-var=\"{{email}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Email</span> <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">.......</span></p><p>Education Level : ....... <span contenteditable=\"false\" data-var=\"{{education_level}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Education Level</span> <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">.......</span></p><p>I am a .......<span contenteditable=\"false\" data-var=\"{{funding_type}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Funding Type</span> ....... (<span contenteditable=\"false\" data-var=\"{{scholarship_name}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Scholarship Name</span>) student in  ....... <span contenteditable=\"false\" data-var=\"{{program}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Program</span> ....... program at the College of Computing, Khon Kaen University.</p><p>I would like to temporarily leave Thailand to visit ....... <span contenteditable=\"false\" data-var=\"{{destination}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Destination City &amp; Country</span> <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">.......</span><span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\"> (the name of the destination city and country) for:</span></p><p><span contenteditable=\"false\" data-var=\"{{purpose}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Purpose of Leave</span></p><p>Duration of leave is  .......<span contenteditable=\"false\" data-var=\"{{duration_days}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Duration (days/months)</span>....... , starting from ...<span contenteditable=\"false\" data-var=\"{{leave_start}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Leave Start Date</span> <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">...</span><span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\"> to </span>...<span contenteditable=\"false\" data-var=\"{{leave_end}}\" style=\"font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif;display:inline-block;padding:1px 8px;margin:0px 2px;border-radius:5px;background:rgb(222, 235, 255);color:rgb(7, 118, 188);font-size:11px;font-weight:600;border-width:1px;border-color:rgba(7, 118, 188, 0.2);vertical-align:middle;white-space:nowrap\">Leave End Date</span>..<span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">.</span></p><p>My visa expires on <span contenteditable=\"false\" data-var=\"{{visa_expiry}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Visa Expiry</span>. <span style=\"background-color:transparent;font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif\">Re-entry permit: </span><span contenteditable=\"false\" data-var=\"{{re_entry_permit}}\" style=\"font-family:var(--font-sarabun), 'TH Sarabun New', 'Sarabun', sans-serif;display:inline-block;padding:1px 8px;margin:0px 2px;border-radius:5px;background:rgb(222, 235, 255);color:rgb(7, 118, 188);font-size:11px;font-weight:600;border-width:1px;border-color:rgba(7, 118, 188, 0.2);vertical-align:middle;white-space:nowrap\">Re-entry Permit Applied</span></p><p><br /></p><p>*I understand that by taking this leave of absence, I am responsible for complying with all university policies related to leaves and maintaining my student status. I also acknowledge that I must inform the university of any changes to my leave plans.</p><br />",
+      "variables": "[\"{{doc_number}}\",\"{{date}}\",\"{{student_name}}\",\"{{student_id}}\",\"{{thai_tel}}\",\"{{email}}\",\"{{education_level}}\",\"{{funding_type}}\",\"{{scholarship_name}}\",\"{{program}}\",\"{{destination}}\",\"{{purpose}}\",\"{{duration_days}}\",\"{{leave_start}}\",\"{{leave_end}}\",\"{{visa_expiry}}\",\"{{re_entry_permit}}\",\"{{sig_student}}\",\"{{sig_advisor}}\",\"{{sig_ir_staff}}\",\"{{sig_dean}}\"]",
+      "signingMethod": "digital",
+      "requestTypes": [
+        {
+          "name": "Leave Request Form",
+          "description": "",
+          "icon": "RiPlaneLine"
+        }
+      ]
+    },
+    {
+      "name": "หนังสือขอเปิดบัญชีธนาคาร (ไทยพาณิชย์)",
+      "description": "หนังสือรับรองนักศึกษาต่างชาติเพื่อขอเปิดบัญชีเงินฝากธนาคารไทยพาณิชย์ สาขามหาวิทยาลัยขอนแก่น",
+      "body": "<table style=\"width:100%;border-collapse:collapse;font-family:var(--font-sarabun, 'Sarabun'), sans-serif\"><tbody><tr><td style=\"width:36%;vertical-align:top;padding-top:6px\"><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:24px;font-weight:700;color:#d32f2f;margin:0 0 10px\">ด่วนที่สุด</p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0\">อว 660301.26.7/<span contenteditable=\"false\" data-var=\"{{doc_number}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Document No. (เลขที่เอกสาร)</span></p></td><td style=\"width:28%;vertical-align:top;text-align:center\"><img src=\"/kkulogo2.png\" alt=\"KKU Logo\" style=\"text-align:right;height:110px;margin:0px auto\" /></td><td style=\"width:36%;vertical-align:top;padding-top:28px\"><p style=\"text-align:right;font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0px\">มหาวิทยาลัยขอนแก่น   </p><p style=\"text-align:right;font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0px\">123 ถนนมิตรภาพ         </p><p style=\"text-align:right;font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0px\">อำเภอเมืองขอนแก่น     </p><p style=\"text-align:right;font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0px\">จังหวัดขอนแก่น  40002</p></td></tr></tbody></table><p style=\"text-align:right;font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:14px 0px 0px;padding-left:3cm\"><span contenteditable=\"false\" data-var=\"{{date_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Current Date (Thai)</span></p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0;margin-top:14px\">เรื่อง  ขอความอนุเคราะห์เปิดบัญชีธนาคารสำหรับนักศึกษาต่างชาติ ประจำวิทยาลัยการคอมพิวเตอร์</p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0\">เรียน  ผู้จัดการธนาคารไทยพาณิชย์ สาขามหาวิทยาลัยขอนแก่น</p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0;text-indent:2.5cm;text-align:justify;margin-top:14px\">ด้วยวิทยาลัยการคอมพิวเตอร์ มหาวิทยาลัยขอนแก่น ได้รับนักศึกษาต่างชาติ <span contenteditable=\"false\" data-var=\"{{student_name}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student Name</span> สัญชาติ<span contenteditable=\"false\" data-var=\"{{nationality_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Nationality</span> หมายเลขพาสปอร์ต <span contenteditable=\"false\" data-var=\"{{passport_number}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Passport Number</span> รหัสประจำตัวนักศึกษา <span contenteditable=\"false\" data-var=\"{{student_id}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student ID</span> เข้าศึกษาในระดับ<span contenteditable=\"false\" data-var=\"{{degree_level_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Degree Level</span> <span contenteditable=\"false\" data-var=\"{{program_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Study Program</span> ใน<span contenteditable=\"false\" data-var=\"{{semester_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Starting Semester</span> ปีการศึกษา <span contenteditable=\"false\" data-var=\"{{academic_year_be}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Academic Year (B.E.)</span> ในระหว่างวันที่ <span contenteditable=\"false\" data-var=\"{{study_start_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Study Start Date (Thai)</span> ถึงวันที่ <span contenteditable=\"false\" data-var=\"{{study_end_th}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Study End Date (Thai)</span> ระยะเวลารวม <span contenteditable=\"false\" data-var=\"{{study_duration}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Study Duration</span> <span contenteditable=\"false\" data-var=\"{{bank_funding}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Funding Source</span></p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0;text-indent:2.5cm;text-align:justify\">ในการนี้ วิทยาลัยการคอมพิวเตอร์ ขอรับรองการเข้าศึกษาของนักศึกษาต่างชาติดังกล่าว และขอความอนุเคราะห์ธนาคารไทยพาณิชย์ สาขามหาวิทยาลัยขอนแก่น เปิดบัญชีสำหรับนักศึกษารายดังกล่าว ทั้งนี้ ขอเรียนชี้แจงเพิ่มเติมว่า แม้นักศึกษาต่างชาติจะเข้าศึกษาในหลักสูตรแบบเต็มเวลา (Full-time Student) แต่ในการเดินทางเข้ามายังราชอาณาจักรไทยครั้งแรก จะได้รับอนุญาตให้อยู่ในราชอาณาจักรเป็นระยะเวลา 90 วัน ตามระเบียบของสำนักงานตรวจคนเข้าเมือง โดยนักศึกษาจะสามารถดำเนินการขอต่ออายุการอนุญาตให้อยู่ในราชอาณาจักร (Visa Extension) ได้ตั้งแต่ 45 วันก่อนสิ้นสุดระยะเวลาการพำนักครั้งแรกตามที่ได้รับอนุญาต อนึ่ง หากมีข้อสงสัยประการใด โปรดติดต่อคุณกษมา อ้อทอง โทร 043-009700 ต่อ 50534 หรืออีเมล kasaor@kku.ac.th</p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0;text-indent:2.5cm;text-align:justify;margin-top:10px\">จึงเรียนมาเพื่อพิจารณาให้ความอนุเคราะห์</p><p style=\"font-family:var(--font-sarabun, 'Sarabun'), sans-serif;font-size:15px;line-height:1.75;margin:0;text-align:center;margin-top:20px;padding-left:6cm\">ขอแสดงความนับถือ</p><br />",
+      "variables": "[\"{{doc_number}}\",\"{{date_th}}\",\"{{student_name}}\",\"{{nationality_th}}\",\"{{passport_number}}\",\"{{student_id}}\",\"{{degree_level_th}}\",\"{{program_th}}\",\"{{semester_th}}\",\"{{academic_year_be}}\",\"{{study_start_th}}\",\"{{study_end_th}}\",\"{{study_duration}}\",\"{{bank_funding}}\",\"{{sig_dean}}\"]",
+      "signingMethod": "digital",
+      "requestTypes": [
+        {
+          "name": "หนังสือขอเปิดบัญชีธนาคาร (ไทยพาณิชย์)",
+          "description": "",
+          "icon": "RiBankLine"
+        }
+      ]
+    },
+    {
+      "name": "Report of Arrival for International Student",
+      "description": "Submitted within 1 week of returning from an approved leave, with the student ID card, passport arrival stamp page, approved Leave Request and (for research leave) a progress report.",
+      "body": "<p style=\"text-align:center;margin:0\"><img src=\"/kkulogo2.png\" alt=\"KKU Logo\" style=\"height:110px;margin:0 auto 6px\" /></p><p style=\"font-family:'Times New Roman', Times, serif;text-align:center;font-weight:700;font-size:20px;margin:0 0 6px\">Report of Arrival for International Student</p><hr style=\"border:none;border-top:1.5px solid #111;margin:0 0 14px\" /><table style=\"width:100%;border-collapse:collapse;font-family:'Times New Roman', Times, serif\"><tbody><tr><td style=\"width:60%;padding:0;vertical-align:top\"><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">CP KKU 660301.6.7/<span contenteditable=\"false\" data-var=\"{{doc_number}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Document No.</span></p></td><td style=\"width:40%;padding:0;vertical-align:top;text-align:right\"><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">Date <span contenteditable=\"false\" data-var=\"{{date}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Current Date</span></p></td></tr></tbody></table><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0;margin-top:6px\">Dear Dean of the College of Computing,</p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0;margin-top:14px\">In response to the leave request for travelling abroad, CP KKU 660301.6.7/<span contenteditable=\"false\" data-var=\"{{leave_ref_number}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Approved Leave Request No.</span>.</p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">I am <span contenteditable=\"false\" data-var=\"{{student_name}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student Name</span> Student ID no. <span contenteditable=\"false\" data-var=\"{{student_id}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Student ID</span></p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">Thai Tel. no. <span contenteditable=\"false\" data-var=\"{{thai_tel}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Thai Tel. No.</span> E-mail <span contenteditable=\"false\" data-var=\"{{email}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Email</span></p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">Education Level: <span contenteditable=\"false\" data-var=\"{{education_level}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Education Level</span></p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0;text-align:justify\">I am a <span contenteditable=\"false\" data-var=\"{{funding_type}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Funding Type</span> (<span contenteditable=\"false\" data-var=\"{{scholarship_name}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Scholarship Name</span>) student in <span contenteditable=\"false\" data-var=\"{{program}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Program</span> program at the College of Computing, Khon Kaen University.</p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0;text-align:justify\">I would like to inform you about my arrival at Khon Kaen University, Khon Kaen, Thailand, after taking a leave to <span contenteditable=\"false\" data-var=\"{{destination}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Destination City &amp; Country</span> (Name of the country) for: <span contenteditable=\"false\" data-var=\"{{purpose}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Purpose of Leave</span></p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0\">Duration of leave is <span contenteditable=\"false\" data-var=\"{{duration_days}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Duration (days/months)</span> starting from <span contenteditable=\"false\" data-var=\"{{leave_start}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Leave Start Date</span> to <span contenteditable=\"false\" data-var=\"{{leave_end}}\" style=\"display:inline-block;padding:1px 8px;margin:0 2px;border-radius:5px;background:#DEEBFF;color:#0776BC;font-size:11px;font-weight:600;border:1px solid rgba(7,118,188,0.2);vertical-align:middle;white-space:nowrap\">Leave End Date</span>.</p><p style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.9;margin:0;margin-top:14px\">Enclose herewith are:</p><ol style=\"font-family:'Times New Roman', Times, serif;font-size:15px;line-height:1.6;margin:0;padding-left:2.2em\"><li>A copy of the student ID card</li><li>A copy of the passport page of stamp arrival to Thailand</li><li>A copy of the approved Leave Request for International Student</li><li>Progress report*</li></ol><p style=\"font-family:'Times New Roman', Times, serif;font-size:14px;line-height:1.6;margin:10px 0 0 2.2em;text-align:justify\">* In case you took a leave for data collection, conference, or research/thesis-related purposes. You need to submit a progress report highlighting the progress you have made, as well as the knowledge and insights you have gained.</p><br />",
+      "variables": "[\"{{doc_number}}\",\"{{date}}\",\"{{leave_ref_number}}\",\"{{student_name}}\",\"{{student_id}}\",\"{{thai_tel}}\",\"{{email}}\",\"{{education_level}}\",\"{{funding_type}}\",\"{{scholarship_name}}\",\"{{program}}\",\"{{destination}}\",\"{{purpose}}\",\"{{duration_days}}\",\"{{leave_start}}\",\"{{leave_end}}\",\"{{sig_student}}\"]",
+      "signingMethod": "digital",
+      "requestTypes": [
+        {
+          "name": "Report of Arrival",
+          "description": "",
+          "icon": "RiHome3Line"
+        }
+      ]
+    }
+  ],
+  "variables": [
+    {
+      "key": "student_name",
+      "label": "Student Name",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "student_id",
+      "label": "Student ID",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "student_title",
+      "label": "Title (Mr./Mrs./Miss)",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "thai_tel",
+      "label": "Thai Tel. No.",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "email",
+      "label": "Email",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "education_level",
+      "label": "Education Level",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "funding_type",
+      "label": "Funding Type",
+      "description": null,
+      "inputType": "radio",
+      "options": "[{\"label\":\"Self-funded\",\"allowInput\":false},{\"label\":\"Scholarship\",\"allowInput\":false}]"
+    },
+    {
+      "key": "scholarship_name",
+      "label": "Scholarship Name",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "program",
+      "label": "Program",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "destination",
+      "label": "Destination City & Country",
+      "description": null,
+      "inputType": "text",
+      "options": null
+    },
+    {
+      "key": "purpose",
+      "label": "Purpose of Leave",
+      "description": null,
+      "inputType": "select",
+      "options": "[{\"label\":\"Personal Purposes\",\"allowInput\":false},{\"label\":\"Data Collection\",\"allowInput\":false},{\"label\":\"Research/Thesis-related Purposes\",\"docText\":\"\",\"allowInput\":false},{\"label\":\"Conference (please specify)\",\"docText\":\"\",\"allowInput\":true},{\"label\":\"Others (please specify)\",\"docText\":\"\",\"allowInput\":true}]"
+    },
+    {
+      "key": "duration_days",
+      "label": "Duration (days/months)",
+      "description": null,
+      "inputType": "text",
+      "options": null
+    },
+    {
+      "key": "leave_start",
+      "label": "Leave Start Date",
+      "description": null,
+      "inputType": "date",
+      "options": null
+    },
+    {
+      "key": "leave_end",
+      "label": "Leave End Date",
+      "description": null,
+      "inputType": "date",
+      "options": null
+    },
+    {
+      "key": "visa_expiry",
+      "label": "Visa Expiry",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "advisor_name",
+      "label": "Advisor Name",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "date",
+      "label": "Current Date",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "visa_expiry_date",
+      "label": "Visa Expiry Date",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "days_remaining",
+      "label": "Days Remaining",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "request_type",
+      "label": "Request Type",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "status",
+      "label": "Status",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "dean_name",
+      "label": "Dean Name",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "re_entry_permit",
+      "label": "Re-entry Permit Applied",
+      "description": null,
+      "inputType": "radio",
+      "options": "[{\"label\":\"Yes, already applied\",\"allowInput\":false},{\"label\":\"Not yet applied\",\"allowInput\":false}]"
+    },
+    {
+      "key": "passport_number",
+      "label": "Passport Number",
+      "description": null,
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "date_th",
+      "label": "Current Date (Thai)",
+      "description": "วันที่ปัจจุบันแบบไทย เช่น 1 กรกฎาคม 2568",
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "nationality_th",
+      "label": "Nationality",
+      "description": "Shown in Thai in the letter",
+      "inputType": "select",
+      "options": "[{\"label\":\"Cambodian\",\"docText\":\"กัมพูชา\"},{\"label\":\"Lao\",\"docText\":\"ลาว\"},{\"label\":\"Myanmar\",\"docText\":\"เมียนมา\"},{\"label\":\"Vietnamese\",\"docText\":\"เวียดนาม\"},{\"label\":\"Indonesian\",\"docText\":\"อินโดนีเซีย\"},{\"label\":\"Chinese\",\"docText\":\"จีน\"},{\"label\":\"South Korean\",\"docText\":\"เกาหลีใต้\"},{\"label\":\"Japanese\",\"docText\":\"ญี่ปุ่น\"},{\"label\":\"Bhutanese\",\"docText\":\"ภูฏาน\"},{\"label\":\"Nepalese\",\"docText\":\"เนปาล\"},{\"label\":\"Filipino\",\"docText\":\"ฟิลิปปินส์\"},{\"label\":\"Malaysian\",\"docText\":\"มาเลเซีย\"},{\"label\":\"Bangladeshi\",\"docText\":\"บังกลาเทศ\"},{\"label\":\"Indian\",\"docText\":\"อินเดีย\"},{\"label\":\"Pakistani\",\"docText\":\"ปากีสถาน\"},{\"label\":\"Others (please specify)\",\"allowInput\":true}]"
+    },
+    {
+      "key": "degree_level_th",
+      "label": "Degree Level",
+      "description": null,
+      "inputType": "select",
+      "options": "[{\"label\":\"Bachelor's degree\",\"docText\":\"ปริญญาตรี\"},{\"label\":\"Master's degree\",\"docText\":\"ปริญญาโท\"},{\"label\":\"Doctoral degree\",\"docText\":\"ปริญญาเอก\"}]"
+    },
+    {
+      "key": "program_th",
+      "label": "Study Program",
+      "description": "Shown in Thai in the letter",
+      "inputType": "select",
+      "options": "[{\"label\":\"Computer Science and Information Technology (International Program)\",\"docText\":\"หลักสูตรวิทยาการคอมพิวเตอร์และเทคโนโลยีสารสนเทศ (หลักสูตรนานาชาติ)\"},{\"label\":\"Data Science and Artificial Intelligence (International Program)\",\"docText\":\"หลักสูตรวิทยาการข้อมูลและปัญญาประดิษฐ์ (หลักสูตรนานาชาติ)\"},{\"label\":\"Geo-Informatics\",\"docText\":\"หลักสูตรภูมิสารสนเทศศาสตร์\"},{\"label\":\"Others (please specify)\",\"allowInput\":true}]"
+    },
+    {
+      "key": "semester_th",
+      "label": "Starting Semester",
+      "description": null,
+      "inputType": "select",
+      "options": "[{\"label\":\"First semester\",\"docText\":\"ภาคการศึกษาต้น\"},{\"label\":\"Second semester\",\"docText\":\"ภาคการศึกษาปลาย\"},{\"label\":\"Summer session\",\"docText\":\"ภาคการศึกษาพิเศษ\"}]"
+    },
+    {
+      "key": "academic_year_be",
+      "label": "Academic Year (B.E.)",
+      "description": "From the student record (enrollment / expected graduation date)",
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "study_start_th",
+      "label": "Study Start Date (Thai)",
+      "description": "From the student record (enrollment / expected graduation date)",
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "study_end_th",
+      "label": "Study End Date (Thai)",
+      "description": "From the student record (enrollment / expected graduation date)",
+      "inputType": "auto",
+      "options": null
+    },
+    {
+      "key": "study_duration",
+      "label": "Study Duration",
+      "description": null,
+      "inputType": "select",
+      "options": "[{\"label\":\"1 year\",\"docText\":\"1 ปี\"},{\"label\":\"2 years\",\"docText\":\"2 ปี\"},{\"label\":\"3 years\",\"docText\":\"3 ปี\"},{\"label\":\"4 years\",\"docText\":\"4 ปี\"},{\"label\":\"5 years\",\"docText\":\"5 ปี\"},{\"label\":\"6 years\",\"docText\":\"6 ปี\"}]"
+    },
+    {
+      "key": "bank_funding",
+      "label": "Funding Source",
+      "description": "Chooses the funding sentence of the letter",
+      "inputType": "select",
+      "options": "[{\"label\":\"ASEAN & GMS Scholarship\",\"docText\":\"ภายใต้ทุนสนับสนุนการศึกษาสำหรับบุคลากรจากประเทศในภูมิภาคอาเซียนและอนุภูมิภาคลุ่มแม่น้ำโขง (ASEAN & GMS) โดยนักศึกษาดังกล่าวมีความประสงค์ขอเปิดบัญชีเงินฝากธนาคารไทยพาณิชย์ จำกัด (มหาชน) เพื่อใช้ในการรับเงินทุนการศึกษา และเป็นบัญชีหลักสำหรับการใช้จ่ายในระหว่างศึกษาอยู่ในประเทศไทย\"},{\"label\":\"Self-funded\",\"docText\":\"โดยนักศึกษาดังกล่าวเข้าศึกษาโดยใช้ทุนส่วนตัว และมีความประสงค์ขอเปิดบัญชีเงินฝากธนาคารไทยพาณิชย์ จำกัด (มหาชน) เพื่อใช้ในการดำเนินการทางการเงินสำหรับค่าใช้จ่ายด้านการศึกษาและค่าครองชีพ รวมทั้งเป็นบัญชีหลักในการทำธุรกรรมทางการเงินระหว่างการศึกษาในประเทศไทย\"}]"
+    },
+    {
+      "key": "doc_number",
+      "label": "Document No.",
+      "description": "Entered by IR staff when approving the request",
+      "inputType": "staff",
+      "options": null
+    },
+    {
+      "key": "leave_ref_number",
+      "label": "Approved Leave Request No.",
+      "description": "The document number on the approved Leave Request (CP KKU 660301.6.7/...)",
+      "inputType": "text",
+      "options": null
+    }
+  ]
+}

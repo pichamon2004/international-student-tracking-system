@@ -87,7 +87,8 @@ const ADMIN_PERMISSIONS = new Set([
 // MAIN
 // ─────────────────────────────────────────────────────
 
-async function main() {
+// Exported so seed-demo.ts can lay the same foundation after wiping the database
+export async function seedBase() {
   console.log('🌱 Seeding database...');
 
   // 1. สร้าง Modules
@@ -238,6 +239,8 @@ async function main() {
   console.log('🎉 Seeding complete!');
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(async () => { await prisma.$disconnect(); });
+if (require.main === module) {
+  seedBase()
+    .catch((e) => { console.error(e); process.exit(1); })
+    .finally(async () => { await prisma.$disconnect(); });
+}

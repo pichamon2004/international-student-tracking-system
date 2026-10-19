@@ -14,6 +14,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:seed-demo": "ts-node --transpile-only prisma/seed-demo.ts --confirm",
+    "prisma:export-demo-templates": "ts-node --transpile-only prisma/export-demo-templates.ts",
     "prisma:backfill-events": "ts-node --transpile-only prisma/backfill-request-events.ts",
     "prisma:pre-push": "ts-node --transpile-only prisma/pre-push-migrations.ts",
     "test:file-policy": "node --require ts-node/register/transpile-only --test src/services/domain/filePolicy.test.ts",
